@@ -14,7 +14,7 @@ import { loadLatestPrompt, createContinuousImprovementSession, addTechnicalLog, 
 import { sessionService, ChatSession } from '../lib/sessionService';
 import { erpApiService } from '../lib/erpApiService';
 
-interface ProfessionalBuyerChatProps {
+interface PropertyManagerChatProps {
   onLogout?: () => void;
 }
 
@@ -24,17 +24,17 @@ const geminiModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-pro-preview
 // ERP Function Definition for Gemini
 const searchERPFunction = {
   name: "search_erp_data",
-  description: "Search ERP/purchase order data with various criteria. Use this when user asks about suppliers, orders, purchases, products, or wants to find specific data from their ERP system.",
+  description: "Search ERP/maintenance order data with various criteria. Use this when user asks about contractors, orders, maintenance, services, or wants to find specific data from their ERP system.",
   parameters: {
     type: "object",
     properties: {
       supplierName: {
         type: "string",
-        description: "Supplier/vendor name or partial name to search for"
+        description: "Contractor/service provider name or partial name to search for"
       },
       productDescription: {
         type: "string", 
-        description: "Product description or partial description to search for"
+        description: "Service description or partial description to search for"
       },
       dateFrom: {
         type: "string",
@@ -46,7 +46,7 @@ const searchERPFunction = {
       },
       buyerName: {
         type: "string",
-        description: "Buyer/purchaser name or partial name to search for"
+        description: "Property manager name or partial name to search for"
       }
     }
   }
@@ -95,7 +95,7 @@ const processTextWithCitations = (text: string, citationSources?: CitationSource
   return { originalText, formattedSources };
 };
 
-const ProfessionalBuyerChat: React.FC<ProfessionalBuyerChatProps> = ({ onLogout }) => {
+const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -134,24 +134,24 @@ const ProfessionalBuyerChat: React.FC<ProfessionalBuyerChatProps> = ({ onLogout 
             role: 'model',
             parts: [{
               text: isLikelyNewUser 
-                ? `🎉 **Welcome to Professional Buyer AI Assistant!**
+                ? `🎉 **Welcome to Property Manager AI Assistant!**
 
-I'm here to transform how you handle procurement and purchasing. As your AI-powered procurement expert, I can help you:
+I'm here to transform how you handle property management and maintenance. As your AI-powered property management expert, I can help you:
 
 **🎯 Get Started (recommended):**
 • **Load Sample Data**: Go to Admin panel → Load sample knowledge documents and ERP data to try me out
-• **Upload Your Files**: Add your own procurement policies and Excel purchase data  
-• **Ask Questions**: "What suppliers do we use?" or "Find me laptop purchases from last quarter"
+• **Upload Your Files**: Add your own property management policies and Excel maintenance data  
+• **Ask Questions**: "What contractors do we use?" or "Find me HVAC maintenance from last quarter"
 
 **💡 My Special Capabilities:**
-✅ Real-time access to your ERP/purchase data through advanced function calling
-✅ Analysis of your internal procurement documents and policies  
-✅ Professional buyer expertise for cost optimization and supplier management
+✅ Real-time access to your ERP/maintenance data through advanced function calling
+✅ Analysis of your internal property management documents and policies  
+✅ Property manager expertise for cost optimization and contractor management
 
 **Ready to explore?** Try asking me "Load some sample data so I can see what you can do" or visit the Admin panel to upload your own files!
 
 What would you like to start with?`
-                : `Hello! I'm your Professional Buyer AI Assistant. I'm here to help you optimize your procurement processes, negotiate better deals, and achieve significant cost savings.
+                : `Hello! I'm your Property Manager AI Assistant. I'm here to help you optimize your property management processes, negotiate better deals, and achieve significant cost savings.
 
 📚 **Knowledge Base Loaded:** ${session.documentsUsed.length} document(s) available for reference.
 
@@ -176,7 +176,7 @@ What can I help you with today?`
           const welcomeMessage: Message = {
             role: 'model',
             parts: [{
-              text: "Hello! I'm your Professional Buyer AI Assistant. I'm here to help you optimize your procurement processes, negotiate better deals, and achieve significant cost savings. What can I help you with today?"
+              text: "Hello! I'm your Property Manager AI Assistant. I'm here to help you optimize your property management processes, negotiate better deals, and achieve significant cost savings. What can I help you with today?"
             }]
           };
           setMessages([welcomeMessage]);
@@ -193,8 +193,8 @@ What can I help you with today?`
   const quickActions = [
     "Use prenegotiated discount prices",
     "Get approvals easily and from correct person", 
-    "Find preferred supplier and best price/quality",
-    "Create purchase orders easily and correctly"
+    "Find preferred contractor and best price/quality",
+    "Create maintenance orders easily and correctly"
   ];
 
   const handleQuickAction = async (action: string) => {
@@ -595,10 +595,10 @@ What can I help you with today?`
         </div>
         <div className="flex items-center justify-center mb-4">
           <Bot className="h-8 w-8 mr-3" />
-          <h1 className="text-3xl font-bold">Professional Buyer AI Assistant</h1>
+          <h1 className="text-3xl font-bold">Property Manager AI Assistant</h1>
         </div>
         <p className="text-gray-300 text-lg max-w-4xl mx-auto">
-          Get expert procurement advice, use prenegotiated prices from best suppliers, and do professional level procurement with ease
+          Get expert property management advice, use prenegotiated prices from best contractors, and do professional level property management with ease
         </p>
       </div>
 
@@ -747,7 +747,7 @@ What can I help you with today?`
               <Input
                 ref={inputRef}
                 type="text"
-                placeholder="Ask about procurement strategies, cost optimization, supplier management..."
+                placeholder="Ask about property management strategies, cost optimization, contractor management..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -823,4 +823,4 @@ What can I help you with today?`
   );
 };
 
-export default ProfessionalBuyerChat;
+export default PropertyManagerChat;

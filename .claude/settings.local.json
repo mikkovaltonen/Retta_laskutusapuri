@@ -20,7 +20,8 @@
       "Bash(npm cache clean:*)",
       "Bash(npm install:*)",
       "WebFetch(domain:www.zealsourcing.fi)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "WebFetch(domain:retta.fi)"
     ],
     "deny": []
   }

@@ -36,7 +36,7 @@ interface Message {
   };
 }
 
-interface ProcurementChatProps {
+interface PropertyManagementChatProps {
   uploadedFiles: UploadedFile[];
   onCorrectionsApplied: () => void;
   applyBatchCorrectionsFromChat: (corrections: unknown[]) => void;
@@ -62,7 +62,7 @@ const processTextWithCitations = (text: string, citationSources?: CitationSource
   return { originalText, formattedSources };
 };
 
-const ProcurementChat: React.FC<ProcurementChatProps> = ({ 
+const PropertyManagementChat: React.FC<PropertyManagementChatProps> = ({ 
   uploadedFiles,
   onCorrectionsApplied,
   applyBatchCorrectionsFromChat
@@ -80,7 +80,7 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
       if (file.type === 'application/pdf') {
         // For PDFs, we'll include metadata about the file
         return {
-          text: `[PDF Document: ${file.name}]\nThis is a PDF document that needs to be analyzed. The user has uploaded this file for procurement analysis.`
+          text: `[PDF Document: ${file.name}]\nThis is a PDF document that needs to be analyzed. The user has uploaded this file for property management analysis.`
         };
       } else if (file.type.includes('spreadsheet') || file.type.includes('excel') || file.type === 'text/csv') {
         // For Excel/CSV files, include the content if it's text
@@ -99,7 +99,7 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
       }
       
       return {
-        text: `[Document: ${file.name}]\nFile type: ${file.type}\nSize: ${file.size} bytes\nThis document has been uploaded for procurement analysis.`
+        text: `[Document: ${file.name}]\nFile type: ${file.type}\nSize: ${file.size} bytes\nThis document has been uploaded for property management analysis.`
       };
     } catch (error) {
       console.error('Error processing file for AI:', error);
@@ -120,10 +120,10 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
         const latestPrompt = await loadLatestPrompt(user.email);
         if (latestPrompt) {
           systemPrompt = latestPrompt;
-          console.log('[ProcurementChat] Using latest saved prompt version');
+          console.log('[PropertyManagementChat] Using latest saved prompt version');
         }
       } catch (error) {
-        console.error('[ProcurementChat] Error loading latest prompt:', error);
+        console.error('[PropertyManagementChat] Error loading latest prompt:', error);
       }
     }
 
@@ -133,12 +133,12 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
         const response = await fetch('/docs/gemini_instructions.md');
         if (response.ok) {
           systemPrompt = await response.text();
-          console.log('[ProcurementChat] Using default prompt from file');
+          console.log('[PropertyManagementChat] Using default prompt from file');
         } else {
           throw new Error('Failed to fetch default prompt');
         }
       } catch (error) {
-        console.error('[ProcurementChat] Error loading default prompt:', error);
+        console.error('[PropertyManagementChat] Error loading default prompt:', error);
         throw new Error('No system prompt configured. Please visit Admin panel to set up your prompt.');
       }
     }
@@ -174,7 +174,7 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
         generationConfig: { temperature: 0.2 },
       });
       
-      console.log("[ProcurementChat] Starting session with uploaded documents");
+      console.log("[PropertyManagementChat] Starting session with uploaded documents");
       const result = await model.generateContent({ 
         contents: [{ role: 'user', parts: initialMessageParts }], 
         tools: [{ googleSearch: {} }] 
@@ -260,15 +260,15 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
     }
   };
 
-  const handleStructuredExtraction = async (type: 'suppliers' | 'pricing' | 'contracts') => {
+  const handleStructuredExtraction = async (type: 'contractors' | 'pricing' | 'contracts') => {
     if (!sessionActive) {
       toast.error('Please start an analysis session first');
       return;
     }
 
     const prompts = {
-      suppliers: `Extract all supplier information from the uploaded documents and provide it in a structured JSON format. Include: supplier name, contact details, capabilities, certifications, performance metrics, and any other relevant supplier data. Format as an array of supplier objects.`,
-      pricing: `Extract all pricing information from the uploaded documents and provide it in a structured JSON format. Include: item names, prices, quantities, units, suppliers, effective dates, and any pricing terms. Format as an array of pricing objects.`,
+      contractors: `Extract all contractor information from the uploaded documents and provide it in a structured JSON format. Include: contractor name, contact details, services offered, certifications, performance metrics, and any other relevant contractor data. Format as an array of contractor objects.`,
+      pricing: `Extract all pricing information from the uploaded documents and provide it in a structured JSON format. Include: service names, prices, quantities, units, service providers, effective dates, and any pricing terms. Format as an array of pricing objects.`,
       contracts: `Extract all contract information from the uploaded documents and provide it in a structured JSON format. Include: contract parties, terms, duration, payment terms, deliverables, and key clauses. Format as an array of contract objects.`
     };
 
@@ -321,11 +321,11 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleStructuredExtraction('suppliers')}
+              onClick={() => handleStructuredExtraction('contractors')}
               disabled={isLoading}
             >
               <Table className="h-4 w-4 mr-2" />
-              Extract Suppliers
+              Extract Contractors
             </Button>
             <Button
               variant="outline"
@@ -425,4 +425,4 @@ const ProcurementChat: React.FC<ProcurementChatProps> = ({
   );
 };
 
-export default ProcurementChat;
+export default PropertyManagementChat;

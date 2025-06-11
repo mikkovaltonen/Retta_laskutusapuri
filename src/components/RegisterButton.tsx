@@ -66,7 +66,7 @@ export const RegisterButton = () => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-full text-lg font-light shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+        <Button className="text-white px-10 py-4 rounded-full text-lg font-light shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105" style={{backgroundColor: '#003d3b'}} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2a54'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#003d3b'}>
           Create Account
         </Button>
       </DialogTrigger>
@@ -74,7 +74,7 @@ export const RegisterButton = () => {
         <DialogHeader>
           <DialogTitle>Create Your Account</DialogTitle>
           <DialogDescription>
-            Join the Professional Buyer AI Agent Evaluator to start testing procurement intelligence.
+            Join the Retta Property Manager AI Assistant to start testing property management intelligence.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -118,7 +118,10 @@ export const RegisterButton = () => {
           </div>
           <Button 
             type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full text-white"
+            style={{backgroundColor: '#003d3b'}}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2a54'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#003d3b'}
             disabled={isLoading}
           >
             {isLoading ? "Creating Account..." : "Create Account"}

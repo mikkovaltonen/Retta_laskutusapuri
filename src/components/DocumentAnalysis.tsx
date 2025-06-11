@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload, FileText, X, Download } from "lucide-react";
 import { toast } from "sonner";
-import ProcurementChat from "@/components/ProcurementChat";
+import PropertyManagementChat from "@/components/PropertyManagementChat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface DocumentAnalysisProps {
@@ -383,7 +383,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                     </p>
                   </div>
                   
-                  <ProcurementChat 
+                  <PropertyManagementChat 
                     uploadedFiles={uploadedFiles}
                     onCorrectionsApplied={() => {}}
                     applyBatchCorrectionsFromChat={() => {}}

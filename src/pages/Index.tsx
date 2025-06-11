@@ -9,13 +9,14 @@ const Index = () => {
     <div className="min-h-screen bg-white font-sans">
       <nav className="flex justify-between items-center px-8 py-6 bg-white shadow-sm">
         <Link to="/" className="flex flex-col">
-          <span className="text-2xl font-light tracking-wide text-blue-900">PROCUREMENT AI</span>
-          <span className="text-blue-600 text-sm font-light">Agent Evaluator</span>
+          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>RETTA AI</span>
+          <span className="text-sm font-light" style={{color: '#1e2a54'}}>Property Manager Assistant</span>
         </Link>
         <div className="flex gap-4">
           <Button
             variant="ghost"
-            className="text-blue-700 hover:bg-blue-50 font-light"
+            className="font-light hover:bg-green-50"
+            style={{color: '#003d3b'}}
             asChild
           >
             <Link to="/login">Login</Link>
@@ -26,21 +27,22 @@ const Index = () => {
 
       <main className="container mx-auto px-8 py-20 text-center">
         <h1 className="text-6xl font-light mb-8 leading-tight">
-          <span className="text-blue-900">Procurement AI Agent</span>
+          <span style={{color: '#003d3b'}}>Retta AI Property</span>
           <br />
-          <span className="text-blue-700">Evaluator</span>
+          <span style={{color: '#1e2a54'}}>Manager Assistant</span>
         </h1>
-        <p className="text-xl mb-6 text-blue-800 font-light max-w-3xl mx-auto">
-          Evaluate and test AI-powered procurement capabilities with real documents.
+        <p className="text-xl mb-6 font-light max-w-3xl mx-auto" style={{color: '#003d3b'}}>
+          Intelligent property management automation and AI-powered document analysis.
         </p>
-        <p className="text-lg mb-12 text-blue-600 font-light max-w-2xl mx-auto">
-          Upload procurement policies and simulate ERP/P2P integration by loading sample data via excels and evaluate AI Agent performance with your own data
+        <p className="text-lg mb-12 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
+          Upload property documents, manage tenant communications, and evaluate AI Assistant performance with your own property management data
         </p>
         <div className="flex justify-center gap-6 flex-wrap">
           <RegisterButton />
           <Button
             variant="outline"
-            className="px-10 py-4 rounded-full text-lg border-blue-600 text-blue-600 hover:bg-blue-50 font-light shadow-lg transition-all duration-300"
+            className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
+            style={{borderColor: '#003d3b', color: '#003d3b'}}
             asChild
           >
             <Link to="/login">Login</Link>
@@ -48,47 +50,47 @@ const Index = () => {
         </div>
 
         <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16 text-blue-900">The Procurement Challenge</h2>
-          <div className="mb-20 bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden">
-            <img src="/problem.png" alt="Procurement Cost Problem Analysis" className="w-full h-auto" />
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>The Property Management Challenge</h2>
+          <div className="mb-20 bg-white rounded-2xl shadow-xl overflow-hidden" style={{borderColor: '#80ffb7', border: '1px solid'}}>
+            <img src="/problem.png" alt="Property Management Cost Problem Analysis" className="w-full h-auto" />
           </div>
         </section>
 
         <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16 text-blue-900">Key Evaluation Benefits</h2>
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Key Property Management Benefits</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-            <Card className="p-8 border-blue-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl">
+            <Card className="p-8 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl" style={{borderColor: '#80ffb7', border: '1px solid'}}>
               <CardContent className="space-y-6">
-                <div className="h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <DollarSign className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light text-blue-900">Cost Savings Potential</h3>
-                <p className="text-blue-700 font-light leading-relaxed">
-                  Evaluate how AI can align purchases with negotiated contracts and reduce operational costs by automating procurement processes.
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Cost Optimization</h3>
+                <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
+                  Evaluate how AI can optimize property management costs through intelligent maintenance scheduling and vendor management.
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="p-8 border-blue-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl">
+            <Card className="p-8 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl" style={{borderColor: '#80ffb7', border: '1px solid'}}>
               <CardContent className="space-y-6">
-                <div className="h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <Upload className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light text-blue-900">Document Intelligence</h3>
-                <p className="text-blue-700 font-light leading-relaxed">
-                  Test AI's ability to extract and analyze data from your procurement documents, contracts, and supplier catalogs.
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Document Intelligence</h3>
+                <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
+                  Test AI's ability to extract and analyze data from property documents, lease agreements, and maintenance reports.
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="p-8 border-blue-100 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl">
+            <Card className="p-8 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl" style={{borderColor: '#80ffb7', border: '1px solid'}}>
               <CardContent className="space-y-6">
-                <div className="h-16 w-16 bg-blue-600 rounded-2xl flex items-center justify-center">
+                <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <Brain className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light text-blue-900">Professional Buyer Intelligence</h3>
-                <p className="text-blue-700 font-light leading-relaxed">
-                  Experience how AI can transform every employee into a professional buyer by providing intelligent procurement guidance and automation.
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Professional Property Management</h3>
+                <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
+                  Experience how AI can transform property management with intelligent tenant communication and automated maintenance workflows.
                 </p>
               </CardContent>
             </Card>
@@ -96,37 +98,39 @@ const Index = () => {
         </section>
 
         <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16 text-blue-900">Our Solution for Evaluation</h2>
-          <div className="grid md:grid-cols-2 gap-12 items-start p-10 bg-blue-50 rounded-3xl shadow-xl border border-blue-100">
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Our Property Management Solution</h2>
+          <div className="grid md:grid-cols-2 gap-12 items-start p-10 rounded-3xl shadow-xl" style={{backgroundColor: '#ffede5', borderColor: '#80ffb7', border: '1px solid'}}>
             <div>
-              <h3 className="text-3xl font-light text-blue-900 mb-6">Professional Buyer Tech Stack</h3>
-              <p className="text-blue-700 mb-8 font-light leading-relaxed">An overview of the technology stack empowering professional buyers.</p>
-              <img src="/professiona_buyer_tech_stack.png" alt="Professional Buyer Tech Stack" className="rounded-2xl shadow-lg border border-blue-200 w-full h-auto" />
+              <h3 className="text-3xl font-light mb-6" style={{color: '#003d3b'}}>Solution Overview</h3>
+              <p className="mb-8 font-light leading-relaxed" style={{color: '#1e2a54'}}>A diagram illustrating the main components and flow of our property management solution.</p>
+              <img src="/solution_overview.png" alt="Solution Overview" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
             </div>
             <div>
-              <h3 className="text-3xl font-light text-blue-900 mb-6">Core Solution Overview</h3>
-              <p className="text-blue-700 mb-8 font-light leading-relaxed">A diagram illustrating the main components and flow of our solution.</p>
-              <img src="/solution_overview.png" alt="Solution Overview" className="rounded-2xl shadow-lg border border-blue-200 w-full h-auto" />
+              <h3 className="text-3xl font-light mb-6" style={{color: '#003d3b'}}>Enhanced Solution Architecture</h3>
+              <p className="mb-8 font-light leading-relaxed" style={{color: '#1e2a54'}}>Advanced architecture showing the complete property management automation system.</p>
+              <img src="/solution_overview2.png" alt="Enhanced Solution Overview" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
             </div>
           </div>
         </section>
 
         <section className="mt-32 mb-20">
-          <h2 className="text-4xl font-light mb-10 text-blue-900 text-center">
-            Start Your <span className="text-blue-600">Procurement AI Evaluation</span>
+          <h2 className="text-4xl font-light mb-10 text-center" style={{color: '#003d3b'}}>
+            Start Your <span style={{color: '#1e2a54'}}>Property Management AI Evaluation</span>
           </h2>
           <div className="flex justify-center gap-6 flex-wrap">
             <RegisterButton />
             <Button
               variant="outline"
-              className="px-10 py-4 rounded-full text-lg border-blue-600 text-blue-600 hover:bg-blue-50 font-light shadow-lg transition-all duration-300"
+              className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
+              style={{borderColor: '#003d3b', color: '#003d3b'}}
               asChild
             >
               <Link to="/login">Already have an account? Login</Link>
             </Button>
             <Button
               variant="outline"
-              className="px-10 py-4 rounded-full text-lg border-blue-600 text-blue-600 hover:bg-blue-50 font-light shadow-lg transition-all duration-300"
+              className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
+              style={{borderColor: '#003d3b', color: '#003d3b'}}
               onClick={() => window.open('https://github.com/mikkovaltonen/professional_buyer', '_blank', 'noopener,noreferrer')}
             >
               View Full Solution →
@@ -135,26 +139,28 @@ const Index = () => {
         </section>
 
         <section className="mt-32 mb-20">
-          <h2 className="text-4xl font-light mb-16 text-blue-900 text-center">About Zeal Sourcing</h2>
-          <div className="bg-white rounded-3xl shadow-xl border border-blue-100 overflow-hidden">
-            <img src="/zeal.png" alt="Zeal Sourcing - Buying stuff but better" className="w-full h-auto" />
+          <h2 className="text-4xl font-light mb-16 text-center" style={{color: '#003d3b'}}>About Retta</h2>
+          <div className="bg-white rounded-3xl shadow-xl overflow-hidden" style={{borderColor: '#80ffb7', border: '1px solid'}}>
+            <img src="/retta.png" alt="Retta - Luotettavaa ja mutkatonta isännöintiä" className="w-full h-auto" />
           </div>
           <div className="text-center mt-12">
-            <p className="text-blue-700 text-xl mb-8 font-light max-w-2xl mx-auto">
-              Professional procurement solutions that transform how businesses buy and source.
+            <p className="text-xl mb-8 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
+              Luotettavaa ja mutkatonta isännöintiä - Professional property management solutions that transform how properties are managed.
             </p>
             <div className="flex justify-center gap-6">
               <Button
                 variant="outline"
-                className="px-8 py-3 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50 font-light shadow-lg transition-all duration-300"
-                onClick={() => window.open('https://zealsourcing.fi', '_blank', 'noopener,noreferrer')}
+                className="px-8 py-3 rounded-full font-light shadow-lg transition-all duration-300 hover:bg-green-50"
+                style={{borderColor: '#003d3b', color: '#003d3b'}}
+                onClick={() => window.open('https://retta.fi', '_blank', 'noopener,noreferrer')}
               >
-                Visit zealsourcing.fi
+                Visit retta.fi
               </Button>
               <Button
                 variant="outline"
-                className="px-8 py-3 rounded-full border-blue-600 text-blue-600 hover:bg-blue-50 font-light shadow-lg transition-all duration-300"
-                onClick={() => window.open('https://linkedin.com/company/zeal-sourcing', '_blank', 'noopener,noreferrer')}
+                className="px-8 py-3 rounded-full font-light shadow-lg transition-all duration-300 hover:bg-green-50"
+                style={{borderColor: '#003d3b', color: '#003d3b'}}
+                onClick={() => window.open('https://linkedin.com/company/retta', '_blank', 'noopener,noreferrer')}
               >
                 LinkedIn
               </Button>
@@ -163,35 +169,36 @@ const Index = () => {
         </section>
       </main>
 
-      <footer className="bg-blue-900 py-20 mt-20">
+      <footer className="py-20 mt-20" style={{backgroundColor: '#003d3b'}}>
         <div className="container mx-auto px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
             <div>
-              <h3 className="font-light text-lg mb-6 text-white">Services</h3>
+              <h3 className="font-light text-lg mb-6 text-white">Palvelumme</h3>
               <ul className="space-y-3">
-                <li><a href="https://www.zealsourcing.fi/procurement-services" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Procurement Services</a></li>
-                <li><a href="https://www.zealsourcing.fi/create-procurement-strategy" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Procurement Strategy</a></li>
-                <li><a href="https://www.zealsourcing.fi/copy-of-create-procurement-strategy" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Procurement & Tools</a></li>
+                <li><a href="https://retta.fi/palvelumme" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>Property Management Services</a></li>
+                <li><a href="https://retta.fi/rakennuttajille-ja-suurasiakkaille" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>For Developers & Major Clients</a></li>
+                <li><a href="https://retta.fi/tietoa-asumisesta" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>Housing Information</a></li>
               </ul>
             </div>
             <div>
-              <h3 className="font-light text-lg mb-6 text-white">Resources</h3>
+              <h3 className="font-light text-lg mb-6 text-white">Asiakkuus</h3>
               <ul className="space-y-3">
-                <li><a href="https://www.zealsourcing.fi/insights" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Insights</a></li>
+                <li><a href="https://retta.fi/tule-asiakkaaksi" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>Become a Customer</a></li>
+                <li><a href="https://retta.fi/omaretta" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>OmaRetta Portal</a></li>
               </ul>
             </div>
             <div>
-              <h3 className="font-light text-lg mb-6 text-white">Contact</h3>
+              <h3 className="font-light text-lg mb-6 text-white">Tietoa meistä</h3>
               <ul className="space-y-3">
-                <li><a href="https://www.zealsourcing.fi/our-team" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Our Team</a></li>
-                <li><a href="https://www.linkedin.com/company/zealsourcing" className="text-blue-200 hover:text-white font-light transition-colors duration-300">LinkedIn</a></li>
-                <li><a href="https://www.zealsourcing.fi" className="text-blue-200 hover:text-white font-light transition-colors duration-300">Visit Zeal Sourcing</a></li>
+                <li><a href="https://retta.fi/tietoa-meista" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>About Us</a></li>
+                <li><a href="https://retta.fi/toihin-rettalle" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>Work at Retta</a></li>
+                <li><a href="https://retta.fi" className="font-light transition-colors duration-300 text-white hover:opacity-80" style={{color: '#80ffb7'}}>Visit Retta.fi</a></li>
               </ul>
             </div>
           </div>
-          <div className="mt-16 pt-8 border-t border-blue-700 text-center">
-            <p className="text-blue-200 font-light">© 2024 Zeal Sourcing. All rights reserved.</p>
-            <p className="text-blue-300 font-light mt-2">Developed by Mikko Valtonen for open source use</p>
+          <div className="mt-16 pt-8 text-center" style={{borderTop: '1px solid #1e2a54'}}>
+            <p className="font-light" style={{color: '#80ffb7'}}>© 2024 Retta. All rights reserved.</p>
+            <p className="font-light mt-2" style={{color: '#bedaff'}}>AI Assistant developed by Mikko Valtonen for Retta</p>
           </div>
         </div>
       </footer>
