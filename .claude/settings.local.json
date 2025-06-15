@@ -21,7 +21,10 @@
       "Bash(npm install:*)",
       "WebFetch(domain:www.zealsourcing.fi)",
       "Bash(cp:*)",
-      "WebFetch(domain:retta.fi)"
+      "WebFetch(domain:retta.fi)",
+      "Bash(ls:*)",
+      "Bash(md5sum:*)",
+      "Bash(diff:*)"
     ],
     "deny": []
   }

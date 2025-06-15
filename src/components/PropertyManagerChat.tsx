@@ -21,32 +21,32 @@ interface PropertyManagerChatProps {
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 const geminiModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-pro-preview-03-25';
 
-// ERP Function Definition for Gemini
+// Purchase Order Function Definition for Gemini
 const searchERPFunction = {
-  name: "search_erp_data",
-  description: "Search ERP/maintenance order data with various criteria. Use this when user asks about contractors, orders, maintenance, services, or wants to find specific data from their ERP system.",
+  name: "search_purchase_orders",
+  description: "Search purchase order data for property management services and maintenance contracts. Use this when user asks about suppliers, contractors, orders, maintenance services, pricing, delivery dates, or wants to find specific purchase order information.",
   parameters: {
     type: "object",
     properties: {
       supplierName: {
         type: "string",
-        description: "Contractor/service provider name or partial name to search for"
+        description: "Supplier/contractor name or partial name (e.g., 'Huolto-Karhu', 'TechCorp', 'Kiinteistopalvelut')"
       },
       productDescription: {
         type: "string", 
-        description: "Service description or partial description to search for"
+        description: "Service or product description or partial description (e.g., 'Kattoremontti', 'Putkiston huolto', 'Sähkötyöt', 'maintenance', 'repair')"
       },
       dateFrom: {
         type: "string",
-        description: "Search from date (YYYY-MM-DD format). Filters by 'Receive By' column in the Excel data."
+        description: "Search from delivery date (YYYY-MM-DD format). Filters by 'Receive By' column for service delivery dates."
       },
       dateTo: {
         type: "string",
-        description: "Search to date (YYYY-MM-DD format). Filters by 'Receive By' column in the Excel data."
+        description: "Search to delivery date (YYYY-MM-DD format). Filters by 'Receive By' column for service delivery dates."
       },
       buyerName: {
         type: "string",
-        description: "Property manager name or partial name to search for"
+        description: "Property manager name or partial name who placed the order (e.g., 'Erika', 'Mikael', 'Sundström')"
       }
     }
   }
@@ -279,7 +279,7 @@ What can I help you with today?`
               const functionName = part.functionCall.name;
               const functionArgs = part.functionCall.args;
               
-              if (functionName === 'search_erp_data') {
+              if (functionName === 'search_purchase_orders') {
                 try {
                   const aiRequestId = Math.random().toString(36).substring(2, 8);
                   
