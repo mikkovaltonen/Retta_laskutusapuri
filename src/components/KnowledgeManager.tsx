@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, KnowledgeDocument } from '../lib/storageService';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { KnowledgeUpload } from './KnowledgeUpload';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -15,13 +16,14 @@ export const KnowledgeManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
 
   const loadDocuments = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const userDocs = await storageService.getUserDocuments(user.uid);
+      const userDocs = await storageService.getUserDocuments(user.uid, currentWorkspace);
       setDocuments(userDocs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load documents');

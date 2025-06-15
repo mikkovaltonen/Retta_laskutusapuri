@@ -1,25 +1,39 @@
-# Procurement AI Agent Evaluator
+# Propertius - Professional Property Management AI
 
-A modern React application for evaluating AI capabilities in procurement processes through document analysis and intelligent data extraction.
+Meet the Propertius – your AI assistant for high standard professional property management. Advanced procurement optimization, intelligent invoicing automation, and comprehensive property operations management in one unified platform.
 
 ## Features
 
-- **Document Intelligence**: Upload and analyze PDF, Excel, CSV, and Word documents
-- **AI-Powered Analysis**: Leverage Google Gemini AI for procurement document insights
-- **Structured Data Extraction**: Extract suppliers, pricing, and contract information in structured formats
-- **Interactive Chat Interface**: Natural language conversation with AI about uploaded documents
-- **Quick Action Buttons**: Pre-built prompts for common procurement analyses
-- **Export Capabilities**: Download extracted data as CSV files
-- **Responsive UI**: Modern interface built with Tailwind CSS and shadcn/ui components
+### 🏢 **Dual Workspace Architecture**
+- **Propertius Procurement**: Advanced purchasing optimization and supplier intelligence
+- **Propertius Invoicing**: Intelligent billing automation and financial operations
+- **Seamless Workspace Switching**: Context-aware navigation between procurement and invoicing
+
+### 🤖 **AI-Powered Operations**
+- **Document Intelligence**: Upload and analyze PDF, Excel, CSV, and Word documents  
+- **Real-time ERP Integration**: Direct access to purchase order and invoice data via function calling
+- **Interactive Chat Interface**: Natural language conversation with workspace-specific AI assistants
+- **Knowledge Base Integration**: Workspace-specific internal policies and procedures
+
+### 📊 **Data Management**
+- **Workspace-Isolated Storage**: Separate data collections for procurement and invoicing
+- **System Prompt Versioning**: Track and evaluate different AI configurations per workspace
+- **Continuous Improvement Tracking**: Monitor AI performance and user feedback
+- **Structured Data Export**: Download extracted data as CSV files
 
 ## Use Cases
 
-Perfect for evaluating AI capabilities in:
-- **Supplier Analysis**: Extract and analyze supplier information from catalogs and documents
-- **Contract Review**: Identify key terms, risks, and opportunities in procurement contracts
-- **Pricing Intelligence**: Analyze pricing trends and identify cost-saving opportunities
-- **Document Processing**: Demonstrate AI's ability to structure unorganized procurement data
-- **Procurement Workflow Optimization**: Assess how AI can streamline procurement processes
+### **Procurement Workspace**
+- **Supplier Intelligence**: Analyze supplier performance and pricing trends
+- **Purchase Order Management**: Search and analyze procurement history
+- **Cost Optimization**: Identify savings opportunities through AI insights
+- **Procurement Policy Compliance**: Ensure adherence to internal guidelines
+
+### **Invoicing Workspace**  
+- **Invoice Processing**: Automated analysis and categorization
+- **Payment Tracking**: Monitor payment status and overdue invoices
+- **Financial Analytics**: Generate insights from billing data
+- **Billing Process Optimization**: Streamline invoicing workflows
 
 ## Technologies
 
@@ -57,6 +71,52 @@ The application uses two distinct messaging systems:
 - **Purchase Orders**: `search_purchase_orders` function for ERP data access
 - **Real-time Data**: Direct access to Excel-based purchase order information
 - **Structured Results**: Supplier details, pricing, contact information, delivery dates
+
+## Architecture: Function Declarations
+
+### **🔧 Hardcoded Function Declarations (By Design)**
+
+Propertius uses a **hybrid architecture** for AI function calling:
+
+#### **📝 What's Hardcoded:**
+- **Function Declarations** (`searchERPFunction` in `PropertyManagerChat.tsx`)
+- **Parameter Definitions** and validation schemas
+- **Gemini Model Configuration** 
+- **API Integration Logic**
+
+#### **🔥 What's in Firebase:**
+- **System Prompts** (workspace-specific: `purchaser_systemPromptVersions`, `invoicer_systemPromptVersions`)
+- **Knowledge Documents** (workspace-specific: `purchaser_knowledge`, `invoicer_knowledge`)
+- **Chat History** and continuous improvement data
+
+#### **💡 Why This Design:**
+```javascript
+// Example: Hardcoded function declaration in PropertyManagerChat.tsx
+const searchERPFunction = {
+  name: "search_purchase_orders", 
+  description: "Search and DISPLAY purchase order data for property management...",
+  parameters: {
+    type: "object",
+    properties: {
+      supplierName: { type: "string", description: "Supplier/contractor name..." },
+      productDescription: { type: "string", description: "Service description..." },
+      // ... other parameters
+    }
+  }
+};
+```
+
+**Benefits:**
+- ✅ **Performance**: No Firebase calls for function definitions
+- ✅ **Version Control**: Function schemas tracked in Git
+- ✅ **Security**: API structure not user-modifiable  
+- ✅ **Reliability**: Consistent function behavior
+- ✅ **Developer Experience**: Easy to modify in code
+
+**Final AI Prompt Structure:**
+```
+Firebase System Prompt + Firebase Knowledge Docs + Hardcoded Function Declaration → Gemini AI
+```
 
 ## Installation
 

@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { toast } from 'sonner';
 import { loadLatestPrompt } from '../lib/firestoreService';
 
@@ -74,6 +75,7 @@ const PropertyManagementChat: React.FC<PropertyManagementChatProps> = ({
   const [extractedData, setExtractedData] = useState<Record<string, unknown>[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
 
   const processFileForAI = (file: UploadedFile): Part | null => {
     try {
@@ -115,9 +117,9 @@ const PropertyManagementChat: React.FC<PropertyManagementChatProps> = ({
 
     // Load the latest system prompt version
     let systemPrompt = '';
-    if (user?.email) {
+    if (user?.uid) {
       try {
-        const latestPrompt = await loadLatestPrompt(user.email);
+        const latestPrompt = await loadLatestPrompt(user.uid, currentWorkspace);
         if (latestPrompt) {
           systemPrompt = latestPrompt;
           console.log('[PropertyManagementChat] Using latest saved prompt version');

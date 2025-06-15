@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { erpApiService, SearchCriteria, SearchResult } from '../lib/erpApiService';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -17,6 +18,7 @@ export const ERPApiTester: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const { user } = useAuth();
+  const { currentWorkspace, workspaceConfig } = useWorkspace();
 
   const handleInputChange = (field: keyof SearchCriteria, value: string) => {
     setSearchCriteria(prev => ({
@@ -78,10 +80,13 @@ export const ERPApiTester: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="w-5 h-5" />
-            ERP API Tester
+            {workspaceConfig[currentWorkspace].apiTestTitle}
           </CardTitle>
           <CardDescription>
-            Test the internal ERP API with different search criteria
+            {currentWorkspace === 'purchaser' 
+              ? 'Test the internal ERP API with different purchase order search criteria'
+              : 'Test the internal ERP API with different sales invoice search criteria'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

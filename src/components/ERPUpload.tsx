@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { storageService, ERPDocument } from '../lib/storageService';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Upload, FileSpreadsheet, AlertCircle, Database } from 'lucide-react';
@@ -18,6 +19,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!user) {
@@ -47,7 +49,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
     setError(null);
 
     try {
-      const uploadedDoc = await storageService.uploadERPDocument(file, user.uid);
+      const uploadedDoc = await storageService.uploadERPDocument(file, user.uid, currentWorkspace);
       onUploadComplete?.(uploadedDoc);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -102,7 +104,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       } as File;
       
       // Upload using the existing upload function
-      const uploadedDoc = await storageService.uploadERPDocument(fileObject, user.uid);
+      const uploadedDoc = await storageService.uploadERPDocument(fileObject, user.uid, currentWorkspace);
       onUploadComplete?.(uploadedDoc);
       toast.success('Sample ERP data loaded successfully!');
       console.log('✅ Successfully loaded sample ERP data');
@@ -121,10 +123,13 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="w-5 h-5" />
-          ERP/P2P Data Upload
+          {currentWorkspace === 'purchaser' ? 'Purchase Order Data Upload' : 'Sales Invoice Data Upload'}
         </CardTitle>
         <CardDescription>
-          Upload your structured Excel file to simulate ERP integration
+          {currentWorkspace === 'purchaser' 
+            ? 'Upload your Excel file with purchase order data to simulate ERP integration'
+            : 'Upload your Excel file with sales invoice data to simulate ERP integration'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent>

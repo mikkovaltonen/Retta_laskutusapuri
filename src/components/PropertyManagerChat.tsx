@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { toast } from 'sonner';
 import { loadLatestPrompt, createContinuousImprovementSession, addTechnicalLog, setUserFeedback } from '../lib/firestoreService';
 import { sessionService, ChatSession } from '../lib/sessionService';
@@ -16,6 +17,7 @@ import { erpApiService } from '../lib/erpApiService';
 
 interface PropertyManagerChatProps {
   onLogout?: () => void;
+  hideNavigation?: boolean;
 }
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
@@ -23,8 +25,8 @@ const geminiModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-pro-preview
 
 // Purchase Order Function Definition for Gemini
 const searchERPFunction = {
-  name: "search_purchase_orders",
-  description: "Search purchase order data for property management services and maintenance contracts. Use this when user asks about suppliers, contractors, orders, maintenance services, pricing, delivery dates, or wants to find specific purchase order information.",
+  name: "search_purchase_orders", 
+  description: "Search and DISPLAY purchase order data for property management. ALWAYS show the actual data found to the user in a clear, formatted way. Include specific details like supplier names, products, prices, dates, and quantities from the results.",
   parameters: {
     type: "object",
     properties: {
@@ -95,7 +97,7 @@ const processTextWithCitations = (text: string, citationSources?: CitationSource
   return { originalText, formattedSources };
 };
 
-const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) => {
+const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout, hideNavigation = false }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -105,6 +107,7 @@ const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) =
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { currentWorkspace } = useWorkspace();
   
   // Continuous improvement tracking
   const [continuousImprovementSessionId, setContinuousImprovementSessionId] = useState<string | null>(null);
@@ -120,11 +123,16 @@ const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) =
   // Initialize chat session with context
   React.useEffect(() => {
     const initializeSession = async () => {
-      if (!sessionActive && user && !sessionInitializing) {
+      // Force reinitialization when workspace changes or on first load
+      if (user) {
         setSessionInitializing(true);
+        setSessionActive(false); // Reset session state
+        setMessages([]); // Clear existing messages
+        setChatSession(null); // Clear existing session
+        
         try {
           // Initialize session with system prompt + knowledge documents
-          const session = await sessionService.initializeChatSession(user.uid);
+          const session = await sessionService.initializeChatSession(user.uid, currentWorkspace);
           setChatSession(session);
           
           // Check if this is a new user (no documents loaded)
@@ -134,28 +142,28 @@ const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) =
             role: 'model',
             parts: [{
               text: isLikelyNewUser 
-                ? `🎉 **Tervetuloa Retta Professional Buyer -assistenttiin!**
+                ? `🎉 **Welcome to Propertius!**
 
-Olen täällä auttamassa sinua säästämään rahaa ostokuluissa ja optimoimaan kiinteistöjen hankintaprosesseja. Ostojen asiantuntijana voin auttaa sinua:
+Meet your AI assistant for high standard professional property management. I'm here to help you with ${currentWorkspace === 'purchaser' ? 'advanced procurement optimization and supplier intelligence' : 'intelligent invoicing automation and financial operations'}.
 
-**🎯 Aloita tästä (suositus):**
-• **Lataa esimerkkidata**: Mene Admin-paneeliin → Lataa esimerkkitiedostot ja ostotilaustiedot kokeillaksesi
-• **Lataa omat tiedostot**: Lisää omat ostokäytäntösi ja Excel-ostotilaustiedot
-• **Kysy kysymyksiä**: "Mitä toimittajia käytämme?" tai "Etsi viime vuosineljänneksen huoltosopimuksia"
+**🎯 Quick Start Guide:**
+• **Load Sample Data**: Visit Admin panel → Load example files and ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data to explore
+• **Upload Your Data**: Add your own ${currentWorkspace === 'purchaser' ? 'procurement policies and purchase order' : 'invoicing processes and sales invoice'} files
+• **Ask Questions**: "${currentWorkspace === 'purchaser' ? 'What suppliers do we use?' : 'Show me recent invoices'}" or "${currentWorkspace === 'purchaser' ? 'Find maintenance contracts from last quarter' : 'Track overdue payments'}"
 
-**💡 Erikoisominaisuuteni:**
-✅ Reaaliaikainen pääsy ostotilaustietoihisi kehittyneen function calling -teknologian kautta
-✅ Sisäisten hankintakäytäntöjesi ja dokumenttien analysointi
-✅ Kiinteistöisännöitsijän asiantuntemus kustannusoptimointiin ja toimittajahallintaan
+**💡 Advanced Features:**
+✅ Real-time access to your ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data through advanced function calling
+✅ Analysis of your internal ${currentWorkspace === 'purchaser' ? 'procurement policies' : 'billing processes'} and documentation  
+✅ Professional property management expertise for ${currentWorkspace === 'purchaser' ? 'cost optimization and supplier management' : 'financial operations and payment tracking'}
 
-**Valmis kokeilemaan?** Kokeile kysyä minulta "Lataa esimerkkidataa, jotta näen mitä osaat" tai vieraile Admin-paneelissa lataamassa omia tiedostoja!
+**Ready to explore?** Try asking "Load sample data so I can see what you can do" or visit the Admin panel to upload your own files!
 
-Mistä haluaisit aloittaa?`
-                : `Hei! Olen Retta Professional Buyer -assistenttisi. Olen täällä auttamassa sinua säästämään rahaa ostokuluissa ja optimoimaan kiinteistöjen hankintaprosesseja.
+How would you like to get started?`
+                : `Hello! I'm your Propertius ${currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} assistant. I'm here to help you with professional property management ${currentWorkspace === 'purchaser' ? 'procurement optimization and cost savings' : 'invoicing automation and financial tracking'}.
 
-📚 **Tietokanta ladattu:** ${session.documentsUsed.length} dokumentti(a) käytettävissä.
+📚 **Knowledge Base Loaded:** ${session.documentsUsed.length} document(s) available.
 
-Miten voin auttaa sinua tänään?`
+How can I help you today?`
             }]
           };
           setMessages([welcomeMessage]);
@@ -170,7 +178,12 @@ Miten voin auttaa sinua tänään?`
           }
         } catch (error) {
           console.error('Failed to initialize session:', error);
-          toast.error('Tietokannan lataus epäonnistui. Tarkista system prompt -asetukset Admin-paneelista.');
+          
+          if (error instanceof Error && error.message.includes('No system prompt configured')) {
+            toast.error(`No ${currentWorkspace} system prompt found. Please create one in the Admin panel.`);
+          } else {
+            toast.error('Database loading failed. Check system prompt settings in Admin panel.');
+          }
           
           // No fallback message - user needs to configure system prompt
           setMessages([]);
@@ -182,7 +195,7 @@ Miten voin auttaa sinua tänään?`
     };
 
     initializeSession();
-  }, [sessionActive, user, sessionInitializing]);
+  }, [user?.uid, currentWorkspace]); // Removed sessionInitializing to prevent infinite loop
 
   const quickActions = [
     "Use prenegotiated discount prices",
@@ -229,7 +242,7 @@ Miten voin auttaa sinua tänään?`
         // Fallback: try to load latest prompt for this user
         if (user?.uid) {
           try {
-            const latestPrompt = await loadLatestPrompt(user.uid);
+            const latestPrompt = await loadLatestPrompt(user.uid, currentWorkspace);
             if (latestPrompt) {
               systemPrompt = latestPrompt;
             }
@@ -330,13 +343,14 @@ Miten voin auttaa sinua tänään?`
                     });
                   }
                   
-                  // Create function response
+                  // Create function response with explicit instructions
                   const functionResponse = {
                     role: 'model' as const,
                     parts: [{
                       functionResponse: {
                         name: functionName,
                         response: {
+                          instruction: "IMPORTANT: Present this data to the user in a clear, formatted way. Show specific details from each record including supplier names, products, prices, and dates. Do not just say you are 'checking' - show the actual results found.",
                           records: searchResult.records,
                           totalCount: searchResult.totalCount,
                           processingTimeMs: searchResult.processingTimeMs
@@ -344,6 +358,7 @@ Miten voin auttaa sinua tänään?`
                       }
                     }]
                   };
+                  
                   
                   // Generate follow-up response with function results
                   const followUpResult = await model.generateContent({
@@ -469,7 +484,7 @@ Miten voin auttaa sinua tänään?`
     if (user) {
       setSessionInitializing(true);
       try {
-        const session = await sessionService.initializeChatSession(user.uid);
+        const session = await sessionService.initializeChatSession(user.uid, currentWorkspace);
         setChatSession(session);
         toast.success('Session refreshed with latest knowledge base');
       } catch (error) {
@@ -496,7 +511,7 @@ Miten voin auttaa sinua tänään?`
       // For now, use a default prompt key if we don't have the actual one
       // This should be updated when the user selects/creates a prompt version
       const promptKey = currentPromptKey || `${user.email?.split('@')[0] || 'user'}_v1`;
-      const sessionId = await createContinuousImprovementSession(promptKey, chatSessionKey, user.uid);
+      const sessionId = await createContinuousImprovementSession(promptKey, chatSessionKey, user.uid, currentWorkspace);
       setContinuousImprovementSessionId(sessionId);
       console.log('📊 Continuous improvement session initialized:', sessionId);
     } catch (error) {
@@ -567,32 +582,43 @@ Miten voin auttaa sinua tänään?`
         )}
         
         {/* Action buttons top right */}
-        <div className="absolute top-4 right-4 flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={handleOpenAdmin}
-            className="text-white hover:bg-white/20"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Admin
-          </Button>
-          {onLogout && (
+        {!hideNavigation && (
+          <div className="absolute top-4 right-4 flex gap-2">
             <Button
               variant="ghost"
-              onClick={onLogout}
+              onClick={handleOpenAdmin}
               className="text-white hover:bg-white/20"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              <Settings className="h-4 w-4 mr-2" />
+              Admin
             </Button>
-          )}
-        </div>
+            {onLogout && (
+              <Button
+                variant="ghost"
+                onClick={onLogout}
+                className="text-white hover:bg-white/20"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex items-center justify-center mb-4">
           <Bot className="h-8 w-8 mr-3" />
-          <h1 className="text-3xl font-bold">Property Manager AI Assistant</h1>
+          <h1 className="text-3xl font-bold">
+            {currentWorkspace === 'purchaser' 
+              ? 'Propertius Procurement AI' 
+              : 'Propertius Invoicing AI'
+            }
+          </h1>
         </div>
         <p className="text-gray-300 text-lg max-w-4xl mx-auto">
-          Get expert property management advice, use prenegotiated prices from best contractors, and do professional level property management with ease
+          Meet the Propertius – your AI assistant for high standard professional property management. 
+          {currentWorkspace === 'purchaser' 
+            ? ' Advanced procurement optimization, supplier intelligence, and cost management.'
+            : ' Intelligent invoicing automation, payment tracking, and financial operations.'
+          }
         </p>
       </div>
 

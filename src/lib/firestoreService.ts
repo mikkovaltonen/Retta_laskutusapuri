@@ -2,6 +2,14 @@ import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs,
 import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 
+// Workspace types
+export type WorkspaceType = 'purchaser' | 'invoicer';
+
+// Helper function to get workspace-specific collection names
+const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+  return `${workspace}_${baseCollection}`;
+};
+
 export interface SystemPromptVersion {
   id?: string;
   version: number;
@@ -81,7 +89,8 @@ export const savePromptVersion = async (
   promptText: string, 
   evaluation: string = '',
   aiModel: string = 'gemini-2.5-flash-preview-04-17',
-  userEmail?: string
+  userEmail?: string,
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<number> => {
   try {
     if (!db) {
@@ -103,7 +112,7 @@ export const savePromptVersion = async (
     }
 
     // Try Firebase first
-    const nextVersion = await getNextVersionNumber(userId);
+    const nextVersion = await getNextVersionNumber(userId, workspace);
     const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `user_${userId.substring(0, 8)}_v${nextVersion}`;
     
     const promptVersion: Omit<SystemPromptVersion, 'id'> = {
@@ -116,7 +125,7 @@ export const savePromptVersion = async (
       technicalKey: technicalKey
     };
 
-    const docRef = await addDoc(collection(db, 'systemPromptVersions'), {
+    const docRef = await addDoc(collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)), {
       ...promptVersion,
       savedDate: serverTimestamp()
     });
@@ -143,13 +152,13 @@ export const savePromptVersion = async (
 };
 
 // Get the next version number for a user
-const getNextVersionNumber = async (userId: string): Promise<number> => {
+const getNextVersionNumber = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<number> => {
   if (!db) {
     return 1;
   }
 
   const q = query(
-    collection(db, 'systemPromptVersions'),
+    collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
     where('userId', '==', userId)
   );
   
@@ -166,9 +175,9 @@ const getNextVersionNumber = async (userId: string): Promise<number> => {
 };
 
 // Load the latest version of system prompt for a user
-export const loadLatestPrompt = async (userId: string): Promise<string | null> => {
+export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<string | null> => {
   try {
-    console.log('🔍 Loading latest prompt for user:', userId.substring(0, 8) + '...');
+    console.log('🔍 Loading latest prompt for user:', userId.substring(0, 8) + '...', 'workspace:', workspace);
     
     if (!db) {
       console.warn('Firebase not initialized, using localStorage fallback');
@@ -179,7 +188,7 @@ export const loadLatestPrompt = async (userId: string): Promise<string | null> =
     }
 
     const q = query(
-      collection(db, 'systemPromptVersions'),
+      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
       where('userId', '==', userId)
     );
     
@@ -219,9 +228,9 @@ export const loadLatestPrompt = async (userId: string): Promise<string | null> =
 };
 
 // Get all versions for a user (for history browsing)
-export const getPromptHistory = async (userId: string): Promise<SystemPromptVersion[]> => {
+export const getPromptHistory = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<SystemPromptVersion[]> => {
   try {
-    console.log('📚 Loading prompt history for user:', userId.substring(0, 8) + '...');
+    console.log('📚 Loading prompt history for user:', userId.substring(0, 8) + '...', 'workspace:', workspace);
     
     if (!db) {
       console.warn('Firebase not initialized, using localStorage fallback');
@@ -229,7 +238,7 @@ export const getPromptHistory = async (userId: string): Promise<SystemPromptVers
     }
 
     const q = query(
-      collection(db, 'systemPromptVersions'),
+      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
       where('userId', '==', userId)
     );
     
@@ -325,7 +334,8 @@ export const loadPrompt = async (userId: string): Promise<string | null> => {
 export const createContinuousImprovementSession = async (
   promptKey: string,
   chatSessionKey: string,
-  userId: string
+  userId: string,
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<string> => {
   try {
     if (!db) {
@@ -343,7 +353,7 @@ export const createContinuousImprovementSession = async (
       lastUpdated: new Date()
     };
 
-    const docRef = await addDoc(collection(db, 'continuous_improvement'), {
+    const docRef = await addDoc(collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)), {
       ...session,
       createdDate: serverTimestamp(),
       lastUpdated: serverTimestamp()
@@ -392,6 +402,8 @@ export const addTechnicalLog = async (
   }
 };
 
+// Note: This function cannot determine workspace from sessionId alone
+// Future improvement: either encode workspace in sessionId or add workspace parameter
 export const setUserFeedback = async (
   sessionId: string,
   feedback: 'thumbs_up' | 'thumbs_down',
@@ -423,7 +435,8 @@ export const setUserFeedback = async (
 
 export const getContinuousImprovementSessions = async (
   userId: string,
-  promptKey?: string
+  promptKey?: string,
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<ContinuousImprovementSession[]> => {
   try {
     if (!db) {
@@ -432,7 +445,7 @@ export const getContinuousImprovementSessions = async (
     }
 
     let q = query(
-      collection(db, 'continuous_improvement'),
+      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
       where('userId', '==', userId)
     );
 
@@ -458,7 +471,8 @@ export const getContinuousImprovementSessions = async (
 
 // Get negative feedback sessions (for issue reporting)
 export const getNegativeFeedbackSessions = async (
-  userId?: string // If not provided, get all users' feedback
+  userId?: string, // If not provided, get all users' feedback
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<ContinuousImprovementSession[]> => {
   try {
     if (!db) {
@@ -467,7 +481,7 @@ export const getNegativeFeedbackSessions = async (
     }
 
     let q = query(
-      collection(db, 'continuous_improvement'),
+      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
       where('userFeedback', '==', 'thumbs_down')
     );
 

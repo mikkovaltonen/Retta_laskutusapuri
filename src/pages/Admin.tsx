@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate, Link } from "react-router-dom";
 import { LogOut, Settings, FileText, Database, ArrowLeft, Bot, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import DocumentAnalysis from "@/components/DocumentAnalysis";
 import { KnowledgeManager } from "@/components/KnowledgeManager";
 import { ERPManager } from "@/components/ERPManager";
@@ -18,9 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import PromptEditor from "../components/PromptEditor";
 
-const Admin = () => {
+interface AdminProps {
+  hideNavigation?: boolean;
+}
+
+const Admin = ({ hideNavigation = false }: AdminProps) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
   const [showPdfUpload, setShowPdfUpload] = useState(false);
   const [showExcelUpload, setShowExcelUpload] = useState(false);
@@ -42,41 +48,45 @@ const Admin = () => {
         <div className="container mx-auto">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-6">
-              <Button
-                variant="ghost"
-                onClick={handleBackToWorkbench}
-                className="text-white hover:bg-white/20"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Chat
-              </Button>
+              {!hideNavigation && (
+                <Button
+                  variant="ghost"
+                  onClick={handleBackToWorkbench}
+                  className="text-white hover:bg-white/20"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Chat
+                </Button>
+              )}
               <div className="flex items-center gap-3">
                 <Bot className="h-8 w-8" />
                 <div>
-                  <h1 className="text-2xl font-bold">Admin Panel</h1>
-                  <p className="text-gray-300">System Configuration & Management</p>
+                  <h1 className="text-2xl font-bold">Propertius Admin</h1>
+                  <p className="text-gray-300">Professional Property Management Configuration</p>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              {/* User info */}
-              {user && (
-                <div className="text-sm text-gray-300">
-                  <span className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span className="text-white font-medium">{user.email}</span>
-                  </span>
-                </div>
-              )}
-              <Button
-                variant="ghost"
-                onClick={handleLogout}
-                className="text-white hover:bg-white/20"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </Button>
-            </div>
+            {!hideNavigation && (
+              <div className="flex items-center gap-4">
+                {/* User info */}
+                {user && (
+                  <div className="text-sm text-gray-300">
+                    <span className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-white font-medium">{user.email}</span>
+                    </span>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={handleLogout}
+                  className="text-white hover:bg-white/20"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -147,12 +157,12 @@ const Admin = () => {
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <FileText className="mr-3 h-6 w-6" />
-                Internal Knowledge
+                {currentWorkspace === 'purchaser' ? 'Procurement Internal Knowledge' : 'Invoicing Internal Knowledge'}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Upload markdown and text documents containing internal procurement policies, procedures, and knowledge base content for AI analysis.
+                Upload markdown and text documents containing internal {currentWorkspace === 'purchaser' ? 'procurement policies, procedures, and purchasing guidelines' : 'invoicing policies, billing procedures, and financial workflows'} for AI analysis.
               </p>
               <Dialog open={showPdfUpload} onOpenChange={setShowPdfUpload}>
                 <DialogTrigger asChild>
@@ -165,7 +175,7 @@ const Admin = () => {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Internal Knowledge Management</DialogTitle>
+                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Procurement Internal Knowledge' : 'Invoicing Internal Knowledge'} Management</DialogTitle>
                     <DialogDescription>
                       Upload and manage markdown and text documents for your internal knowledge base.
                     </DialogDescription>
@@ -181,12 +191,12 @@ const Admin = () => {
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <Database className="mr-3 h-6 w-6" />
-                ERP/P2P Integration
+                {currentWorkspace === 'purchaser' ? 'Purchase Order Integration' : 'Sales Invoice Integration'}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Upload and manage your structured Excel file to simulate ERP integration.
+                Upload and manage your structured Excel file to simulate {currentWorkspace === 'purchaser' ? 'purchase order' : 'sales invoice'} ERP integration.
               </p>
               <Dialog open={showExcelUpload} onOpenChange={setShowExcelUpload}>
                 <DialogTrigger asChild>
@@ -199,7 +209,7 @@ const Admin = () => {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>ERP/P2P Integration Management</DialogTitle>
+                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} Integration Management</DialogTitle>
                     <DialogDescription>
                       Upload and manage your structured Excel file to simulate ERP integration.
                     </DialogDescription>
@@ -215,12 +225,12 @@ const Admin = () => {
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <Database className="mr-3 h-6 w-6" />
-                ERP API Testing
+                {currentWorkspace === 'purchaser' ? 'Purchase Order API Tester' : 'Sales Invoice API Tester'}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Test the internal ERP API with search functionality. Search by supplier, product, date range, or buyer name.
+                Test the internal ERP API with search functionality. Search by {currentWorkspace === 'purchaser' ? 'supplier, product, date range, or buyer name' : 'customer, invoice amount, date range, or invoice status'}.
               </p>
               <Dialog open={showApiTester} onOpenChange={setShowApiTester}>
                 <DialogTrigger asChild>
@@ -233,7 +243,7 @@ const Admin = () => {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>ERP API Testing Interface</DialogTitle>
+                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} API Testing Interface</DialogTitle>
                     <DialogDescription>
                       Test the ERP search API with different criteria and verify functionality.
                     </DialogDescription>
