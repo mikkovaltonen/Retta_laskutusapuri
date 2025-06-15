@@ -76,8 +76,9 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       setUploading(true);
       setError(null);
       
-      // Fetch the sample Excel file from public directory
-      const response = await fetch('/example_purchase_orders.xlsx');
+      // Fetch the sample Excel file from public directory with cache busting
+      const cacheBuster = Date.now();
+      const response = await fetch(`/example_purchase_orders.xlsx?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
       }

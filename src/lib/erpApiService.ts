@@ -106,6 +106,7 @@ export class ERPApiService {
       const allRecords: ERPRecord[] = rawData.map((row: any[], index: number) => {
         const record: ERPRecord = { rowIndex: index + 2 }; // +2 because row 1 is headers, Excel rows start from 1
         
+        // Map headers to data - use only available headers
         headers.forEach((header: string, colIndex: number) => {
           record[header] = row[colIndex] || '';
         });
@@ -119,6 +120,23 @@ export class ERPApiService {
         availableHeaders: headers,
         sampleRecord: allRecords[0] || null
       });
+      
+      // Debug: Show detailed first record mapping
+      if (allRecords.length > 0) {
+        console.log('🔍 DETAILED FIRST RECORD MAPPING:');
+        console.log(`Headers count: ${headers.length}, Data columns count: ${rawData[0]?.length || 0}`);
+        console.log('Headers:', headers);
+        console.log('First raw row data:', rawData[0]);
+        
+        headers.forEach((header, index) => {
+          const value = rawData[0]?.[index];
+          console.log(`Column ${index}: "${header}" = "${value}"`);
+        });
+        
+        if (rawData[0]?.length > headers.length) {
+          console.log('⚠️ Extra data columns (not mapped):', rawData[0].slice(headers.length));
+        }
+      }
 
       const filteredRecords = this.applyFilters(allRecords, criteria, headers, requestId);
       

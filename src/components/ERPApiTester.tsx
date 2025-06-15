@@ -55,83 +55,6 @@ export const ERPApiTester: React.FC = () => {
     }
   };
 
-  const loadSampleData = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const sampleRecords = await erpApiService.getSampleData(user.uid, 3);
-      const sampleResult: SearchResult = {
-        records: sampleRecords,
-        totalCount: sampleRecords.length,
-        searchCriteria: {},
-        executedAt: new Date(),
-        processingTimeMs: 0
-      };
-      setSearchResult(sampleResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sample data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runTestSuite = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      console.log('🧪 Starting ERP API Test Suite...');
-      
-      // Test 1: Get all records
-      console.log('Test 1: Getting all records...');
-      const allRecords = await erpApiService.searchRecords(user.uid, {});
-      console.log(`✅ Found ${allRecords.totalCount} total records`);
-
-      // Test 2: Search by supplier
-      console.log('Test 2: Searching by supplier...');
-      const supplierTest = await erpApiService.searchRecords(user.uid, { supplierName: 'Tech' });
-      console.log(`✅ Supplier search: ${supplierTest.totalCount} records found`);
-
-      // Test 3: Search by product
-      console.log('Test 3: Searching by product...');
-      const productTest = await erpApiService.searchRecords(user.uid, { productDescription: 'laptop' });
-      console.log(`✅ Product search: ${productTest.totalCount} records found`);
-
-      // Test 4: Search by buyer
-      console.log('Test 4: Searching by buyer...');
-      const buyerTest = await erpApiService.searchRecords(user.uid, { buyerName: 'John' });
-      console.log(`✅ Buyer search: ${buyerTest.totalCount} records found`);
-
-      // Test 5: Date range search
-      console.log('Test 5: Searching by date range...');
-      const dateTest = await erpApiService.searchRecords(user.uid, { 
-        dateFrom: '2024-01-01', 
-        dateTo: '2024-12-31' 
-      });
-      console.log(`✅ Date search: ${dateTest.totalCount} records found`);
-
-      // Test 6: Combined search
-      console.log('Test 6: Combined search...');
-      const combinedTest = await erpApiService.searchRecords(user.uid, { 
-        supplierName: 'Tech',
-        productDescription: 'laptop'
-      });
-      console.log(`✅ Combined search: ${combinedTest.totalCount} records found`);
-
-      console.log('🎉 All tests completed successfully!');
-      setSearchResult(allRecords);
-    } catch (err) {
-      console.error('❌ Test suite failed:', err);
-      setError(err instanceof Error ? err.message : 'Test suite failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   React.useEffect(() => {
     if (user) {
@@ -171,51 +94,74 @@ export const ERPApiTester: React.FC = () => {
 
           {/* Filter Documentation */}
           <div className="p-4 bg-green-50 border border-green-200 rounded">
-            <h4 className="font-medium text-green-800 mb-3">📋 ERP API Field Mapping</h4>
+            <h4 className="font-medium text-green-800 mb-3">📋 Purchase Order API Field Mapping</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
                 <h5 className="font-medium text-green-700 mb-2">📦 Supplier Name Filter</h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches ONLY column:</strong> "Supplier Name"
+                  <strong>Searches column:</strong> "Supplier Name"
                 </p>
                 <p className="text-green-600 text-xs">
-                  ⚠️ Your Excel must have a column named exactly "Supplier Name"
+                  Finds suppliers like "Huolto-Karhu Oy", "TechCorp", etc.
                 </p>
               </div>
               
               <div>
-                <h5 className="font-medium text-green-700 mb-2">🛍️ Product Description Filter</h5>
+                <h5 className="font-medium text-green-700 mb-2">🛍️ Product/Service Description</h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches ONLY column:</strong> "Description"
+                  <strong>Searches column:</strong> "Description"
                 </p>
                 <p className="text-green-600 text-xs">
-                  ⚠️ Your Excel must have a column named exactly "Description"
+                  Finds services like "Kattoremontti", "Putkiston huolto", etc.
                 </p>
               </div>
               
               <div>
-                <h5 className="font-medium text-green-700 mb-2">📅 Date Range Filter</h5>
+                <h5 className="font-medium text-green-700 mb-2">📅 Delivery Date Filter</h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches ONLY column:</strong> "Receive By"
+                  <strong>Searches column:</strong> "Receive By"
                 </p>
                 <p className="text-green-600 text-xs">
-                  ⚠️ Your Excel must have a column named exactly "Receive By"
+                  Filter by when service/product should be delivered
                 </p>
               </div>
               
               <div>
-                <h5 className="font-medium text-green-700 mb-2">👤 Buyer Name Filter</h5>
+                <h5 className="font-medium text-green-700 mb-2">👤 Property Manager</h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches ONLY column:</strong> "Buyer Name"
+                  <strong>Searches column:</strong> "Buyer Name"
                 </p>
                 <p className="text-green-600 text-xs">
-                  ⚠️ Your Excel must have a column named exactly "Buyer Name"
+                  Find orders by property manager like "Erika Sundström"
+                </p>
+              </div>
+              
+              <div>
+                <h5 className="font-medium text-green-700 mb-2">📋 PO Number</h5>
+                <p className="text-green-600 mb-1">
+                  <strong>Available in results:</strong> "PO Number"
+                </p>
+                <p className="text-green-600 text-xs">
+                  Unique purchase order identifier (e.g., 107000)
+                </p>
+              </div>
+              
+              <div>
+                <h5 className="font-medium text-green-700 mb-2">💰 Pricing Info</h5>
+                <p className="text-green-600 mb-1">
+                  <strong>Available:</strong> Unit Price, Line Amount, VAT %
+                </p>
+                <p className="text-green-600 text-xs">
+                  Complete pricing breakdown per order line
                 </p>
               </div>
             </div>
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
               <p className="text-blue-700 text-sm">
-                <strong>💡 Required Excel Column Names:</strong> Supplier Name, Description, Receive By, Buyer Name
+                <strong>💡 Searchable Fields:</strong> Supplier Name, Description, Receive By, Buyer Name
+              </p>
+              <p className="text-blue-700 text-xs mt-1">
+                <strong>📊 All Available Data:</strong> PO Number, Supplier Details, Product Code, Quantity, Unit, Pricing, Contact Info, Invoice Details
               </p>
             </div>
           </div>
@@ -239,11 +185,11 @@ export const ERPApiTester: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="supplier" className="flex items-center gap-2">
                 📦 Supplier Name
-                <span className="text-xs text-gray-500">(searches: "Supplier Name" column)</span>
+                <span className="text-xs text-gray-500">(searches: "Supplier Name")</span>
               </Label>
               <Input
                 id="supplier"
-                placeholder="e.g., Tech, Acme, part of supplier name"
+                placeholder="e.g., Huolto-Karhu, TechCorp, Kiinteistopalvelut"
                 value={searchCriteria.supplierName || ''}
                 onChange={(e) => handleInputChange('supplierName', e.target.value)}
               />
@@ -251,12 +197,12 @@ export const ERPApiTester: React.FC = () => {
             
             <div className="space-y-2">
               <Label htmlFor="product" className="flex items-center gap-2">
-                🛍️ Product Description
-                <span className="text-xs text-gray-500">(searches: "Description" column)</span>
+                🛍️ Service/Product Description
+                <span className="text-xs text-gray-500">(searches: "Description")</span>
               </Label>
               <Input
                 id="product"
-                placeholder="e.g., laptop, monitor, part of description"
+                placeholder="e.g., Kattoremontti, Putkiston huolto, Sähkötyöt"
                 value={searchCriteria.productDescription || ''}
                 onChange={(e) => handleInputChange('productDescription', e.target.value)}
               />
@@ -264,37 +210,37 @@ export const ERPApiTester: React.FC = () => {
             
             <div className="space-y-2">
               <Label htmlFor="buyer" className="flex items-center gap-2">
-                👤 Buyer Name
-                <span className="text-xs text-gray-500">(searches: "Buyer Name" column)</span>
+                👤 Property Manager
+                <span className="text-xs text-gray-500">(searches: "Buyer Name")</span>
               </Label>
               <Input
                 id="buyer"
-                placeholder="e.g., John, Smith, part of buyer name"
+                placeholder="e.g., Erika, Mikael, property manager name"
                 value={searchCriteria.buyerName || ''}
                 onChange={(e) => handleInputChange('buyerName', e.target.value)}
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="dateFrom">Date From (Receive By)</Label>
+              <Label htmlFor="dateFrom">📅 Delivery Date From</Label>
               <Input
                 id="dateFrom"
                 type="date"
                 value={searchCriteria.dateFrom || ''}
                 onChange={(e) => handleInputChange('dateFrom', e.target.value)}
               />
-              <p className="text-xs text-gray-500">Filters by "Receive By" column</p>
+              <p className="text-xs text-gray-500">Service delivery date range start</p>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="dateTo">Date To (Receive By)</Label>
+              <Label htmlFor="dateTo">📅 Delivery Date To</Label>
               <Input
                 id="dateTo"
                 type="date"
                 value={searchCriteria.dateTo || ''}
                 onChange={(e) => handleInputChange('dateTo', e.target.value)}
               />
-              <p className="text-xs text-gray-500">Filters by "Receive By" column</p>
+              <p className="text-xs text-gray-500">Service delivery date range end</p>
             </div>
           </div>
 
@@ -307,24 +253,6 @@ export const ERPApiTester: React.FC = () => {
             >
               <Search className="w-4 h-4 mr-2" />
               Search Records
-            </Button>
-            
-            <Button 
-              onClick={loadSampleData} 
-              disabled={loading}
-              variant="outline"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Load Sample Data
-            </Button>
-            
-            <Button 
-              onClick={runTestSuite} 
-              disabled={loading}
-              variant="outline"
-              className="text-green-600 border-green-200 hover:bg-green-50"
-            >
-              🧪 Run Test Suite
             </Button>
           </div>
         </CardContent>
