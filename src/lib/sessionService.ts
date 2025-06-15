@@ -1,6 +1,11 @@
 import { db } from './firebase';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { storageService, KnowledgeDocument } from './storageService';
+import { storageService, KnowledgeDocument, WorkspaceType } from './storageService';
+
+// Helper function to get workspace-specific localStorage keys
+const getWorkspaceStorageKey = (baseKey: string, workspace: WorkspaceType): string => {
+  return `${workspace}_${baseKey}`;
+};
 
 export interface ChatSession {
   systemPrompt: string;
@@ -25,10 +30,15 @@ export class SessionService {
   /**
    * Get the latest system prompt for a user
    */
-  async getLatestSystemPrompt(userId: string): Promise<SystemPromptVersion | null> {
+  async getLatestSystemPrompt(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<SystemPromptVersion | null> {
     try {
+      // Helper function to get workspace-specific collection names
+      const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+        return `${workspace}_${baseCollection}`;
+      };
+
       const q = query(
-        collection(db, 'systemPromptVersions'),
+        collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
         where('userId', '==', userId)
       );
       
@@ -59,9 +69,9 @@ export class SessionService {
   /**
    * Get all knowledge documents for a user
    */
-  async getUserKnowledgeDocuments(userId: string): Promise<KnowledgeDocument[]> {
+  async getUserKnowledgeDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<KnowledgeDocument[]> {
     try {
-      return await storageService.getUserDocuments(userId);
+      return await storageService.getUserDocuments(userId, workspace);
     } catch (error) {
       console.error('Failed to fetch knowledge documents:', error);
       return [];
@@ -110,10 +120,10 @@ Please use this internal knowledge to provide accurate, company-specific guidanc
   /**
    * Initialize a new chat session with full context
    */
-  async initializeChatSession(userId: string): Promise<ChatSession> {
+  async initializeChatSession(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ChatSession> {
     try {
       // Get latest system prompt
-      const latestPrompt = await this.getLatestSystemPrompt(userId);
+      const latestPrompt = await this.getLatestSystemPrompt(userId, workspace);
       if (!latestPrompt?.systemPrompt) {
         throw new Error('No system prompt configured. Please create a prompt in the Admin panel.');
       }
@@ -121,7 +131,7 @@ Please use this internal knowledge to provide accurate, company-specific guidanc
       const aiModel = latestPrompt.aiModel || 'gemini-2.5-pro-preview-06-05';
 
       // Get knowledge documents
-      const documents = await this.getUserKnowledgeDocuments(userId);
+      const documents = await this.getUserKnowledgeDocuments(userId, workspace);
       
       // Build knowledge context
       const knowledgeContext = await this.buildKnowledgeContext(documents);

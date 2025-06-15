@@ -52,7 +52,7 @@ const LoginForm = () => {
       }
       
       if (success) {
-        const from = (location.state as { from?: string })?.from || '/workbench';
+        const from = (location.state as { from?: string })?.from || '/workspace/purchaser';
         navigate(from, { replace: true });
       }
     } catch (err) {

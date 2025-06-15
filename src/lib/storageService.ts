@@ -3,6 +3,14 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
+// Workspace types
+export type WorkspaceType = 'purchaser' | 'invoicer';
+
+// Helper function to get workspace-specific collection names
+const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+  return `${workspace}_${baseCollection}`;
+};
+
 export interface KnowledgeDocument {
   id?: string;
   name: string;
@@ -40,7 +48,8 @@ export class StorageService {
   async uploadDocument(
     file: File, 
     userId: string,
-    originalFormat: string = 'md'
+    originalFormat: string = 'md',
+    workspace: WorkspaceType = 'purchaser'
   ): Promise<KnowledgeDocument> {
     try {
       // Read file content
@@ -57,7 +66,7 @@ export class StorageService {
         type: 'internal-knowledge' as const
       };
 
-      const docRef = await addDoc(collection(db, 'knowledge'), docData);
+      const docRef = await addDoc(collection(db, getWorkspaceCollectionName('knowledge', workspace)), docData);
       
       return {
         id: docRef.id,
@@ -71,10 +80,10 @@ export class StorageService {
     }
   }
 
-  async getUserDocuments(userId: string): Promise<KnowledgeDocument[]> {
+  async getUserDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<KnowledgeDocument[]> {
     try {
       const q = query(
-        collection(db, 'knowledge'),
+        collection(db, getWorkspaceCollectionName('knowledge', workspace)),
         where('userId', '==', userId)
       );
       
@@ -138,7 +147,8 @@ export class StorageService {
    */
   async uploadERPDocument(
     file: File, 
-    userId: string
+    userId: string,
+    workspace: WorkspaceType = 'purchaser'
   ): Promise<ERPDocument> {
     try {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -186,7 +196,7 @@ export class StorageService {
         type: 'erp-integration' as const
       };
 
-      const docRef = await addDoc(collection(db, 'erpDocuments'), docData);
+      const docRef = await addDoc(collection(db, getWorkspaceCollectionName('erpDocuments', workspace)), docData);
       
       // Convert JSON strings back to arrays for return value
       return {
@@ -213,10 +223,10 @@ export class StorageService {
   /**
    * Get user's ERP documents
    */
-  async getUserERPDocuments(userId: string): Promise<ERPDocument[]> {
+  async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ERPDocument[]> {
     try {
       const q = query(
-        collection(db, 'erpDocuments'),
+        collection(db, getWorkspaceCollectionName('erpDocuments', workspace)),
         where('userId', '==', userId)
       );
       

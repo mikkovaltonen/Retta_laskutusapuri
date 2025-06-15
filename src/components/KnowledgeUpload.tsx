@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { storageService, KnowledgeDocument } from '../lib/storageService';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Upload, File, AlertCircle } from 'lucide-react';
@@ -17,6 +18,7 @@ export const KnowledgeUpload: React.FC<KnowledgeUploadProps> = ({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!user) {
@@ -49,7 +51,8 @@ export const KnowledgeUpload: React.FC<KnowledgeUploadProps> = ({
       const uploadedDoc = await storageService.uploadDocument(
         file, 
         user.uid,
-        fileExtension.replace('.', '')
+        fileExtension.replace('.', ''),
+        currentWorkspace
       );
       
       onUploadComplete?.(uploadedDoc);

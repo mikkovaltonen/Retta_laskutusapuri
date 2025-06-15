@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { storageService, ERPDocument } from '../lib/storageService';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { ERPUpload } from './ERPUpload';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -23,13 +24,14 @@ export const ERPManager: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<ERPDocument | null>(null);
   const { user } = useAuth();
+  const { currentWorkspace, workspaceConfig } = useWorkspace();
 
   const loadDocuments = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const userDocs = await storageService.getUserERPDocuments(user.uid);
+      const userDocs = await storageService.getUserERPDocuments(user.uid, currentWorkspace);
       setDocuments(userDocs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load ERP documents');
@@ -156,10 +158,13 @@ export const ERPManager: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Database className="w-5 h-5" />
-            Your ERP Data
+            {workspaceConfig[currentWorkspace].erpTitle}
           </CardTitle>
           <CardDescription>
-            Your uploaded Excel file simulates your ERP system data
+            {currentWorkspace === 'purchaser' 
+              ? 'Your uploaded Excel file simulates purchase order data from your ERP system'
+              : 'Your uploaded Excel file simulates sales invoice data from your ERP system'
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>

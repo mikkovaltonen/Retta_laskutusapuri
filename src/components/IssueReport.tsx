@@ -25,10 +25,12 @@ import {
   updateIssueStatus
 } from "@/lib/firestoreService";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import ChatHistoryDialog from "./ChatHistoryDialog";
 
 const IssueReport: React.FC = () => {
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const [issues, setIssues] = useState<ContinuousImprovementSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'fixed' | 'not_fixed'>('all');
@@ -43,7 +45,7 @@ const IssueReport: React.FC = () => {
     setIsLoading(true);
     try {
       // Load only current user's negative feedback
-      const negativeFeedback = await getNegativeFeedbackSessions(user?.uid);
+      const negativeFeedback = await getNegativeFeedbackSessions(user?.uid, currentWorkspace);
       setIssues(negativeFeedback);
     } catch (error) {
       console.error('Error loading issues:', error);

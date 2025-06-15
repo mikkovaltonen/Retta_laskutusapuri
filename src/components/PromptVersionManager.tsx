@@ -16,6 +16,7 @@ import {
   getPromptVersion
 } from "@/lib/firestoreService";
 import { useAuth } from "@/hooks/useAuth";
+import { useWorkspace } from "@/hooks/useWorkspace";
 
 interface PromptVersionManagerProps {
   onPromptChange?: (prompt: string) => void;
@@ -27,6 +28,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   currentPrompt = '' 
 }) => {
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const [prompt, setPrompt] = useState(currentPrompt);
   const [evaluation, setEvaluation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -98,7 +100,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     if (!user?.uid) return;
 
     try {
-      const history = await getPromptHistory(user.uid);
+      const history = await getPromptHistory(user.uid, currentWorkspace);
       setVersions(history);
     } catch (error) {
       console.error('Error loading version history:', error);
@@ -123,7 +125,8 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
         prompt,
         evaluation,
         undefined, // Use default AI model from environment
-        user.email || undefined
+        user.email || undefined,
+        currentWorkspace
       );
       
       toast.success(`Saved as version ${versionNumber}`);

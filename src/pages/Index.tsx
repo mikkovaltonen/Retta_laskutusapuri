@@ -9,8 +9,8 @@ const Index = () => {
     <div className="min-h-screen bg-white font-sans">
       <nav className="flex justify-between items-center px-8 py-6 bg-white shadow-sm">
         <Link to="/" className="flex flex-col">
-          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>RETTA AI</span>
-          <span className="text-sm font-light" style={{color: '#1e2a54'}}>Professional Buyer</span>
+          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>PROPERTIUS</span>
+          <span className="text-sm font-light" style={{color: '#1e2a54'}}>Professional Property Management</span>
         </Link>
         <div className="flex gap-4">
           <Button
@@ -27,15 +27,13 @@ const Index = () => {
 
       <main className="container mx-auto px-8 py-20 text-center">
         <h1 className="text-6xl font-light mb-8 leading-tight">
-          <span style={{color: '#003d3b'}}>Retta</span>
-          <br />
-          <span style={{color: '#1e2a54'}}>Professional Buyer</span>
+          <span style={{color: '#003d3b'}}>Propertius</span>
         </h1>
         <p className="text-xl mb-6 font-light max-w-3xl mx-auto" style={{color: '#003d3b'}}>
-          Intelligent procurement automation and AI-powered purchasing document analysis.
+          Meet the Propertius – your AI assistant for high standard professional property management
         </p>
         <p className="text-lg mb-12 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
-          Upload procurement documents, manage supplier communications, and evaluate AI Assistant performance with your own purchasing data
+          Professional buyer assistant and invoicing assistant to save time, save money and raise decision making transparency and quality standards of your property management daily operations
         </p>
         <div className="flex justify-center gap-6 flex-wrap">
           <RegisterButton />

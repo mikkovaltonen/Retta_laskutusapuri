@@ -51,7 +51,7 @@ export const RegisterButton = () => {
         
         // Small delay to let Firebase auth state update, then navigate
         setTimeout(() => {
-          navigate('/workbench');
+          navigate('/workspace/purchaser');
         }, 100);
       } else {
         toast.error("Failed to create account. Please try again.");
