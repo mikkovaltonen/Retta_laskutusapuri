@@ -170,11 +170,11 @@ How can I help you today?`
           setSessionActive(true);
           
           if (isLikelyNewUser) {
-            toast.success("🎉 Tervetuloa! Ostojen asiantuntijasi on valmis. Käy Admin-paneelissa lataamassa esimerkkidataa ja tutustu ominaisuuksiin.", {
+            toast.success("🎉 Welcome! Your Propertius assistant is ready. Visit the Admin panel to load sample data and explore features.", {
               duration: 6000
             });
           } else {
-            toast.success(`Istunto alustettu ${session.documentsUsed.length} tietodokumentilla`);
+            toast.success(`Session initialized with ${session.documentsUsed.length} knowledge document(s)`);
           }
         } catch (error) {
           console.error('Failed to initialize session:', error);
@@ -486,9 +486,44 @@ How can I help you today?`
       try {
         const session = await sessionService.initializeChatSession(user.uid, currentWorkspace);
         setChatSession(session);
+        
+        // Create welcome message after reset
+        const isLikelyNewUser = session.documentsUsed.length === 0;
+        const welcomeMessage: Message = {
+          role: 'model',
+          parts: [{
+            text: isLikelyNewUser 
+              ? `🎉 **Welcome to Propertius!**
+
+Meet your AI assistant for high standard professional property management. I'm here to help you with ${currentWorkspace === 'purchaser' ? 'advanced procurement optimization and supplier intelligence' : 'intelligent invoicing automation and financial operations'}.
+
+**🎯 Quick Start Guide:**
+• **Load Sample Data**: Visit Admin panel → Load example files and ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data to explore
+• **Upload Your Data**: Add your own ${currentWorkspace === 'purchaser' ? 'procurement policies and purchase order' : 'invoicing processes and sales invoice'} files
+• **Ask Questions**: "${currentWorkspace === 'purchaser' ? 'What suppliers do we use?' : 'Show me recent invoices'}" or "${currentWorkspace === 'purchaser' ? 'Find maintenance contracts from last quarter' : 'Track overdue payments'}"
+
+**💡 Advanced Features:**
+✅ Real-time access to your ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data through advanced function calling
+✅ Analysis of your internal ${currentWorkspace === 'purchaser' ? 'procurement policies' : 'billing processes'} and documentation  
+✅ Professional property management expertise for ${currentWorkspace === 'purchaser' ? 'cost optimization and supplier management' : 'financial operations and payment tracking'}
+
+**Ready to explore?** Try asking "Load sample data so I can see what you can do" or visit the Admin panel to upload your own files!
+
+How would you like to get started?`
+              : `Hello! I'm your Propertius ${currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} assistant. I'm here to help you with professional property management ${currentWorkspace === 'purchaser' ? 'procurement optimization and cost savings' : 'invoicing automation and financial tracking'}.
+
+📚 **Knowledge Base Loaded:** ${session.documentsUsed.length} document(s) available.
+
+How can I help you today?`
+          }]
+        };
+        setMessages([welcomeMessage]);
+        setSessionActive(true);
+        
         toast.success('Session refreshed with latest knowledge base');
       } catch (error) {
         console.error('Failed to refresh session:', error);
+        toast.error('Failed to refresh session');
       } finally {
         setSessionInitializing(false);
       }
