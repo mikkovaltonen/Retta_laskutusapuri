@@ -25,10 +25,38 @@ Perfect for evaluating AI capabilities in:
 
 - **Frontend**: React 18, TypeScript, Vite
 - **UI**: Tailwind CSS, shadcn/ui components
-- **AI Integration**: Google Gemini API
+- **AI Integration**: Google Gemini API with function calling
 - **File Processing**: Support for PDF, Excel, CSV, Word documents
+- **Database**: Firebase Firestore for prompt versioning and session management
 - **State Management**: React Hooks
-- **Authentication**: Simple evaluation credentials
+- **Authentication**: Firebase Auth with custom user management
+
+## System Architecture
+
+### System Prompt vs Welcome Message
+
+The application uses two distinct messaging systems:
+
+#### System Prompt (AI Instruction)
+- **Source**: Firebase Firestore database
+- **Purpose**: Instructs the AI how to behave and respond
+- **Visibility**: Hidden from users, sent to AI in every request
+- **Management**: Configurable via Admin panel → Prompt Version Manager
+- **Content**: AI behavior rules, function calling instructions, domain expertise
+- **Location**: `sessionService.initializeChatSession()` → `chatSession.fullContext`
+
+#### Welcome Message (UI Greeting)
+- **Source**: Hardcoded in React component
+- **Purpose**: Friendly greeting displayed to users in chat interface
+- **Visibility**: Visible to users, never sent to AI
+- **Management**: Requires code changes to modify
+- **Content**: User-facing introduction and feature overview
+- **Location**: `PropertyManagerChat.tsx` lines 154-158
+
+#### Function Calling System
+- **Purchase Orders**: `search_purchase_orders` function for ERP data access
+- **Real-time Data**: Direct access to Excel-based purchase order information
+- **Structured Results**: Supplier details, pricing, contact information, delivery dates
 
 ## Installation
 

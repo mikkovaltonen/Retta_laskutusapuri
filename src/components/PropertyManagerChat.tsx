@@ -134,53 +134,47 @@ const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout }) =
             role: 'model',
             parts: [{
               text: isLikelyNewUser 
-                ? `🎉 **Welcome to Property Manager AI Assistant!**
+                ? `🎉 **Tervetuloa Retta Professional Buyer -assistenttiin!**
 
-I'm here to transform how you handle property management and maintenance. As your AI-powered property management expert, I can help you:
+Olen täällä auttamassa sinua säästämään rahaa ostokuluissa ja optimoimaan kiinteistöjen hankintaprosesseja. Ostojen asiantuntijana voin auttaa sinua:
 
-**🎯 Get Started (recommended):**
-• **Load Sample Data**: Go to Admin panel → Load sample knowledge documents and ERP data to try me out
-• **Upload Your Files**: Add your own property management policies and Excel maintenance data  
-• **Ask Questions**: "What contractors do we use?" or "Find me HVAC maintenance from last quarter"
+**🎯 Aloita tästä (suositus):**
+• **Lataa esimerkkidata**: Mene Admin-paneeliin → Lataa esimerkkitiedostot ja ostotilaustiedot kokeillaksesi
+• **Lataa omat tiedostot**: Lisää omat ostokäytäntösi ja Excel-ostotilaustiedot
+• **Kysy kysymyksiä**: "Mitä toimittajia käytämme?" tai "Etsi viime vuosineljänneksen huoltosopimuksia"
 
-**💡 My Special Capabilities:**
-✅ Real-time access to your ERP/maintenance data through advanced function calling
-✅ Analysis of your internal property management documents and policies  
-✅ Property manager expertise for cost optimization and contractor management
+**💡 Erikoisominaisuuteni:**
+✅ Reaaliaikainen pääsy ostotilaustietoihisi kehittyneen function calling -teknologian kautta
+✅ Sisäisten hankintakäytäntöjesi ja dokumenttien analysointi
+✅ Kiinteistöisännöitsijän asiantuntemus kustannusoptimointiin ja toimittajahallintaan
 
-**Ready to explore?** Try asking me "Load some sample data so I can see what you can do" or visit the Admin panel to upload your own files!
+**Valmis kokeilemaan?** Kokeile kysyä minulta "Lataa esimerkkidataa, jotta näen mitä osaat" tai vieraile Admin-paneelissa lataamassa omia tiedostoja!
 
-What would you like to start with?`
-                : `Hello! I'm your Property Manager AI Assistant. I'm here to help you optimize your property management processes, negotiate better deals, and achieve significant cost savings.
+Mistä haluaisit aloittaa?`
+                : `Hei! Olen Retta Professional Buyer -assistenttisi. Olen täällä auttamassa sinua säästämään rahaa ostokuluissa ja optimoimaan kiinteistöjen hankintaprosesseja.
 
-📚 **Knowledge Base Loaded:** ${session.documentsUsed.length} document(s) available for reference.
+📚 **Tietokanta ladattu:** ${session.documentsUsed.length} dokumentti(a) käytettävissä.
 
-What can I help you with today?`
+Miten voin auttaa sinua tänään?`
             }]
           };
           setMessages([welcomeMessage]);
           setSessionActive(true);
           
           if (isLikelyNewUser) {
-            toast.success("🎉 Welcome! Your AI assistant is ready. Visit the Admin panel to load sample data and explore capabilities.", {
+            toast.success("🎉 Tervetuloa! Ostojen asiantuntijasi on valmis. Käy Admin-paneelissa lataamassa esimerkkidataa ja tutustu ominaisuuksiin.", {
               duration: 6000
             });
           } else {
-            toast.success(`Session initialized with ${session.documentsUsed.length} knowledge document(s)`);
+            toast.success(`Istunto alustettu ${session.documentsUsed.length} tietodokumentilla`);
           }
         } catch (error) {
           console.error('Failed to initialize session:', error);
-          toast.error('Failed to load knowledge base. Using default settings.');
+          toast.error('Tietokannan lataus epäonnistui. Tarkista system prompt -asetukset Admin-paneelista.');
           
-          // Fallback to basic welcome message
-          const welcomeMessage: Message = {
-            role: 'model',
-            parts: [{
-              text: "Hello! I'm your Property Manager AI Assistant. I'm here to help you optimize your property management processes, negotiate better deals, and achieve significant cost savings. What can I help you with today?"
-            }]
-          };
-          setMessages([welcomeMessage]);
-          setSessionActive(true);
+          // No fallback message - user needs to configure system prompt
+          setMessages([]);
+          setSessionActive(false);
         } finally {
           setSessionInitializing(false);
         }
