@@ -122,20 +122,9 @@ export class ERPApiService {
       });
       
       // Debug: Show detailed first record mapping
+      // Minimal logging for production
       if (allRecords.length > 0) {
-        console.log('🔍 DETAILED FIRST RECORD MAPPING:');
-        console.log(`Headers count: ${headers.length}, Data columns count: ${rawData[0]?.length || 0}`);
-        console.log('Headers:', headers);
-        console.log('First raw row data:', rawData[0]);
-        
-        headers.forEach((header, index) => {
-          const value = rawData[0]?.[index];
-          console.log(`Column ${index}: "${header}" = "${value}"`);
-        });
-        
-        if (rawData[0]?.length > headers.length) {
-          console.log('⚠️ Extra data columns (not mapped):', rawData[0].slice(headers.length));
-        }
+        console.log(`📋 Data summary: ${headers.length} headers, ${allRecords.length} records`);
       }
 
       const filteredRecords = this.applyFilters(allRecords, criteria, headers, requestId);
@@ -202,13 +191,7 @@ export class ERPApiService {
         const supplierField = headers.find(header => 
           header === 'Supplier Name' || header.toLowerCase() === 'supplier name'
         );
-        console.log('🏭 SUPPLIER FILTER [' + requestId + ']:', {
-          searchField: 'Supplier Name',
-          foundField: supplierField,
-          searchTerm: criteria.supplierName,
-          recordValue: record[supplierField || ''],
-          rowIndex: record.rowIndex
-        });
+        // Removed excessive per-record logging for production
         
         if (supplierField) {
           const supplierValue = String(record[supplierField] || '').toLowerCase();
@@ -226,13 +209,7 @@ export class ERPApiService {
         const productField = headers.find(header => 
           header === 'Description' || header.toLowerCase() === 'description'
         );
-        console.log('📦 PRODUCT FILTER [' + requestId + ']:', {
-          searchField: 'Description',
-          foundField: productField,
-          searchTerm: criteria.productDescription,
-          recordValue: record[productField || ''],
-          rowIndex: record.rowIndex
-        });
+        // Removed excessive per-record logging for production
         
         if (productField) {
           const productValue = String(record[productField] || '').toLowerCase();
@@ -252,34 +229,18 @@ export class ERPApiService {
           header === 'Receive By' || header.toLowerCase() === 'receive by'
         );
         
-        console.log('📅 DATE FILTER [' + requestId + ']:', {
-          searchField: 'Receive By',
-          foundField: dateField,
-          rawDateValue: record[dateField || ''],
-          dateFrom: criteria.dateFrom,
-          dateTo: criteria.dateTo,
-          rowIndex: record.rowIndex
-        });
+        // Removed excessive per-record logging for production
         
         if (dateField) {
           const rawDateValue = String(record[dateField] || '');
           const dateValue = this.parseDate(rawDateValue);
           
-          console.log('📅 Date parsing:', {
-            field: dateField,
-            rawValue: rawDateValue,
-            parsedDate: dateValue,
-            isValid: dateValue !== null
-          });
+          // Date parsing optimized for production
           
           if (criteria.dateFrom && dateValue) {
             const fromDate = new Date(criteria.dateFrom);
             const passesFromCheck = dateValue >= fromDate;
-            console.log('📅 Date FROM check:', {
-              recordDate: dateValue.toISOString(),
-              fromCriteria: fromDate.toISOString(),
-              passes: passesFromCheck
-            });
+            // Date FROM check optimized for production
             if (!passesFromCheck) {
               return false;
             }
@@ -289,11 +250,7 @@ export class ERPApiService {
             const toDate = new Date(criteria.dateTo);
             toDate.setHours(23, 59, 59, 999); // End of day
             const passesToCheck = dateValue <= toDate;
-            console.log('📅 Date TO check:', {
-              recordDate: dateValue.toISOString(),
-              toCriteria: toDate.toISOString(),
-              passes: passesToCheck
-            });
+            // Date TO check optimized for production
             if (!passesToCheck) {
               return false;
             }
@@ -309,13 +266,7 @@ export class ERPApiService {
         const buyerField = headers.find(header => 
           header === 'Buyer Name' || header.toLowerCase() === 'buyer name'
         );
-        console.log('👤 BUYER FILTER [' + requestId + ']:', {
-          searchField: 'Buyer Name',
-          foundField: buyerField,
-          searchTerm: criteria.buyerName,
-          recordValue: record[buyerField || ''],
-          rowIndex: record.rowIndex
-        });
+        // Removed excessive per-record logging for production
         
         if (buyerField) {
           const buyerValue = String(record[buyerField] || '').toLowerCase();
@@ -348,7 +299,7 @@ export class ERPApiService {
   private parseDate(dateStr: string): Date | null {
     if (!dateStr) return null;
     
-    console.log('🔍 Parsing date string:', dateStr);
+    // Date parsing optimized for production
     
     // Try different date formats
     const formats = [
@@ -363,11 +314,7 @@ export class ERPApiService {
       if (format.regex.test(dateStr)) {
         const date = new Date(dateStr);
         if (!isNaN(date.getTime())) {
-          console.log('✅ Date parsed successfully:', {
-            input: dateStr,
-            format: format.name,
-            output: date.toISOString()
-          });
+          // Date parsed successfully
           return date;
         }
       }
@@ -380,16 +327,12 @@ export class ERPApiService {
       const excelEpoch = new Date(1900, 0, 1);
       const date = new Date(excelEpoch.getTime() + (num - 2) * 24 * 60 * 60 * 1000);
       if (!isNaN(date.getTime())) {
-        console.log('✅ Excel serial date parsed:', {
-          input: dateStr,
-          serialNumber: num,
-          output: date.toISOString()
-        });
+        // Excel serial date parsed successfully
         return date;
       }
     }
 
-    console.log('❌ Failed to parse date:', dateStr);
+    // Failed to parse date - optimized for production
     return null;
   }
 
