@@ -1,6 +1,6 @@
 import { storage, db } from './firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy, setDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
 // Workspace types
@@ -155,13 +155,15 @@ export class StorageService {
   }
 
   /**
-   * Delete user's existing ERP documents from purchaser_erpDocuments collection
+   * Delete user's existing ERP documents from workspace-specific collection
    */
   async deleteUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
     try {
-      // Delete documents from purchaser_erpDocuments collection
+      const collectionName = workspace === 'invoicer' ? 'invoicer_erpDocuments' : 'purchaser_erpDocuments';
+      
+      // Delete documents from workspace-specific collection
       const recordsQ = query(
-        collection(db, 'purchaser_erpDocuments'),
+        collection(db, collectionName),
         where('userId', '==', userId)
       );
       
@@ -169,7 +171,7 @@ export class StorageService {
       const deleteRecordsPromises = recordsSnapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deleteRecordsPromises);
       
-      console.log(`🗑️ Deleted ${recordsSnapshot.docs.length} existing ERP documents from purchaser_erpDocuments`);
+      console.log(`🗑️ Deleted ${recordsSnapshot.docs.length} existing ERP documents from ${collectionName}`);
     } catch (error) {
       console.error('Failed to delete existing ERP documents:', error);
       // Don't throw - just log and continue
@@ -210,16 +212,32 @@ export class StorageService {
       console.log(`📊 Processed ${jsonObjects.length} records as JSON objects from sheet: ${sheets[0]}`);
       console.log(`📋 Found ${columnCount} columns:`, columnNames);
       
-      // Save each row directly to purchaser_erpDocuments with order number as document ID
-      console.log(`💾 Saving ${jsonObjects.length} records directly to purchaser_erpDocuments collection...`);
-      console.log(`🔧 Using order numbers as document IDs with Excel columns as fields`);
+      // Determine collection name based on workspace
+      const collectionName = workspace === 'invoicer' ? 'invoicer_erpDocuments' : 'purchaser_erpDocuments';
+      
+      // Save each row directly to workspace-specific collection with order/invoice number as document ID
+      console.log(`💾 Saving ${jsonObjects.length} records directly to ${collectionName} collection...`);
+      console.log(`🔧 Using ${workspace === 'invoicer' ? 'invoice' : 'order'} numbers as document IDs with Excel columns as fields`);
       
       const recordPromises = jsonObjects.map((record, index) => {
-        // Use order number as document ID if available, otherwise fallback
-        const orderNumberField = Object.keys(record).find(key => 
-          key.toLowerCase().includes('order') && key.toLowerCase().includes('number')
-        );
-        const orderNumber = orderNumberField ? String(record[orderNumberField]) : `record_${Date.now()}_${index}`;
+        // Use appropriate number field as document ID based on workspace
+        let numberField, documentId;
+        
+        if (workspace === 'invoicer') {
+          // For invoices, look for invoice number field
+          numberField = Object.keys(record).find(key => 
+            key.toLowerCase().includes('invoice') && key.toLowerCase().includes('number')
+          );
+          const invoiceNumber = numberField ? String(record[numberField]) : `invoice_${Date.now()}_${index}`;
+          documentId = `${invoiceNumber}_row_${index + 1}`;
+        } else {
+          // For purchase orders, look for order number field
+          numberField = Object.keys(record).find(key => 
+            key.toLowerCase().includes('order') && key.toLowerCase().includes('number')
+          );
+          const orderNumber = numberField ? String(record[numberField]) : `order_${Date.now()}_${index}`;
+          documentId = `${orderNumber}_row_${index + 1}`;
+        }
         
         const recordData = {
           userId,
@@ -232,14 +250,14 @@ export class StorageService {
         // Log first record structure as example
         if (index === 0) {
           console.log(`📄 Sample record structure:`, Object.keys(recordData));
-          console.log(`📋 Using order number '${orderNumber}' as document ID`);
+          console.log(`📋 Using document ID: ${documentId}`);
         }
         
-        return addDoc(collection(db, 'purchaser_erpDocuments'), recordData);
+        return setDoc(doc(db, collectionName, documentId), recordData);
       });
       
       await Promise.all(recordPromises);
-      console.log(`✅ Saved ${jsonObjects.length} individual records to purchaser_erpDocuments collection`);
+      console.log(`✅ Saved ${jsonObjects.length} individual records to ${collectionName} collection`);
       
       // Return format with jsonData for compatibility
       return {
@@ -262,13 +280,15 @@ export class StorageService {
   }
 
   /**
-   * Get user's ERP documents from purchaser_erpDocuments collection
+   * Get user's ERP documents from workspace-specific collection
    */
   async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ERPDocument[]> {
     try {
-      // Get all records from purchaser_erpDocuments for this user
+      const collectionName = workspace === 'invoicer' ? 'invoicer_erpDocuments' : 'purchaser_erpDocuments';
+      
+      // Get all records from workspace-specific collection for this user
       const recordsQ = query(
-        collection(db, 'purchaser_erpDocuments'),
+        collection(db, collectionName),
         where('userId', '==', userId)
       );
       
@@ -276,11 +296,11 @@ export class StorageService {
       const jsonData = recordsSnapshot.docs.map(recordDoc => {
         const recordData = recordDoc.data();
         // Remove metadata fields, keep only Excel columns
-        const { userId, uploadedAt, originalFileName, rowIndex, ...excelColumns } = recordData;
+        const { userId, uploadedAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = recordData;
         return excelColumns;
       });
       
-      console.log(`📋 Loaded ${jsonData.length} individual records from purchaser_erpDocuments`);
+      console.log(`📋 Loaded ${jsonData.length} individual records from ${collectionName}`);
       
       // Group by original filename if available
       const fileGroups = new Map<string, Record<string, unknown>[]>();
@@ -293,7 +313,7 @@ export class StorageService {
           fileGroups.set(fileName, []);
         }
         
-        const { userId, uploadedAt, originalFileName, rowIndex, ...excelColumns } = data;
+        const { userId, uploadedAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = data;
         fileGroups.get(fileName)!.push(excelColumns);
       }
       

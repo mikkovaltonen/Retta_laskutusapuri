@@ -84,14 +84,23 @@ export class SalesInvoiceApiService {
         return result;
       }
 
-      if (invoiceDocuments.length > 1) {
-        console.warn(`⚠️ Found ${invoiceDocuments.length} invoice documents for user, using the first one. Consider cleaning up duplicates.`);
+      console.log(`📄 Found ${invoiceDocuments.length} invoice documents for user, combining all data for search.`);
+
+      // Combine JSON data from all invoice documents
+      let allJsonRecords: Record<string, unknown>[] = [];
+
+      for (const invoiceDoc of invoiceDocuments) {
+        console.log(`📊 Processing invoice document: ${invoiceDoc.name}`);
+        
+        if (invoiceDoc.jsonData && invoiceDoc.jsonData.length > 0) {
+          allJsonRecords.push(...invoiceDoc.jsonData);
+          console.log(`✅ Added ${invoiceDoc.jsonData.length} JSON records from ${invoiceDoc.name}`);
+        } else {
+          console.log(`⚠️ No JSON data found in ${invoiceDoc.name}`);
+        }
       }
 
-      const invoiceDoc = invoiceDocuments[0]; // Only one document allowed
-      const { rawData, headers } = invoiceDoc;
-
-      if (!rawData || !headers || rawData.length === 0) {
+      if (!allJsonRecords || allJsonRecords.length === 0) {
         const result = {
           records: [],
           totalCount: 0,
@@ -106,7 +115,7 @@ export class SalesInvoiceApiService {
             recordCount: result.totalCount,
             records: [],
             searchCriteria: result.searchCriteria,
-            error: 'No valid invoice data or headers found'
+            error: 'No valid invoice data found'
           },
           processingTimeMs: result.processingTimeMs,
           timestamp: new Date().toISOString(),
@@ -116,26 +125,24 @@ export class SalesInvoiceApiService {
         return result;
       }
 
-      // Convert raw data to invoice records with column names
-      const allRecords: InvoiceRecord[] = rawData.map((row: (string | number | boolean | null | undefined)[], index: number) => {
-        const record: InvoiceRecord = { rowIndex: index + 2 }; // +2 because row 1 is headers, Excel rows start from 1
-        
-        // Map headers to data - use only available headers
-        headers.forEach((header: string, colIndex: number) => {
-          record[header] = row[colIndex] || '';
-        });
-        
+      // Convert JSON objects to InvoiceRecord format
+      const allRecords: InvoiceRecord[] = allJsonRecords.map((jsonRecord, index) => {
+        const record: InvoiceRecord = { 
+          rowIndex: index + 2, // +2 because row 1 is headers, Excel rows start from 1
+          ...jsonRecord // Spread all JSON properties
+        };
         return record;
       });
 
       // Apply search filters
+      const availableHeaders = allRecords.length > 0 ? Object.keys(allRecords[0]).filter(key => key !== 'rowIndex') : [];
       console.log('📋 Invoice data summary:', {
         totalRecords: allRecords.length,
-        availableHeaders: headers,
+        availableHeaders: availableHeaders,
         sampleRecord: allRecords[0] || null
       });
 
-      const filteredRecords = this.applyInvoiceFilters(allRecords, criteria, headers, requestId);
+      const filteredRecords = this.applyInvoiceFilters(allRecords, criteria, availableHeaders, requestId);
       
       const result = {
         records: filteredRecords,
@@ -446,7 +453,16 @@ export class SalesInvoiceApiService {
     
     try {
       const invoiceDocuments = await storageService.getUserERPDocuments(userId, 'invoicer');
-      const fields = (invoiceDocuments.length === 0 || !invoiceDocuments[0].headers) ? [] : invoiceDocuments[0].headers;
+      
+      if (invoiceDocuments.length === 0) {
+        return [];
+      }
+      
+      // Get fields from first document's JSON data
+      const firstDoc = invoiceDocuments[0];
+      const fields = (firstDoc.jsonData && firstDoc.jsonData.length > 0) 
+        ? Object.keys(firstDoc.jsonData[0]) 
+        : [];
       
       console.log('📤 SALES INVOICE API RESPONSE [' + requestId + ']:', {
         status: 'SUCCESS',
