@@ -2,15 +2,20 @@ import { storageService, ERPDocument } from './storageService';
 
 export interface SearchCriteria {
   supplierName?: string;        // Toimittajan nimi tai osa nimestä
-  productDescription?: string;  // Tuotteen kuvaus tai osa kuvauksesta
+  productDescription?: string;  // Tuotteen kuvaus tai osa kuvauksesta (purchase orders)
+  serviceDescription?: string;  // Palvelun kuvaus tai osa kuvauksesta (invoices)
   dateFrom?: string;           // Ostopäivämäärä alkaen (YYYY-MM-DD)
   dateTo?: string;             // Ostopäivämäärä päättyen (YYYY-MM-DD)
-  buyerName?: string;          // Ostajan nimi tai osa nimestä
+  dueDateFrom?: string;        // Eräpäivä alkaen (YYYY-MM-DD) - invoices only
+  dueDateTo?: string;          // Eräpäivä päättyen (YYYY-MM-DD) - invoices only
+  buyerName?: string;          // Ostajan nimi tai osa nimestä (purchase orders)
+  approverName?: string;       // Hyväksyjän nimi tai osa nimestä (invoices)
+  paymentStatus?: string;      // Maksun tila (invoices only)
 }
 
 export interface ERPRecord {
   rowIndex: number;
-  [key: string]: any; // Dynamic columns based on Excel headers
+  [key: string]: string | number | boolean | null | undefined; // Dynamic columns based on Excel headers
 }
 
 export interface SearchResult {
@@ -73,6 +78,10 @@ export class ERPApiService {
         return result;
       }
 
+      if (erpDocuments.length > 1) {
+        console.warn(`⚠️ Found ${erpDocuments.length} ERP documents for user, using the first one. Consider cleaning up duplicates.`);
+      }
+
       const erpDoc = erpDocuments[0]; // Only one document allowed
       const { rawData, headers } = erpDoc;
 
@@ -103,7 +112,7 @@ export class ERPApiService {
       }
 
       // Convert raw data to records with column names
-      const allRecords: ERPRecord[] = rawData.map((row: any[], index: number) => {
+      const allRecords: ERPRecord[] = rawData.map((row: (string | number | boolean | null | undefined)[], index: number) => {
         const record: ERPRecord = { rowIndex: index + 2 }; // +2 because row 1 is headers, Excel rows start from 1
         
         // Map headers to data - use only available headers
@@ -177,11 +186,8 @@ export class ERPApiService {
    * Apply search filters to records
    */
   private applyFilters(records: ERPRecord[], criteria: SearchCriteria, headers: string[], requestId: string): ERPRecord[] {
-    let currentRecords = [...records];
-    let filterCount = 0;
-    
     console.log('🔧 FILTER PROCESSING [' + requestId + ']:', {
-      startingRecordCount: currentRecords.length,
+      startingRecordCount: records.length,
       filtersToApply: Object.keys(criteria).filter(key => criteria[key as keyof SearchCriteria])
     });
     
@@ -204,7 +210,7 @@ export class ERPApiService {
         }
       }
 
-      // Filter by product description - exact column match
+      // Filter by product description - exact column match (purchase orders)
       if (criteria.productDescription) {
         const productField = headers.find(header => 
           header === 'Description' || header.toLowerCase() === 'description'
@@ -219,6 +225,24 @@ export class ERPApiService {
           }
         } else {
           console.log('⚠️ "Description" column not found. Available headers:', headers);
+        }
+      }
+
+      // Filter by service description - exact column match (invoices)
+      if (criteria.serviceDescription) {
+        const serviceField = headers.find(header => 
+          header === 'Service Description' || header.toLowerCase() === 'service description' ||
+          header === 'Description' || header.toLowerCase() === 'description'
+        );
+        
+        if (serviceField) {
+          const serviceValue = String(record[serviceField] || '').toLowerCase();
+          const searchTerm = criteria.serviceDescription.toLowerCase();
+          if (!serviceValue.includes(searchTerm)) {
+            return false;
+          }
+        } else {
+          console.log('⚠️ "Service Description" or "Description" column not found. Available headers:', headers);
         }
       }
 
@@ -261,7 +285,7 @@ export class ERPApiService {
         }
       }
 
-      // Filter by buyer name - exact column match
+      // Filter by buyer name - exact column match (purchase orders)
       if (criteria.buyerName) {
         const buyerField = headers.find(header => 
           header === 'Buyer Name' || header.toLowerCase() === 'buyer name'
@@ -276,6 +300,72 @@ export class ERPApiService {
           }
         } else {
           console.log('⚠️ "Buyer Name" column not found. Available headers:', headers);
+        }
+      }
+
+      // Filter by approver name - exact column match (invoices)
+      if (criteria.approverName) {
+        const approverField = headers.find(header => 
+          header === 'Approver Name' || header.toLowerCase() === 'approver name' ||
+          header === 'Approved By' || header.toLowerCase() === 'approved by'
+        );
+        
+        if (approverField) {
+          const approverValue = String(record[approverField] || '').toLowerCase();
+          const searchTerm = criteria.approverName.toLowerCase();
+          if (!approverValue.includes(searchTerm)) {
+            return false;
+          }
+        } else {
+          console.log('⚠️ "Approver Name" or "Approved By" column not found. Available headers:', headers);
+        }
+      }
+
+      // Filter by due date range (invoices)
+      if (criteria.dueDateFrom || criteria.dueDateTo) {
+        const dueDateField = headers.find(header => 
+          header === 'Due Date' || header.toLowerCase() === 'due date' ||
+          header === 'Payment Due' || header.toLowerCase() === 'payment due'
+        );
+        
+        if (dueDateField) {
+          const rawDateValue = String(record[dueDateField] || '');
+          const dateValue = this.parseDate(rawDateValue);
+          
+          if (criteria.dueDateFrom && dateValue) {
+            const fromDate = new Date(criteria.dueDateFrom);
+            if (dateValue < fromDate) {
+              return false;
+            }
+          }
+          
+          if (criteria.dueDateTo && dateValue) {
+            const toDate = new Date(criteria.dueDateTo);
+            toDate.setHours(23, 59, 59, 999);
+            if (dateValue > toDate) {
+              return false;
+            }
+          }
+        } else {
+          console.log('⚠️ "Due Date" column not found for due date filtering. Available headers:', headers);
+        }
+      }
+
+      // Filter by payment status (invoices)
+      if (criteria.paymentStatus) {
+        const statusField = headers.find(header => 
+          header === 'Payment Status' || header.toLowerCase() === 'payment status' ||
+          header === 'Status' || header.toLowerCase() === 'status'
+        );
+        
+        if (statusField) {
+          const statusValue = String(record[statusField] || '').toLowerCase();
+          const searchTerm = criteria.paymentStatus.toLowerCase();
+          if (!statusValue.includes(searchTerm)) {
+            return false;
+          }
+        } else {
+          console.log('⚠️ "Payment Status" or "Status" column not found. Available headers:', headers);
         }
       }
 

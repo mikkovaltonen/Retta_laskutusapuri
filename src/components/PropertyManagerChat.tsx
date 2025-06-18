@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 import { Loader2, Send, RotateCcw, Paperclip, Bot, LogOut, Settings, ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -14,17 +15,27 @@ import { toast } from 'sonner';
 import { loadLatestPrompt, createContinuousImprovementSession, addTechnicalLog, setUserFeedback } from '../lib/firestoreService';
 import { sessionService, ChatSession } from '../lib/sessionService';
 import { erpApiService } from '../lib/erpApiService';
+import { salesInvoiceApiService } from '../lib/salesInvoiceApiService';
+
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  content: string | ArrayBuffer;
+  url?: string;
+}
 
 interface PropertyManagerChatProps {
   onLogout?: () => void;
   hideNavigation?: boolean;
+  uploadedFiles?: UploadedFile[];
 }
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-const geminiModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-pro-preview-03-25';
+const geminiModel = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.5-flash-preview-04-17';
 
 // Purchase Order Function Definition for Gemini
-const searchERPFunction = {
+const searchPurchaseOrdersFunction = {
   name: "search_purchase_orders", 
   description: "Search and DISPLAY purchase order data for property management. ALWAYS show the actual data found to the user in a clear, formatted way. Include specific details like supplier names, products, prices, dates, and quantities from the results.",
   parameters: {
@@ -49,6 +60,50 @@ const searchERPFunction = {
       buyerName: {
         type: "string",
         description: "Property manager name or partial name who placed the order (e.g., 'Erika', 'Mikael', 'Sundström')"
+      }
+    }
+  }
+};
+
+
+// Invoice Function Definition for Gemini  
+const searchInvoicesFunction = {
+  name: "search_invoices",
+  description: "Search and DISPLAY invoice data for property management. ALWAYS show the actual data found to the user in a clear, formatted way. Include specific details like supplier names, amounts, due dates, payment status, and invoice numbers from the results.",
+  parameters: {
+    type: "object",
+    properties: {
+      customerName: {
+        type: "string",
+        description: "Customer name or partial name (e.g., 'Asunto Oy Kukkakatu', 'Kiinteistö Oy Metsäkoti', 'Taloyhtiö Oy')"
+      },
+      serviceDescription: {
+        type: "string",
+        description: "Service or product description or partial description (e.g., 'Kattoremontti', 'Siivouspalvelut', 'Sähkötyöt', 'cleaning', 'maintenance')"
+      },
+      dateFrom: {
+        type: "string", 
+        description: "Search from invoice date (YYYY-MM-DD format). Filters by 'Invoice Date' column for billing dates."
+      },
+      dateTo: {
+        type: "string",
+        description: "Search to invoice date (YYYY-MM-DD format). Filters by 'Invoice Date' column for billing dates."
+      },
+      dueDateFrom: {
+        type: "string",
+        description: "Search from due date (YYYY-MM-DD format). Filters by 'Due Date' column for payment deadlines."
+      },
+      dueDateTo: {
+        type: "string", 
+        description: "Search to due date (YYYY-MM-DD format). Filters by 'Due Date' column for payment deadlines."
+      },
+      approverName: {
+        type: "string",
+        description: "Invoice approver name or partial name who approved the invoice (e.g., 'Erika', 'Mikael', 'Talousosasto')"
+      },
+      paymentStatus: {
+        type: "string",
+        description: "Payment status (e.g., 'Paid', 'Pending', 'Overdue', 'Approved')"
       }
     }
   }
@@ -142,39 +197,39 @@ const PropertyManagerChat: React.FC<PropertyManagerChatProps> = ({ onLogout, hid
             role: 'model',
             parts: [{
               text: isLikelyNewUser 
-                ? `🎉 **Welcome to Propertius!**
+                ? `🎉 **Tervetuloa Propertiukseen!**
 
-Meet your AI assistant for high standard professional property management. I'm here to help you with ${currentWorkspace === 'purchaser' ? 'advanced procurement optimization and supplier intelligence' : 'intelligent invoicing automation and financial operations'}.
+Tutustu tekoälyavustajaan korkeatasoista kiinteistönhallintaa varten. Olen täällä auttamassa sinua ${currentWorkspace === 'purchaser' ? 'edistyneessä hankintojen optimoinnissa ja toimittaja-älyssä' : 'älykkäässä laskutusautomaatiossa ja talousoperaatioissa'}.
 
-**🎯 Quick Start Guide:**
-• **Load Sample Data**: Visit Admin panel → Load example files and ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data to explore
-• **Upload Your Data**: Add your own ${currentWorkspace === 'purchaser' ? 'procurement policies and purchase order' : 'invoicing processes and sales invoice'} files
-• **Ask Questions**: "${currentWorkspace === 'purchaser' ? 'What suppliers do we use?' : 'Show me recent invoices'}" or "${currentWorkspace === 'purchaser' ? 'Find maintenance contracts from last quarter' : 'Track overdue payments'}"
+**🎯 Pikaopas:**
+• **Lataa esimerkkidataa**: Käy Admin-paneelissa → Lataa esimerkkitiedostoja ja ${currentWorkspace === 'purchaser' ? 'ostotilaus' : 'lasku'}dataa tutkittavaksi
+• **Lataa omaa dataa**: Lisää omat ${currentWorkspace === 'purchaser' ? 'hankintakäytäntösi ja ostotilaus' : 'laskutusprosessisi ja myyntilasku'}tiedostosi
+• **Kysy kysymyksiä**: "${currentWorkspace === 'purchaser' ? 'Mitä toimittajia me käytämme?' : 'Näytä viimeaikaiset laskut'}" tai "${currentWorkspace === 'purchaser' ? 'Etsi huoltosopimukset viime vuosineljännekseltä' : 'Seuraa erääntyneitä maksuja'}"
 
-**💡 Advanced Features:**
-✅ Real-time access to your ${currentWorkspace === 'purchaser' ? 'purchase order' : 'invoice'} data through advanced function calling
-✅ Analysis of your internal ${currentWorkspace === 'purchaser' ? 'procurement policies' : 'billing processes'} and documentation  
-✅ Professional property management expertise for ${currentWorkspace === 'purchaser' ? 'cost optimization and supplier management' : 'financial operations and payment tracking'}
+**💡 Edistyneet ominaisuudet:**
+✅ Reaaliaikainen pääsy ${currentWorkspace === 'purchaser' ? 'ostotilaus' : 'lasku'}dataasi edistyneen funktiokutsujen kautta
+✅ Sisäisten ${currentWorkspace === 'purchaser' ? 'hankintakäytäntöjesi' : 'laskutusprosessiesi'} ja dokumentaation analysointi  
+✅ Ammattimainen kiinteistönhallinnan asiantuntemus ${currentWorkspace === 'purchaser' ? 'kustannusoptimoinnissa ja toimittajahallinnassa' : 'talousoperaatioissa ja maksuseurannassa'}
 
-**Ready to explore?** Try asking "Load sample data so I can see what you can do" or visit the Admin panel to upload your own files!
+**Valmis kokeilemaan?** Kokeile kysyä "Lataa esimerkkidataa, jotta näen mitä osaat tehdä" tai käy Admin-paneelissa lataamassa omia tiedostoja!
 
-How would you like to get started?`
-                : `Hello! I'm your Propertius ${currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} assistant. I'm here to help you with professional property management ${currentWorkspace === 'purchaser' ? 'procurement optimization and cost savings' : 'invoicing automation and financial tracking'}.
+Miten haluaisit aloittaa?`
+                : `Hei! Olen Propertius ${currentWorkspace === 'purchaser' ? 'Hankinta' : 'Laskutus'}avustajasi. Olen täällä auttamassa sinua ammattimaisessa kiinteistönhallinnassa ${currentWorkspace === 'purchaser' ? 'hankintojen optimoinnissa ja kustannussäästöissä' : 'laskutusautomaatiossa ja taloudellisessa seurannassa'}.
 
-📚 **Knowledge Base Loaded:** ${session.documentsUsed.length} document(s) available.
+📚 **Tietokanta ladattu:** ${session.documentsUsed.length} dokumentti(a) käytettävissä.
 
-How can I help you today?`
+Miten voin auttaa sinua tänään?`
             }]
           };
           setMessages([welcomeMessage]);
           setSessionActive(true);
           
           if (isLikelyNewUser) {
-            toast.success("🎉 Welcome! Your Propertius assistant is ready. Visit the Admin panel to load sample data and explore features.", {
+            toast.success("🎉 Tervetuloa! Propertius-avustajasi on valmis. Käy Admin-paneelissa lataamassa esimerkkidataa ja tutustumassa ominaisuuksiin.", {
               duration: 6000
             });
           } else {
-            toast.success(`Session initialized with ${session.documentsUsed.length} knowledge document(s)`);
+            toast.success(`Istunto alustettu ${session.documentsUsed.length} tietokannan dokumentilla`);
           }
         } catch (error) {
           console.error('Failed to initialize session:', error);
@@ -198,10 +253,10 @@ How can I help you today?`
   }, [user?.uid, currentWorkspace]); // Removed sessionInitializing to prevent infinite loop
 
   const quickActions = [
-    "Use prenegotiated discount prices",
-    "Get approvals easily and from correct person", 
-    "Find preferred contractor and best price/quality",
-    "Create maintenance orders easily and correctly"
+    "Käytä ennakkoneuvoteltuja alennushintoja",
+    "Hanki hyväksynnät helposti ja oikealta henkilöltä", 
+    "Löydä suosikkiurakoitsija ja paras hinta/laatu-suhde",
+    "Luo huoltotilaukset helposti ja oikein"
   ];
 
   const handleQuickAction = async (action: string) => {
@@ -257,12 +312,16 @@ How can I help you today?`
         }
       }
 
+      // Select appropriate functions based on workspace
+      const availableFunctions = currentWorkspace === 'purchaser' 
+        ? [searchPurchaseOrdersFunction] 
+        : [searchPurchaseOrdersFunction, searchInvoicesFunction];
+      
+      // Use function calling model for ERP data only
       const model = genAI.getGenerativeModel({
         model: geminiModel,
-        generationConfig: { temperature: 0.2 },
-        tools: [
-          { functionDeclarations: [searchERPFunction] }
-        ]
+        generationConfig: { temperature: 0.1 },
+        tools: [{ functionDeclarations: availableFunctions }]
       });
 
       const history = messages.map(msg => ({ role: msg.role, parts: msg.parts }));
@@ -286,7 +345,7 @@ How can I help you today?`
               const functionName = part.functionCall.name;
               const functionArgs = part.functionCall.args;
               
-              if (functionName === 'search_purchase_orders') {
+              if (functionName === 'search_purchase_orders' || functionName === 'search_invoices') {
                 try {
                   const aiRequestId = Math.random().toString(36).substring(2, 8);
                   
@@ -310,8 +369,10 @@ How can I help you today?`
                     });
                   }
 
-                  // Execute ERP search (this will generate its own logs with request ID)
-                  const searchResult = await erpApiService.searchRecords(user!.uid, functionArgs);
+                  // Execute search using appropriate API based on workspace and function
+                  const searchResult = functionName === 'search_purchase_orders'
+                    ? await erpApiService.searchRecords(user!.uid, functionArgs)
+                    : await salesInvoiceApiService.searchInvoices(user!.uid, functionArgs);
                   
                   // Log consolidated AI + ERP results
                   console.log('🔗 AI-ERP INTEGRATION RESULT [' + aiRequestId + ']:', {
@@ -611,7 +672,7 @@ How can I help you today?`
           <div className="absolute top-4 left-4 text-sm text-gray-300">
             <span className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              Logged in as: <span className="text-white font-medium">{user.email}</span>
+              Kirjautunut käyttäjänä: <span className="text-white font-medium">{user.email}</span>
             </span>
           </div>
         )}
@@ -643,16 +704,16 @@ How can I help you today?`
           <Bot className="h-8 w-8 mr-3" />
           <h1 className="text-3xl font-bold">
             {currentWorkspace === 'purchaser' 
-              ? 'Propertius Procurement AI' 
-              : 'Propertius Invoicing AI'
+              ? 'Propertius Hankinta-AI' 
+              : 'Propertius Laskutus-AI'
             }
           </h1>
         </div>
         <p className="text-gray-300 text-lg max-w-4xl mx-auto">
-          Meet the Propertius – your AI assistant for high standard professional property management. 
+          Tutustu Propertiukseen – tekoälyavustajasi korkeatasoista kiinteistönhallintaa varten. 
           {currentWorkspace === 'purchaser' 
-            ? ' Advanced procurement optimization, supplier intelligence, and cost management.'
-            : ' Intelligent invoicing automation, payment tracking, and financial operations.'
+            ? ' Edistynyt hankintojen optimointi, toimittaja-äly ja kustannushallinta.'
+            : ' Älykäs laskutusautomaatio, maksuseuranta ja talousoperaatiot.'
           }
         </p>
       </div>
@@ -666,7 +727,7 @@ How can I help you today?`
             className="text-red-600 border-red-200 hover:bg-red-50"
           >
             <RotateCcw className="mr-2 h-4 w-4" />
-            Reset Chat
+            Nollaa keskustelu
           </Button>
           <Button 
             variant="outline" 
@@ -674,7 +735,7 @@ How can I help you today?`
             className="text-gray-700 border-gray-300 hover:bg-gray-100"
           >
             <Paperclip className="mr-2 h-4 w-4" />
-            Upload Documents
+            Lataa dokumentteja
           </Button>
         </div>
       </div>
@@ -734,8 +795,50 @@ How can I help you today?`
                     {message.parts.map((part, partIndex) => (
                       <div key={partIndex}>
                         {part.text && (
-                          <div className={`prose ${message.role === 'user' ? 'prose-invert' : ''} prose-sm max-w-none`}>
-                            <ReactMarkdown>
+                          <div className={`prose ${message.role === 'user' ? 'prose-invert' : ''} prose-sm max-w-none prose-table`}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                table: ({ children }) => (
+                                  <div className="overflow-x-auto my-8 rounded-xl shadow-xl border border-gray-200 bg-white">
+                                    <table className="min-w-full table-auto">
+                                      {children}
+                                    </table>
+                                  </div>
+                                ),
+                                thead: ({ children }) => (
+                                  <thead className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                                    {children}
+                                  </thead>
+                                ),
+                                tbody: ({ children }) => (
+                                  <tbody className="divide-y divide-gray-100 bg-white">
+                                    {children}
+                                  </tbody>
+                                ),
+                                tr: ({ children, ...props }) => {
+                                  // Check if this is a header row or data row
+                                  const isHeaderRow = props.node?.tagName === 'tr' && props.node?.parentNode?.tagName === 'thead';
+                                  return (
+                                    <tr className={isHeaderRow ? "" : "hover:bg-blue-25 hover:shadow-sm transition-all duration-200"}>
+                                      {children}
+                                    </tr>
+                                  );
+                                },
+                                th: ({ children }) => (
+                                  <th className="px-8 py-5 text-left text-sm font-bold text-white uppercase tracking-wider">
+                                    {children}
+                                  </th>
+                                ),
+                                td: ({ children }) => (
+                                  <td className="px-8 py-5 text-sm text-gray-800 leading-relaxed">
+                                    <div className="max-w-md">
+                                      {children}
+                                    </div>
+                                  </td>
+                                )
+                              }}
+                            >
                               {(() => {
                                 const { originalText, formattedSources } = processTextWithCitations(
                                   part.text,

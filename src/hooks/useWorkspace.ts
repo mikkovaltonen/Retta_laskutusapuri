@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-export type WorkspaceType = 'purchaser' | 'invoicer';
+export type WorkspaceType = 'purchaser' | 'invoicer' | 'competitive_bidding';
 
 export interface WorkspaceContextType {
   currentWorkspace: WorkspaceType;
@@ -18,18 +18,25 @@ export interface WorkspaceContextType {
 
 export const workspaceConfigs = {
   purchaser: {
-    name: 'Propertius Procurement',
-    chatTitle: 'Procurement Assistant',
-    adminTitle: 'Procurement Management',
-    erpTitle: 'Purchase Order Integration',
-    apiTestTitle: 'Purchase Order API Testing'
+    name: 'Propertius Hankinta',
+    chatTitle: 'Hankinta-avustaja',
+    adminTitle: 'Hankintojen hallinta',
+    erpTitle: 'Ostotilausten integraatio',
+    apiTestTitle: 'Ostotilaus API:n testaus'
   },
   invoicer: {
-    name: 'Propertius Invoicing', 
-    chatTitle: 'Invoicing Assistant',
-    adminTitle: 'Invoicing Management',
-    erpTitle: 'Sales Invoice Integration',
-    apiTestTitle: 'Sales Invoice API Testing'
+    name: 'Propertius Laskutus', 
+    chatTitle: 'Laskutusavustaja',
+    adminTitle: 'Laskutuksen hallinta',
+    erpTitle: 'Myyntilaskujen integraatio',
+    apiTestTitle: 'Myyntilasku API:n testaus'
+  },
+  competitive_bidding: {
+    name: 'Propertius Kilpailuttaja',
+    chatTitle: 'Kilpailutusavustaja', 
+    adminTitle: 'Kilpailutuksen hallinta',
+    erpTitle: 'Markkinatietojen integraatio',
+    apiTestTitle: 'Markkinatietojen testaus'
   }
 } as const;
 

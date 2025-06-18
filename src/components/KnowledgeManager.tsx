@@ -23,7 +23,9 @@ export const KnowledgeManager: React.FC = () => {
     
     try {
       setLoading(true);
+      console.log(`🔍 Loading documents for workspace: ${currentWorkspace}, user: ${user.uid}`);
       const userDocs = await storageService.getUserDocuments(user.uid, currentWorkspace);
+      console.log(`📄 Found ${userDocs.length} documents in ${currentWorkspace}_knowledge collection`);
       setDocuments(userDocs);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load documents');
@@ -34,7 +36,7 @@ export const KnowledgeManager: React.FC = () => {
 
   useEffect(() => {
     loadDocuments();
-  }, [user]);
+  }, [user, currentWorkspace]);
 
   const handleUploadComplete = (newDoc: KnowledgeDocument) => {
     setDocuments(prev => [newDoc, ...prev]);
@@ -44,7 +46,7 @@ export const KnowledgeManager: React.FC = () => {
     if (!doc.id || !confirm(`Delete "${doc.name}"?`)) return;
 
     try {
-      await storageService.deleteDocument(doc.id, doc.storageUrl);
+      await storageService.deleteDocument(doc.id, doc.storageUrl, currentWorkspace);
       setDocuments(prev => prev.filter(d => d.id !== doc.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document');
@@ -77,12 +79,14 @@ export const KnowledgeManager: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // List of sample knowledge documents to load
-      const sampleFiles = [
+      // List of sample knowledge documents to load based on workspace
+      const sampleFiles = currentWorkspace === 'purchaser' ? [
         { path: '/DMA_levels_markdown.md', name: 'DMA Authorization Levels' },
         { path: '/DMA_matrix_combined.md', name: 'DMA Matrix Combined' },
         { path: '/Operative purchasing process.md', name: 'Operative Purchasing Process' },
         { path: '/S2P Policy.md', name: 'Source-to-Pay Policy' }
+      ] : [
+        { path: '/invoicing_internal_knowledge_example.md', name: 'invoicing_internal_knowledge_example' }
       ];
       
       let successCount = 0;
@@ -115,7 +119,7 @@ export const KnowledgeManager: React.FC = () => {
           } as File;
           
           // Upload using the existing upload function
-          await storageService.uploadDocument(fileObject, user.uid, 'md');
+          await storageService.uploadDocument(fileObject, user.uid, 'md', currentWorkspace);
           successCount++;
           
         } catch (fileError) {
@@ -126,7 +130,7 @@ export const KnowledgeManager: React.FC = () => {
       if (successCount > 0) {
         // Reload documents to show the new ones
         await loadDocuments();
-        toast.success(`Successfully loaded ${successCount} sample knowledge documents`);
+        toast.success(`Successfully loaded ${successCount} sample ${currentWorkspace} knowledge document(s)`);
         console.log(`✅ Successfully loaded ${successCount} sample knowledge documents`);
       } else {
         setError('Failed to load any sample documents');
@@ -177,7 +181,7 @@ export const KnowledgeManager: React.FC = () => {
               disabled={loading}
               className="text-green-600 border-green-200 hover:bg-green-50"
             >
-              📚 Load Sample Knowledge
+              📚 Load Sample {currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Knowledge
             </Button>
           </div>
         </CardHeader>

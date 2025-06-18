@@ -26,7 +26,9 @@
       "Bash(md5sum:*)",
       "Bash(diff:*)",
       "Bash(mkdir:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "WebFetch(domain:colab.research.google.com)",
+      "WebFetch(domain:ai.google.dev)"
     ],
     "deny": []
   }

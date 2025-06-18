@@ -39,16 +39,21 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   // Sample prompt - loaded from file or fallback
   const [samplePrompt, setSamplePrompt] = useState<string>('');
 
-  // Load sample prompt from file
+  // Load sample prompt from file based on workspace
   useEffect(() => {
     const loadSamplePrompt = async () => {
       try {
-        const response = await fetch('/sample_promtp.md');
+        const fileName = currentWorkspace === 'purchaser' 
+          ? '/sample_procurement_prompt.md' 
+          : currentWorkspace === 'invoicer'
+          ? '/sample_invoicing_prompt.md'
+          : '/sample_competitive_bidding_prompt.md';
+        const response = await fetch(fileName);
         if (response.ok) {
           const content = await response.text();
           setSamplePrompt(content.trim()); // Use exactly what's in the file
         } else {
-          console.error('Failed to load sample prompt: HTTP', response.status);
+          console.error(`Failed to load sample prompt: HTTP ${response.status} for ${fileName}`);
         }
       } catch (error) {
         console.error('Failed to load sample prompt:', error);
@@ -56,7 +61,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     };
 
     loadSamplePrompt();
-  }, []);
+  }, [currentWorkspace]);
 
   // Load initial data
   useEffect(() => {
@@ -78,7 +83,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     setIsLoading(true);
     try {
       // Load latest prompt for this user
-      const latestPrompt = await loadLatestPrompt(user.uid);
+      const latestPrompt = await loadLatestPrompt(user.uid, currentWorkspace);
       if (latestPrompt) {
         setPrompt(latestPrompt);
       } else {
@@ -163,10 +168,11 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   const handleLoadSamplePrompt = () => {
     if (samplePrompt.trim()) {
       setPrompt(samplePrompt);
-      toast.success('Sample prompt loaded! You can now edit and save it.');
+      toast.success(`Sample ${currentWorkspace} prompt loaded! You can now edit and save it.`);
     } else {
-      toast.error('Sample prompt file is empty or missing. Please add content to /public/sample_promtp.md');
-      console.error('Sample prompt file /public/sample_promtp.md is empty or missing');
+      const fileName = currentWorkspace === 'purchaser' ? '/public/sample_procurement_prompt.md' : '/public/sample_invoicing_prompt.md';
+      toast.error(`Sample prompt file is empty or missing. Please add content to ${fileName}`);
+      console.error(`Sample prompt file ${fileName} is empty or missing`);
     }
   };
 
@@ -193,12 +199,12 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="prompt">System Prompt</Label>
+                <Label htmlFor="prompt">System Prompt ({currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Assistant)</Label>
                 <Textarea
                   id="prompt"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Enter your system prompt for the AI agent..."
+                  placeholder={`Enter your system prompt for the ${currentWorkspace === 'purchaser' ? 'procurement' : 'invoicing'} AI assistant...`}
                   className="min-h-[200px] font-mono text-sm"
                 />
               </div>
@@ -218,7 +224,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
               {!prompt.trim() && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
                   <p className="text-sm text-blue-800">
-                    <strong>Get started:</strong> Load a sample prompt or create your own from scratch.
+                    <strong>Get started:</strong> Load a sample {currentWorkspace === 'purchaser' ? 'procurement' : 'invoicing'} prompt or create your own from scratch.
                   </p>
                   <div className="flex gap-2">
                     <Button 
@@ -226,7 +232,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
                       variant="outline"
                       className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-100"
                     >
-                      Load Sample Prompt
+                      Load Sample {currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Prompt
                     </Button>
                   </div>
                 </div>

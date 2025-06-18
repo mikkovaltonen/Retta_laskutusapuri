@@ -69,8 +69,8 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
                   className={currentWorkspace === 'purchaser' ? 'bg-blue-50' : ''}
                 >
                   <div className="flex flex-col">
-                    <span className="font-medium">Property Manager Purchaser</span>
-                    <span className="text-sm text-gray-500">Purchase Order Management</span>
+                    <span className="font-medium">Propertius Hankinta</span>
+                    <span className="text-sm text-gray-500">Ostotilausten hallinta</span>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -78,8 +78,17 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
                   className={currentWorkspace === 'invoicer' ? 'bg-blue-50' : ''}
                 >
                   <div className="flex flex-col">
-                    <span className="font-medium">Property Manager Invoicer</span>
-                    <span className="text-sm text-gray-500">Sales Invoice Management</span>
+                    <span className="font-medium">Propertius Laskutus</span>
+                    <span className="text-sm text-gray-500">Myyntilaskujen hallinta</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setWorkspace('competitive_bidding')}
+                  className={currentWorkspace === 'competitive_bidding' ? 'bg-blue-50' : ''}
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">Propertius Kilpailuttaja</span>
+                    <span className="text-sm text-gray-500">Markkinatietojen ja kilpailutuksen hallinta</span>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
