@@ -1,4 +1,15 @@
-import { storageService, ERPDocument } from './storageService';
+import { storageService, ERPDocument, WorkspaceType } from './storageService';
+import * as XLSX from 'xlsx';
+import { db } from './firebase';
+import { collection, addDoc } from 'firebase/firestore';
+
+// Helper function to get workspace-specific collection names
+const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+  if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
+    return 'purchaser_knowledge';
+  }
+  return `${workspace}_${baseCollection}`;
+};
 
 export interface SearchCriteria {
   supplierName?: string;        // Toimittajan nimi tai osa nimestä
@@ -18,6 +29,29 @@ export interface ERPRecord {
   [key: string]: string | number | boolean | null | undefined; // Dynamic columns based on Excel headers
 }
 
+export interface PurchaseOrderRow {
+  orderNumber: string;
+  supplierName: string;
+  productDescription: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  orderDate: string; // YYYY-MM-DD format
+  receiveByDate?: string; // YYYY-MM-DD format
+  buyerName?: string;
+  status?: string;
+  notes?: string;
+}
+
+export interface CreatePurchaseOrderResult {
+  success: boolean;
+  orderNumber: string;
+  fileName: string;
+  downloadUrl?: string;
+  rowsAdded: number;
+  message: string;
+}
+
 export interface SearchResult {
   records: ERPRecord[];
   totalCount: number;
@@ -30,7 +64,7 @@ export class ERPApiService {
   /**
    * Search ERP data with multiple criteria
    */
-  async searchRecords(userId: string, criteria: SearchCriteria): Promise<SearchResult> {
+  async searchRecords(userId: string, criteria: SearchCriteria, workspace: WorkspaceType = 'purchaser'): Promise<SearchResult> {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substring(2, 8);
     
@@ -51,7 +85,7 @@ export class ERPApiService {
     
     try {
       // Get user's ERP document
-      const erpDocuments = await storageService.getUserERPDocuments(userId);
+      const erpDocuments = await storageService.getUserERPDocuments(userId, workspace);
       
       if (erpDocuments.length === 0) {
         const result = {
@@ -78,14 +112,23 @@ export class ERPApiService {
         return result;
       }
 
-      if (erpDocuments.length > 1) {
-        console.warn(`⚠️ Found ${erpDocuments.length} ERP documents for user, using the first one. Consider cleaning up duplicates.`);
+      console.log(`📄 Found ${erpDocuments.length} ERP documents for user, combining all data for search.`);
+
+      // Combine JSON data from all ERP documents
+      let allJsonRecords: Record<string, unknown>[] = [];
+
+      for (const erpDoc of erpDocuments) {
+        console.log(`📊 Processing document: ${erpDoc.name}`);
+        
+        if (erpDoc.jsonData && erpDoc.jsonData.length > 0) {
+          allJsonRecords.push(...erpDoc.jsonData);
+          console.log(`✅ Added ${erpDoc.jsonData.length} JSON records from ${erpDoc.name}`);
+        } else {
+          console.log(`⚠️ No JSON data found in ${erpDoc.name}`);
+        }
       }
 
-      const erpDoc = erpDocuments[0]; // Only one document allowed
-      const { rawData, headers } = erpDoc;
-
-      if (!rawData || !headers || rawData.length === 0) {
+      if (!allJsonRecords || allJsonRecords.length === 0) {
         const result = {
           records: [],
           totalCount: 0,
@@ -111,32 +154,30 @@ export class ERPApiService {
         return result;
       }
 
-      // Convert raw data to records with column names
-      const allRecords: ERPRecord[] = rawData.map((row: (string | number | boolean | null | undefined)[], index: number) => {
-        const record: ERPRecord = { rowIndex: index + 2 }; // +2 because row 1 is headers, Excel rows start from 1
-        
-        // Map headers to data - use only available headers
-        headers.forEach((header: string, colIndex: number) => {
-          record[header] = row[colIndex] || '';
-        });
-        
+      // Convert JSON objects to ERPRecord format
+      const allRecords: ERPRecord[] = allJsonRecords.map((jsonRecord, index) => {
+        const record: ERPRecord = { 
+          rowIndex: index + 2, // +2 because row 1 is headers, Excel rows start from 1
+          ...jsonRecord // Spread all JSON properties
+        };
         return record;
       });
 
       // Apply search filters
+      const availableHeaders = allRecords.length > 0 ? Object.keys(allRecords[0]).filter(key => key !== 'rowIndex') : [];
       console.log('📋 Before filtering:', {
         totalRecords: allRecords.length,
-        availableHeaders: headers,
+        availableHeaders: availableHeaders,
         sampleRecord: allRecords[0] || null
       });
       
       // Debug: Show detailed first record mapping
       // Minimal logging for production
       if (allRecords.length > 0) {
-        console.log(`📋 Data summary: ${headers.length} headers, ${allRecords.length} records`);
+        console.log(`📋 Data summary: ${availableHeaders.length} headers, ${allRecords.length} records`);
       }
 
-      const filteredRecords = this.applyFilters(allRecords, criteria, headers, requestId);
+      const filteredRecords = this.applyFilters(allRecords, criteria, availableHeaders, requestId);
       
       const result = {
         records: filteredRecords,
@@ -429,7 +470,7 @@ export class ERPApiService {
   /**
    * Get available fields/columns from ERP data
    */
-  async getAvailableFields(userId: string): Promise<string[]> {
+  async getAvailableFields(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<string[]> {
     const requestId = Math.random().toString(36).substring(2, 8);
     
     console.log('📥 ERP API REQUEST [' + requestId + ']:', {
@@ -440,8 +481,17 @@ export class ERPApiService {
     });
     
     try {
-      const erpDocuments = await storageService.getUserERPDocuments(userId);
-      const fields = (erpDocuments.length === 0 || !erpDocuments[0].headers) ? [] : erpDocuments[0].headers;
+      const erpDocuments = await storageService.getUserERPDocuments(userId, workspace);
+      
+      if (erpDocuments.length === 0) {
+        return [];
+      }
+      
+      // Get fields from first document's JSON data
+      const firstDoc = erpDocuments[0];
+      const fields = (firstDoc.jsonData && firstDoc.jsonData.length > 0) 
+        ? Object.keys(firstDoc.jsonData[0]) 
+        : [];
       
       console.log('📤 ERP API RESPONSE [' + requestId + ']:', {
         status: 'SUCCESS',
@@ -472,7 +522,7 @@ export class ERPApiService {
   /**
    * Get sample data for testing
    */
-  async getSampleData(userId: string, maxRows: number = 5): Promise<ERPRecord[]> {
+  async getSampleData(userId: string, maxRows: number = 5, workspace: WorkspaceType = 'purchaser'): Promise<ERPRecord[]> {
     const requestId = Math.random().toString(36).substring(2, 8);
     
     console.log('📥 ERP API REQUEST [' + requestId + ']:', {
@@ -486,7 +536,7 @@ export class ERPApiService {
     });
     
     try {
-      const searchResult = await this.searchRecords(userId, {});
+      const searchResult = await this.searchRecords(userId, {}, workspace);
       const sampleData = searchResult.records.slice(0, maxRows);
       
       console.log('📤 ERP API RESPONSE [' + requestId + ']:', {
@@ -514,6 +564,189 @@ export class ERPApiService {
       
       console.error('❌ Failed to get sample data:', error);
       return [];
+    }
+  }
+
+  /**
+   * Create a new purchase order with multiple product rows and save to Excel
+   */
+  async createPurchaseOrder(userId: string, orderData: {
+    orderNumber: string;
+    supplierName: string;
+    buyerName?: string;
+    orderDate: string;
+    receiveByDate?: string;
+    rows: Array<{
+      productDescription: string;
+      quantity: number;
+      unitPrice: number;
+      notes?: string;
+    }>;
+  }, workspace: WorkspaceType = 'purchaser'): Promise<CreatePurchaseOrderResult> {
+    const startTime = Date.now();
+    const requestId = Math.random().toString(36).substring(2, 8);
+    
+    console.log('📥 ERP API REQUEST [' + requestId + ']:', {
+      method: 'createPurchaseOrder',
+      userId: userId.substring(0, 8) + '...',
+      inputParameters: {
+        orderNumber: orderData.orderNumber,
+        supplierName: orderData.supplierName,
+        buyerName: orderData.buyerName || null,
+        orderDate: orderData.orderDate,
+        receiveByDate: orderData.receiveByDate || null,
+        productRows: orderData.rows.length
+      },
+      timestamp: new Date().toISOString(),
+      requestId: requestId
+    });
+
+    try {
+      // Generate filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      const fileName = `Purchase_Order_${orderData.orderNumber}_${timestamp}.xlsx`;
+
+      // Prepare Excel data with proper column names
+      const excelRows = orderData.rows.map(row => ({
+        'Order Number': orderData.orderNumber,
+        'Supplier Name': orderData.supplierName,
+        'Description': row.productDescription,
+        'Qty': row.quantity,
+        'Unit Price': row.unitPrice,
+        'Total Price': row.quantity * row.unitPrice,
+        'Order Date': orderData.orderDate,
+        'Receive By': orderData.receiveByDate || '',
+        'Buyer Name': orderData.buyerName || '',
+        'Status': 'New',
+        'Notes': row.notes || ''
+      }));
+
+      // Create Excel workbook
+      const workbook = XLSX.utils.book_new();
+      
+      // Convert data to worksheet format
+      const worksheet = XLSX.utils.json_to_sheet(excelRows);
+      
+      // Add headers styling (basic)
+      const headers = [
+        'Order Number', 'Supplier Name', 'Product Description', 'Quantity',
+        'Unit Price', 'Total Price', 'Order Date', 'Receive By Date',
+        'Buyer Name', 'Status', 'Notes'
+      ];
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // Order Number
+        { wch: 20 }, // Supplier Name
+        { wch: 30 }, // Product Description
+        { wch: 10 }, // Quantity
+        { wch: 12 }, // Unit Price
+        { wch: 12 }, // Total Price
+        { wch: 12 }, // Order Date
+        { wch: 15 }, // Receive By Date
+        { wch: 15 }, // Buyer Name
+        { wch: 10 }, // Status
+        { wch: 25 }  // Notes
+      ];
+      worksheet['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Order');
+
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+      // Convert buffer to blob for download
+      const blob = new Blob([excelBuffer], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+
+      // Create download URL
+      const downloadUrl = URL.createObjectURL(blob);
+
+      const processingTime = Date.now() - startTime;
+
+      console.log('📤 ERP API RESPONSE [' + requestId + ']:', {
+        status: 'SUCCESS',
+        outputResults: {
+          orderNumber: orderData.orderNumber,
+          fileName: fileName,
+          rowsAdded: excelRows.length,
+          downloadAvailable: true,
+          totalValue: excelRows.reduce((sum, row) => sum + row['Total Price'], 0)
+        },
+        processingTimeMs: processingTime,
+        timestamp: new Date().toISOString(),
+        requestId: requestId
+      });
+
+      // Save to Firestore for future searches - individual columns
+      try {
+        // Save metadata document
+        const docData = {
+          name: fileName,
+          originalFormat: 'xlsx',
+          sheetsJson: JSON.stringify(['Purchase Order']),
+          rowCount: excelRows.length,
+          columnCount: Object.keys(excelRows[0] || {}).length,
+          size: excelBuffer.byteLength,
+          uploadedAt: new Date(),
+          userId,
+          type: 'erp-integration' as const
+        };
+
+        const docRef = await addDoc(collection(db, getWorkspaceCollectionName('erpDocuments', workspace)), docData);
+        
+        // Save each row as separate document with individual columns
+        const recordPromises = excelRows.map((record, index) => {
+          const recordData = {
+            parentDocumentId: docRef.id,
+            rowIndex: index + 1,
+            userId,
+            uploadedAt: new Date(),
+            ...record // Each Excel column becomes its own Firestore field
+          };
+          return addDoc(collection(db, getWorkspaceCollectionName('erpRecords', workspace)), recordData);
+        });
+        
+        await Promise.all(recordPromises);
+        console.log(`[CreatePurchaseOrder] Saved metadata and ${excelRows.length} individual records to Firestore`);
+      } catch (firestoreError) {
+        console.warn('Failed to save to Firestore, but Excel file created successfully:', firestoreError);
+      }
+
+      return {
+        success: true,
+        orderNumber: orderData.orderNumber,
+        fileName: fileName,
+        downloadUrl: downloadUrl,
+        rowsAdded: excelRows.length,
+        message: `Purchase order ${orderData.orderNumber} created successfully with ${excelRows.length} product rows. Total value: €${excelRows.reduce((sum, row) => sum + row['Total Price'], 0).toFixed(2)}`
+      };
+
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      
+      console.log('📤 ERP API RESPONSE [' + requestId + ']:', {
+        status: 'ERROR',
+        outputResults: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          orderNumber: orderData.orderNumber
+        },
+        processingTimeMs: processingTime,
+        timestamp: new Date().toISOString(),
+        requestId: requestId
+      });
+
+      console.error('❌ Failed to create purchase order:', error);
+      
+      return {
+        success: false,
+        orderNumber: orderData.orderNumber,
+        fileName: '',
+        rowsAdded: 0,
+        message: `Failed to create purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
     }
   }
 }

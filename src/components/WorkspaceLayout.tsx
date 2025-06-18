@@ -10,7 +10,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({ children, onLo
   return (
     <div className="min-h-screen bg-gray-50">
       <WorkspaceNavigation onLogout={onLogout} />
-      <main className="container mx-auto px-4 py-6">
+      <main className="max-w-full mx-auto px-4 py-6">
         {children}
       </main>
     </div>

@@ -33,9 +33,7 @@ export interface ERPDocument {
   id?: string;
   name: string;
   originalFormat: string;
-  content?: string; // Store content as CSV/JSON for Excel files
-  rawData?: any[][]; // Parsed Excel data as array of arrays
-  headers?: string[]; // Column headers
+  jsonData: Record<string, unknown>[]; // Direct JSON objects from Excel
   storageUrl?: string; // Optional - for large files using Storage
   downloadUrl?: string; // Optional - for large files using Storage
   size: number;
@@ -43,6 +41,15 @@ export interface ERPDocument {
   userId: string;
   type: 'erp-integration';
   sheets?: string[]; // Excel sheet names
+}
+
+export interface ERPRecord {
+  id?: string;
+  parentDocumentId: string;
+  rowIndex: number;
+  userId: string;
+  uploadedAt: Date;
+  [key: string]: unknown; // Dynamic columns from Excel
 }
 
 export class StorageService {
@@ -148,20 +155,21 @@ export class StorageService {
   }
 
   /**
-   * Delete user's existing ERP documents for a workspace
+   * Delete user's existing ERP documents from purchaser_erpDocuments collection
    */
   async deleteUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
     try {
-      const q = query(
-        collection(db, getWorkspaceCollectionName('erpDocuments', workspace)),
+      // Delete documents from purchaser_erpDocuments collection
+      const recordsQ = query(
+        collection(db, 'purchaser_erpDocuments'),
         where('userId', '==', userId)
       );
       
-      const querySnapshot = await getDocs(q);
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
+      const recordsSnapshot = await getDocs(recordsQ);
+      const deleteRecordsPromises = recordsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deleteRecordsPromises);
       
-      console.log(`🗑️ Deleted ${querySnapshot.docs.length} existing ERP documents for workspace: ${workspace}`);
+      console.log(`🗑️ Deleted ${recordsSnapshot.docs.length} existing ERP documents from purchaser_erpDocuments`);
     } catch (error) {
       console.error('Failed to delete existing ERP documents:', error);
       // Don't throw - just log and continue
@@ -186,62 +194,66 @@ export class StorageService {
         throw new Error('Only Excel (.xlsx, .xls) files are supported');
       }
       
-      let content = '';
-      let rawData: any[][] = [];
-      let headers: string[] = [];
-      let sheets: string[] = [];
-      
       // Handle Excel files only
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       
-      sheets = workbook.SheetNames;
+      const sheets = workbook.SheetNames;
       
-      // Process first sheet
+      // Process first sheet - pure JSON approach
       const firstSheet = workbook.Sheets[sheets[0]];
-      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+      const jsonObjects = XLSX.utils.sheet_to_json(firstSheet) as Record<string, unknown>[];
       
-      if (jsonData.length > 0) {
-        headers = jsonData[0].map((h: any) => String(h || '').trim());
-        rawData = jsonData.slice(1);
-      }
+      const columnCount = Object.keys(jsonObjects[0] || {}).length;
+      const columnNames = Object.keys(jsonObjects[0] || {});
       
-      // Convert to CSV format for content
-      content = XLSX.utils.sheet_to_csv(firstSheet);
+      console.log(`📊 Processed ${jsonObjects.length} records as JSON objects from sheet: ${sheets[0]}`);
+      console.log(`📋 Found ${columnCount} columns:`, columnNames);
       
-      // Save to Firestore (convert arrays to JSON strings to avoid nested array issues)
-      const docData = {
+      // Save each row directly to purchaser_erpDocuments with order number as document ID
+      console.log(`💾 Saving ${jsonObjects.length} records directly to purchaser_erpDocuments collection...`);
+      console.log(`🔧 Using order numbers as document IDs with Excel columns as fields`);
+      
+      const recordPromises = jsonObjects.map((record, index) => {
+        // Use order number as document ID if available, otherwise fallback
+        const orderNumberField = Object.keys(record).find(key => 
+          key.toLowerCase().includes('order') && key.toLowerCase().includes('number')
+        );
+        const orderNumber = orderNumberField ? String(record[orderNumberField]) : `record_${Date.now()}_${index}`;
+        
+        const recordData = {
+          userId,
+          uploadedAt: new Date(),
+          originalFileName: file.name,
+          rowIndex: index + 1,
+          ...record // Spread all Excel columns as individual Firestore fields
+        };
+        
+        // Log first record structure as example
+        if (index === 0) {
+          console.log(`📄 Sample record structure:`, Object.keys(recordData));
+          console.log(`📋 Using order number '${orderNumber}' as document ID`);
+        }
+        
+        return addDoc(collection(db, 'purchaser_erpDocuments'), recordData);
+      });
+      
+      await Promise.all(recordPromises);
+      console.log(`✅ Saved ${jsonObjects.length} individual records to purchaser_erpDocuments collection`);
+      
+      // Return format with jsonData for compatibility
+      return {
+        id: `upload_${Date.now()}`, // Generate temporary ID for compatibility
         name: file.name,
         originalFormat: fileExtension,
-        content,
-        rawDataJson: JSON.stringify(rawData), // Convert to JSON string
-        headersJson: JSON.stringify(headers), // Convert to JSON string
-        sheetsJson: JSON.stringify(sheets), // Convert to JSON string
-        rowCount: rawData.length,
-        columnCount: headers.length,
+        jsonData: jsonObjects, // Keep in memory for immediate use
+        sheets: sheets,
         size: file.size,
         uploadedAt: new Date(),
-        userId,
-        type: 'erp-integration' as const
-      };
-
-      const docRef = await addDoc(collection(db, getWorkspaceCollectionName('erpDocuments', workspace)), docData);
-      
-      // Convert JSON strings back to arrays for return value
-      return {
-        id: docRef.id,
-        name: docData.name,
-        originalFormat: docData.originalFormat,
-        content: docData.content,
-        rawData: JSON.parse(docData.rawDataJson),
-        headers: JSON.parse(docData.headersJson),
-        sheets: JSON.parse(docData.sheetsJson),
-        size: docData.size,
-        uploadedAt: docData.uploadedAt,
-        userId: docData.userId,
-        type: docData.type,
-        storageUrl: '', // Not using storage for now
-        downloadUrl: '' // Not using storage for now
+        userId: userId,
+        type: 'erp-integration' as const,
+        storageUrl: '',
+        downloadUrl: ''
       };
     } catch (error) {
       console.error('ERP upload failed:', error);
@@ -250,34 +262,61 @@ export class StorageService {
   }
 
   /**
-   * Get user's ERP documents
+   * Get user's ERP documents from purchaser_erpDocuments collection
    */
   async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ERPDocument[]> {
     try {
-      const q = query(
-        collection(db, getWorkspaceCollectionName('erpDocuments', workspace)),
+      // Get all records from purchaser_erpDocuments for this user
+      const recordsQ = query(
+        collection(db, 'purchaser_erpDocuments'),
         where('userId', '==', userId)
       );
       
-      const querySnapshot = await getDocs(q);
-      const documents = querySnapshot.docs.map(doc => {
+      const recordsSnapshot = await getDocs(recordsQ);
+      const jsonData = recordsSnapshot.docs.map(recordDoc => {
+        const recordData = recordDoc.data();
+        // Remove metadata fields, keep only Excel columns
+        const { userId, uploadedAt, originalFileName, rowIndex, ...excelColumns } = recordData;
+        return excelColumns;
+      });
+      
+      console.log(`📋 Loaded ${jsonData.length} individual records from purchaser_erpDocuments`);
+      
+      // Group by original filename if available
+      const fileGroups = new Map<string, Record<string, unknown>[]>();
+      
+      for (const doc of recordsSnapshot.docs) {
         const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name,
-          originalFormat: data.originalFormat,
-          content: data.content,
-          rawData: data.rawDataJson ? JSON.parse(data.rawDataJson) : [],
-          headers: data.headersJson ? JSON.parse(data.headersJson) : [],
-          sheets: data.sheetsJson ? JSON.parse(data.sheetsJson) : [],
-          size: data.size,
-          uploadedAt: data.uploadedAt,
-          userId: data.userId,
-          type: data.type,
-          storageUrl: data.storageUrl || '',
-          downloadUrl: data.downloadUrl || ''
-        };
-      }) as ERPDocument[];
+        const fileName = data.originalFileName || 'Unknown File';
+        
+        if (!fileGroups.has(fileName)) {
+          fileGroups.set(fileName, []);
+        }
+        
+        const { userId, uploadedAt, originalFileName, rowIndex, ...excelColumns } = data;
+        fileGroups.get(fileName)!.push(excelColumns);
+      }
+      
+      // Create ERPDocument objects for each file
+      const documents: ERPDocument[] = [];
+      for (const [fileName, records] of fileGroups) {
+        const firstRecord = recordsSnapshot.docs.find(doc => doc.data().originalFileName === fileName);
+        const firstRecordData = firstRecord?.data();
+        
+        documents.push({
+          id: `file_${fileName}_${Date.now()}`,
+          name: fileName,
+          originalFormat: 'xlsx',
+          jsonData: records,
+          sheets: ['Sheet1'],
+          size: records.length * 100, // Estimate
+          uploadedAt: firstRecordData?.uploadedAt || new Date(),
+          userId: userId,
+          type: 'erp-integration' as const,
+          storageUrl: '',
+          downloadUrl: ''
+        });
+      }
       
       // Sort by uploadedAt on client side
       return documents.sort((a, b) => 
@@ -290,9 +329,9 @@ export class StorageService {
   }
 
   /**
-   * Delete ERP document
+   * Delete ERP document and its records
    */
-  async deleteERPDocument(documentId: string, storagePath?: string): Promise<void> {
+  async deleteERPDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
     try {
       // Delete from storage if using storage
       if (storagePath) {
@@ -300,8 +339,22 @@ export class StorageService {
         await deleteObject(storageRef);
       }
 
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'erpDocuments', documentId));
+      // Delete individual records first
+      const recordsQ = query(
+        collection(db, getWorkspaceCollectionName('erpRecords', workspace)),
+        where('parentDocumentId', '==', documentId)
+      );
+      
+      const recordsSnapshot = await getDocs(recordsQ);
+      const deleteRecordsPromises = recordsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deleteRecordsPromises);
+      
+      console.log(`🗑️ Deleted ${recordsSnapshot.docs.length} records for document ${documentId}`);
+
+      // Delete document metadata
+      await deleteDoc(doc(db, getWorkspaceCollectionName('erpDocuments', workspace), documentId));
+      
+      console.log(`🗑️ Deleted document metadata ${documentId}`);
     } catch (error) {
       console.error('Delete failed:', error);
       throw new Error('Failed to delete ERP document');
@@ -309,16 +362,16 @@ export class StorageService {
   }
 
   /**
-   * Download ERP document
+   * Download ERP document as JSON
    */
   async downloadERPDocument(document: ERPDocument): Promise<string> {
     try {
-      // Return CSV content
-      if (document.content) {
-        return document.content;
+      // Return JSON data as formatted string
+      if (document.jsonData && document.jsonData.length > 0) {
+        return JSON.stringify(document.jsonData, null, 2);
       }
       
-      throw new Error('No content available');
+      throw new Error('No JSON data available');
     } catch (error) {
       console.error('Download failed:', error);
       throw new Error('Failed to download ERP document');

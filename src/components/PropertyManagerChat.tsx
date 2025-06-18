@@ -109,6 +109,64 @@ const searchInvoicesFunction = {
   }
 };
 
+// Create Purchase Order Function Definition for Gemini
+const createPurchaseOrderFunction = {
+  name: "create_purchase_order",
+  description: "Create a new purchase order with multiple product rows and generate Excel file for download. Use this when the user wants to create, write, or generate a purchase order with specific products and quantities.",
+  parameters: {
+    type: "object",
+    properties: {
+      orderNumber: {
+        type: "string",
+        description: "Unique purchase order number (e.g., 'PO-2024-001', 'TILAUS-240618-1')"
+      },
+      supplierName: {
+        type: "string", 
+        description: "Supplier/contractor name (e.g., 'Huolto-Karhu Oy', 'TechCorp', 'Kiinteistopalvelut Lahtinen')"
+      },
+      buyerName: {
+        type: "string",
+        description: "Name of the person creating/responsible for the purchase order"
+      },
+      orderDate: {
+        type: "string",
+        description: "Order creation date in YYYY-MM-DD format (e.g., '2024-06-18')"
+      },
+      receiveByDate: {
+        type: "string",
+        description: "Expected delivery/completion date in YYYY-MM-DD format (optional)"
+      },
+      rows: {
+        type: "array",
+        description: "Array of product/service rows for the purchase order",
+        items: {
+          type: "object",
+          properties: {
+            productDescription: {
+              type: "string",
+              description: "Product or service description (e.g., 'Kattoremontti', 'LED-valaisimet 10kpl', 'Putkiston huolto')"
+            },
+            quantity: {
+              type: "number",
+              description: "Quantity of the product/service"
+            },
+            unitPrice: {
+              type: "number", 
+              description: "Price per unit in euros (e.g., 150.50 for €150.50)"
+            },
+            notes: {
+              type: "string",
+              description: "Additional notes or specifications for this row (optional)"
+            }
+          },
+          required: ["productDescription", "quantity", "unitPrice"]
+        }
+      }
+    },
+    required: ["orderNumber", "supplierName", "buyerName", "orderDate", "rows"]
+  }
+};
+
 // Debug: Log Gemini API config
 console.log('Gemini API config:', {
   apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : 'undefined',
@@ -283,7 +341,7 @@ Miten voin auttaa sinua tänään?`
       await addTechnicalLog(continuousImprovementSessionId, {
         event: 'user_message',
         userMessage: textToSend
-      });
+      }, currentWorkspace);
     }
 
     try {
@@ -314,7 +372,7 @@ Miten voin auttaa sinua tänään?`
 
       // Select appropriate functions based on workspace
       const availableFunctions = currentWorkspace === 'purchaser' 
-        ? [searchPurchaseOrdersFunction] 
+        ? [searchPurchaseOrdersFunction, createPurchaseOrderFunction] 
         : [searchPurchaseOrdersFunction, searchInvoicesFunction];
       
       // Use function calling model for ERP data only
@@ -345,9 +403,9 @@ Miten voin auttaa sinua tänään?`
               const functionName = part.functionCall.name;
               const functionArgs = part.functionCall.args;
               
-              if (functionName === 'search_purchase_orders' || functionName === 'search_invoices') {
+              if (functionName === 'search_purchase_orders' || functionName === 'search_invoices' || functionName === 'create_purchase_order') {
+                const aiRequestId = Math.random().toString(36).substring(2, 8);
                 try {
-                  const aiRequestId = Math.random().toString(36).substring(2, 8);
                   
                   // Log AI function call details
                   console.log('🤖 AI FUNCTION CALL [' + aiRequestId + ']:', {
@@ -366,23 +424,33 @@ Miten voin auttaa sinua tänään?`
                       functionName: functionName,
                       functionInputs: functionArgs,
                       aiRequestId: aiRequestId
-                    });
+                    }, currentWorkspace);
                   }
 
-                  // Execute search using appropriate API based on workspace and function
-                  const searchResult = functionName === 'search_purchase_orders'
-                    ? await erpApiService.searchRecords(user!.uid, functionArgs)
-                    : await salesInvoiceApiService.searchInvoices(user!.uid, functionArgs);
+                  // Execute function using appropriate API based on function name
+                  let functionResult;
+                  if (functionName === 'search_purchase_orders') {
+                    functionResult = await erpApiService.searchRecords(user!.uid, functionArgs, currentWorkspace);
+                  } else if (functionName === 'search_invoices') {
+                    functionResult = await salesInvoiceApiService.searchInvoices(user!.uid, functionArgs);
+                  } else if (functionName === 'create_purchase_order') {
+                    functionResult = await erpApiService.createPurchaseOrder(user!.uid, functionArgs, currentWorkspace);
+                  }
                   
                   // Log consolidated AI + ERP results
                   console.log('🔗 AI-ERP INTEGRATION RESULT [' + aiRequestId + ']:', {
                     user_query: textToSend,
                     ai_function_call: functionName,
                     ai_parameters: functionArgs,
-                    erp_result_summary: {
-                      totalRecords: searchResult.totalCount,
-                      processingTime: searchResult.processingTimeMs + 'ms',
-                      hasData: searchResult.records.length > 0
+                    erp_result_summary: functionName === 'create_purchase_order' ? {
+                      success: functionResult.success,
+                      orderNumber: functionResult.orderNumber,
+                      rowsAdded: functionResult.rowsAdded,
+                      fileName: functionResult.fileName
+                    } : {
+                      totalRecords: functionResult.totalCount,
+                      processingTime: functionResult.processingTimeMs + 'ms',
+                      hasData: functionResult.records.length > 0
                     },
                     execution_timestamp: new Date().toISOString(),
                     ai_request_id: aiRequestId
@@ -394,14 +462,20 @@ Miten voin auttaa sinua tänään?`
                       event: 'function_call_success',
                       functionName: functionName,
                       functionInputs: functionArgs,
-                      functionOutputs: {
-                        totalRecords: searchResult.totalCount,
-                        processingTimeMs: searchResult.processingTimeMs,
-                        hasData: searchResult.records.length > 0,
-                        recordsPreview: searchResult.records.slice(0, 3) // First 3 records as preview
+                      functionOutputs: functionName === 'create_purchase_order' ? {
+                        success: functionResult.success,
+                        orderNumber: functionResult.orderNumber,
+                        rowsAdded: functionResult.rowsAdded,
+                        fileName: functionResult.fileName,
+                        message: functionResult.message
+                      } : {
+                        totalRecords: functionResult.totalCount,
+                        processingTimeMs: functionResult.processingTimeMs,
+                        hasData: functionResult.records.length > 0,
+                        recordsPreview: functionResult.records.slice(0, 3) // First 3 records as preview
                       },
                       aiRequestId: aiRequestId
-                    });
+                    }, currentWorkspace);
                   }
                   
                   // Create function response with explicit instructions
@@ -410,11 +484,19 @@ Miten voin auttaa sinua tänään?`
                     parts: [{
                       functionResponse: {
                         name: functionName,
-                        response: {
+                        response: functionName === 'create_purchase_order' ? {
+                          instruction: "IMPORTANT: Inform the user that the purchase order has been created successfully. Show the order details including order number, supplier, total value, and provide the download link for the Excel file.",
+                          success: functionResult.success,
+                          orderNumber: functionResult.orderNumber,
+                          fileName: functionResult.fileName,
+                          downloadUrl: functionResult.downloadUrl,
+                          rowsAdded: functionResult.rowsAdded,
+                          message: functionResult.message
+                        } : {
                           instruction: "IMPORTANT: Present this data to the user in a clear, formatted way. Show specific details from each record including supplier names, products, prices, and dates. Do not just say you are 'checking' - show the actual results found.",
-                          records: searchResult.records,
-                          totalCount: searchResult.totalCount,
-                          processingTimeMs: searchResult.processingTimeMs
+                          records: functionResult.records,
+                          totalCount: functionResult.totalCount,
+                          processingTimeMs: functionResult.processingTimeMs
                         }
                       }
                     }]
@@ -440,7 +522,7 @@ Miten voin auttaa sinua tänään?`
                     console.log('💬 AI FINAL RESPONSE [' + aiRequestId + ']:', {
                       response_text_length: aiResponseText.length,
                       response_preview: aiResponseText.substring(0, 200) + (aiResponseText.length > 200 ? '...' : ''),
-                      included_erp_data: searchResult.totalCount > 0,
+                      included_erp_data: functionName !== 'create_purchase_order' && functionResult.totalCount > 0,
                       timestamp: new Date().toISOString(),
                       ai_request_id: aiRequestId
                     });
@@ -451,7 +533,7 @@ Miten voin auttaa sinua tänään?`
                         event: 'ai_response',
                         aiResponse: aiResponseText.substring(0, 500), // First 500 chars to avoid too much data
                         aiRequestId: aiRequestId
-                      });
+                      }, currentWorkspace);
                     }
                     
                     setMessages(prev => [...prev, {
@@ -479,7 +561,7 @@ Miten voin auttaa sinua tänään?`
                       functionInputs: functionArgs,
                       errorMessage: functionError instanceof Error ? functionError.message : 'Unknown error',
                       aiRequestId: aiRequestId
-                    });
+                    }, currentWorkspace);
                   }
                   
                   console.error('Function execution failed:', functionError);
@@ -505,7 +587,7 @@ Miten voin auttaa sinua tänään?`
           await addTechnicalLog(continuousImprovementSessionId, {
             event: 'ai_response',
             aiResponse: aiResponseText.substring(0, 500) // First 500 chars to avoid too much data
-          });
+          }, currentWorkspace);
         }
 
         setMessages(prev => [...prev, {
@@ -639,9 +721,9 @@ How can I help you today?`
       await addTechnicalLog(continuousImprovementSessionId, {
         event: 'ai_response',
         aiResponse: `User feedback for message ${pendingMessageIndex}: ${pendingFeedback}${feedbackComment ? ` - Comment: ${feedbackComment}` : ''}`,
-      });
+      }, currentWorkspace);
       
-      await setUserFeedback(continuousImprovementSessionId, pendingFeedback, feedbackComment || undefined);
+      await setUserFeedback(continuousImprovementSessionId, pendingFeedback, feedbackComment || undefined, currentWorkspace);
       
       setFeedbackDialogOpen(false);
       setPendingFeedback(null);
@@ -758,7 +840,7 @@ How can I help you today?`
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
           {sessionInitializing && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3">
@@ -778,7 +860,7 @@ How can I help you today?`
               key={index}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className="flex items-start space-x-3 max-w-3xl w-full">
+              <div className="flex items-start space-x-3 max-w-5xl w-full">
                 {message.role === 'model' && (
                   <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                     <Bot className="h-5 w-5 text-gray-700" />
@@ -899,7 +981,7 @@ How can I help you today?`
 
       {/* Input Area */}
       <div className="bg-white border-t p-6">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="flex space-x-4 items-end">
             <div className="flex-1">
               <Input

@@ -47,7 +47,7 @@ interface Message {
 }
 
 const processTextWithCitations = (text: string, citationSources?: CitationSource[]) => {
-  let originalText = text;
+  const originalText = text;
   const formattedSources: string[] = [];
 
   if (citationSources && citationSources.length > 0) {
@@ -238,7 +238,7 @@ Miten voin auttaa sinua tänään?`
           setMessages(prev => [...prev, aiMessage]);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => [
         ...prev,
@@ -278,7 +278,8 @@ Miten voin auttaa sinua tänään?`
         continuousImprovementSessionId, 
         feedbackMessageIndex, 
         feedbackType, 
-        feedbackComment
+        feedbackComment,
+        currentWorkspace
       );
       
       toast.success('Kiitos palautteestasi! Se auttaa parantamaan avustajaa.');
@@ -351,7 +352,7 @@ Miten voin auttaa sinua tänään?`
 
       {/* Quick Action Pills */}
       <div className="bg-white border-b p-6">
-        <div className="flex flex-wrap gap-3 justify-center max-w-4xl mx-auto">
+        <div className="flex flex-wrap gap-3 justify-center max-w-6xl mx-auto">
           {quickActions.map((action, index) => (
             <Button
               key={index}
@@ -367,7 +368,7 @@ Miten voin auttaa sinua tänään?`
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6">
           {sessionInitializing && (
             <div className="flex justify-start">
               <div className="flex items-start space-x-3">
@@ -387,7 +388,7 @@ Miten voin auttaa sinua tänään?`
               key={index}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className="flex items-start space-x-3 max-w-3xl">
+              <div className="flex items-start space-x-3 max-w-5xl">
                 {message.role === 'model' && (
                   <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                     <Bot className="h-5 w-5 text-gray-700" />
@@ -504,7 +505,7 @@ Miten voin auttaa sinua tänään?`
 
       {/* Input Area */}
       <div className="bg-white border-t p-6">
-        <div className="max-w-4xl mx-auto flex space-x-3">
+        <div className="max-w-6xl mx-auto flex space-x-3">
           <Input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}

@@ -28,7 +28,27 @@
       "Bash(mkdir:*)",
       "Bash(rg:*)",
       "WebFetch(domain:colab.research.google.com)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"setUserFeedback\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"setUserFeedback\" src/components/CompetitiveBiddingChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"updateIssueStatus\" src/components/IssueReport.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 3 \"return.*<div\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrip/x64-linux/rg -n -A 5 -B 5 \"Input.*placeholder\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"max-w-4xl\" src/components/CompetitiveBiddingChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -l \"Chat.*React.FC|const.*Chat.*=\" src/components/)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -l \"max-w-.*xl\" src/components/)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"max-w-\" src/components/ChatHistoryDialog.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 3 -B 3 \"ReactMarkdown\\|markdown\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"max-w-3xl\\|max-w-2xl\" src/components/CompetitiveBiddingChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 10 \"availableFunctions.*=\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -B 5 -A 15 \"searchPurchaseOrdersFunction\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 10 -B 5 \"aiRequestId.*error\\|catch.*error\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"searchResult\" src/components/PropertyManagerChat.tsx)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"update.*order\\|edit.*order\\|modify.*order\" src/lib/erpApiService.ts)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"class ERPApiService\" -A 20 src/lib/erpApiService.ts)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 15 \"getUserERPDocuments\" src/lib/storageService.ts)",
+      "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getAvailableFields\\|getSampleData\" src/lib/erpApiService.ts)",
+      "Bash(npx eslint:*)"
     ],
     "deny": []
   }

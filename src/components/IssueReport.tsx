@@ -57,7 +57,7 @@ const IssueReport: React.FC = () => {
 
   const handleStatusChange = async (sessionId: string, newStatus: 'fixed' | 'not_fixed') => {
     try {
-      await updateIssueStatus(sessionId, newStatus);
+      await updateIssueStatus(sessionId, newStatus, currentWorkspace);
       
       // Update local state
       setIssues(prev => prev.map(issue => 

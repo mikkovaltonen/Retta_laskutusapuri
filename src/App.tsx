@@ -40,7 +40,9 @@ const AppRoutes = () => {
         path="/issues" 
         element={
           <ProtectedRoute>
-            <IssueReportPage />
+            <WorkspaceProvider>
+              <IssueReportPage />
+            </WorkspaceProvider>
           </ProtectedRoute>
         }
       />

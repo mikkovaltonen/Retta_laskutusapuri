@@ -53,7 +53,7 @@ export const ERPManager: React.FC = () => {
     if (!doc.id || !confirm(`Delete "${doc.name}"? This will remove your ERP simulation data.`)) return;
 
     try {
-      await storageService.deleteERPDocument(doc.id, doc.storageUrl);
+      await storageService.deleteERPDocument(doc.id, doc.storageUrl, currentWorkspace);
       setDocuments([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete document');
@@ -121,17 +121,18 @@ export const ERPManager: React.FC = () => {
   };
 
   const renderPreviewTable = (doc: ERPDocument) => {
-    if (!doc.rawData || !doc.headers) return null;
+    if (!doc.jsonData || doc.jsonData.length === 0) return null;
     
     const maxRows = 10; // Limit preview to first 10 rows
-    const previewData = doc.rawData.slice(0, maxRows);
+    const previewData = doc.jsonData.slice(0, maxRows);
+    const headers = Object.keys(doc.jsonData[0] || {});
     
     return (
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm border-collapse border border-gray-300">
           <thead>
             <tr className="bg-gray-50">
-              {doc.headers.map((header, index) => (
+              {headers.map((header, index) => (
                 <th key={index} className="border border-gray-300 px-2 py-1 text-left font-medium">
                   {header}
                 </th>
@@ -141,18 +142,18 @@ export const ERPManager: React.FC = () => {
           <tbody>
             {previewData.map((row, rowIndex) => (
               <tr key={rowIndex} className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                {doc.headers!.map((_, colIndex) => (
+                {headers.map((header, colIndex) => (
                   <td key={colIndex} className="border border-gray-300 px-2 py-1">
-                    {String(row[colIndex] || '')}
+                    {String(row[header] || '')}
                   </td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
-        {doc.rawData.length > maxRows && (
+        {doc.jsonData.length > maxRows && (
           <p className="text-xs text-gray-500 mt-2">
-            Showing first {maxRows} rows of {doc.rawData.length} total rows
+            Showing first {maxRows} rows of {doc.jsonData.length} total rows
           </p>
         )}
       </div>

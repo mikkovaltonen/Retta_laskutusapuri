@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, FieldValue } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 
@@ -374,7 +374,8 @@ export const createContinuousImprovementSession = async (
 
 export const addTechnicalLog = async (
   sessionId: string,
-  logEntry: Omit<TechnicalLog, 'timestamp'>
+  logEntry: Omit<TechnicalLog, 'timestamp'>,
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<void> => {
   try {
     if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
@@ -382,13 +383,14 @@ export const addTechnicalLog = async (
       return;
     }
 
-    const sessionRef = doc(db, 'continuous_improvement', sessionId);
+    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
     const sessionDoc = await getDoc(sessionRef);
 
     if (sessionDoc.exists()) {
       const sessionData = sessionDoc.data() as ContinuousImprovementSession;
+      const existingLogs = Array.isArray(sessionData.technicalLogs) ? sessionData.technicalLogs : [];
       const updatedLogs = [
-        ...sessionData.technicalLogs,
+        ...existingLogs,
         {
           ...logEntry,
           timestamp: new Date()
@@ -407,12 +409,11 @@ export const addTechnicalLog = async (
   }
 };
 
-// Note: This function cannot determine workspace from sessionId alone
-// Future improvement: either encode workspace in sessionId or add workspace parameter
 export const setUserFeedback = async (
   sessionId: string,
   feedback: 'thumbs_up' | 'thumbs_down',
-  comment?: string
+  comment?: string,
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<void> => {
   try {
     if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
@@ -420,8 +421,12 @@ export const setUserFeedback = async (
       return;
     }
 
-    const sessionRef = doc(db, 'continuous_improvement', sessionId);
-    const updateData: any = {
+    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
+    const updateData: {
+      userFeedback: 'thumbs_up' | 'thumbs_down';
+      lastUpdated: FieldValue;
+      userComment?: string;
+    } = {
       userFeedback: feedback,
       lastUpdated: serverTimestamp()
     };
@@ -513,7 +518,8 @@ export const getNegativeFeedbackSessions = async (
 // Update issue status for negative feedback
 export const updateIssueStatus = async (
   sessionId: string,
-  status: 'fixed' | 'not_fixed'
+  status: 'fixed' | 'not_fixed',
+  workspace: WorkspaceType = 'purchaser'
 ): Promise<void> => {
   try {
     if (!db) {
@@ -521,7 +527,7 @@ export const updateIssueStatus = async (
       return;
     }
 
-    const sessionRef = doc(db, 'continuous_improvement', sessionId);
+    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
     await setDoc(sessionRef, {
       issueStatus: status,
       lastUpdated: serverTimestamp()
