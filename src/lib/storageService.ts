@@ -242,6 +242,7 @@ export class StorageService {
         const recordData = {
           userId,
           uploadedAt: new Date(),
+          createdAt: new Date(), // Row creation timestamp
           originalFileName: file.name,
           rowIndex: index + 1,
           ...record // Spread all Excel columns as individual Firestore fields
@@ -296,7 +297,7 @@ export class StorageService {
       const jsonData = recordsSnapshot.docs.map(recordDoc => {
         const recordData = recordDoc.data();
         // Remove metadata fields, keep only Excel columns
-        const { userId, uploadedAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = recordData;
+        const { userId, uploadedAt, createdAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = recordData;
         return excelColumns;
       });
       
@@ -313,7 +314,7 @@ export class StorageService {
           fileGroups.set(fileName, []);
         }
         
-        const { userId, uploadedAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = data;
+        const { userId, uploadedAt, createdAt, originalFileName, rowIndex, createdViaAPI, ...excelColumns } = data;
         fileGroups.get(fileName)!.push(excelColumns);
       }
       
