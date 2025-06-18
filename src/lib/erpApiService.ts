@@ -715,6 +715,7 @@ export class ERPApiService {
           const recordData = {
             userId,
             uploadedAt: new Date(),
+            createdAt: new Date(), // Row creation timestamp
             originalFileName: fileName,
             rowIndex: index + 1,
             createdViaAPI: true, // Mark as API-created vs uploaded
@@ -889,6 +890,7 @@ export class ERPApiService {
           const recordData = {
             userId,
             uploadedAt: new Date(),
+            createdAt: new Date(), // Row creation timestamp
             originalFileName: fileName,
             rowIndex: index + 1,
             createdViaAPI: true, // Mark as API-created vs uploaded
