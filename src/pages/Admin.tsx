@@ -132,27 +132,14 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
           </Card>
         </div>
 
-        {/* Visual Overview Section */}
-        <div className="my-8 p-6 bg-white rounded-lg shadow-lg border border-gray-300">
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Solution Visuals</h2>
-          <div className="grid md:grid-cols-2 gap-6 items-center">
-            <div>
-              <h3 className="text-xl font-medium text-gray-700 mb-2">Professional Buyer Tech Stack</h3>
-              <img src="/professiona_buyer_tech_stack.png" alt="Professional Buyer Tech Stack" className="rounded-lg shadow-md border border-gray-200 w-full h-auto" />
-            </div>
-            <div>
-              <h3 className="text-xl font-medium text-gray-700 mb-2">Solution Overview</h3>
-              <img src="/solution_overview.png" alt="Solution Overview" className="rounded-lg shadow-md border border-gray-200 w-full h-auto" />
-            </div>
-          </div>
-        </div>
 
         {/* Secondary Tools */}
         <div className="grid md:grid-cols-3 gap-6">
           
           {/* AI Prompt Management - Moved to featured section above */}
 
-          {/* Internal Knowledge Upload */}
+          {/* Internal Knowledge Upload - Hidden for competitive_bidding workspace */}
+          {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
@@ -185,8 +172,10 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               </Dialog>
             </CardContent>
           </Card>
+          )}
 
-          {/* ERP/P2P Integration Simulation */}
+          {/* ERP/P2P Integration Simulation - Hidden for competitive_bidding workspace */}
+          {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
@@ -219,8 +208,10 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               </Dialog>
             </CardContent>
           </Card>
+          )}
 
-          {/* ERP API Testing */}
+          {/* ERP API Testing - Hidden for competitive_bidding workspace */}
+          {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
@@ -253,6 +244,7 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               </Dialog>
             </CardContent>
           </Card>
+          )}
 
           {/* Issue Report */}
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">

@@ -4,10 +4,15 @@ import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy } fr
 import * as XLSX from 'xlsx';
 
 // Workspace types
-export type WorkspaceType = 'purchaser' | 'invoicer';
+export type WorkspaceType = 'purchaser' | 'invoicer' | 'competitive_bidding';
 
 // Helper function to get workspace-specific collection names
+// competitive_bidding shares knowledge with purchaser, but has separate prompts and other collections
 const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+  // Only share knowledge collection between competitive_bidding and purchaser
+  if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
+    return 'purchaser_knowledge';
+  }
   return `${workspace}_${baseCollection}`;
 };
 
@@ -103,7 +108,7 @@ export class StorageService {
     }
   }
 
-  async deleteDocument(documentId: string, storagePath?: string): Promise<void> {
+  async deleteDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
     try {
       // Delete from storage if using storage
       if (storagePath) {
@@ -111,8 +116,8 @@ export class StorageService {
         await deleteObject(storageRef);
       }
 
-      // Delete from Firestore
-      await deleteDoc(doc(db, 'knowledge', documentId));
+      // Delete from Firestore using workspace-specific collection
+      await deleteDoc(doc(db, getWorkspaceCollectionName('knowledge', workspace), documentId));
     } catch (error) {
       console.error('Delete failed:', error);
       throw new Error('Failed to delete document');
@@ -143,6 +148,27 @@ export class StorageService {
   }
 
   /**
+   * Delete user's existing ERP documents for a workspace
+   */
+  async deleteUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
+    try {
+      const q = query(
+        collection(db, getWorkspaceCollectionName('erpDocuments', workspace)),
+        where('userId', '==', userId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      console.log(`🗑️ Deleted ${querySnapshot.docs.length} existing ERP documents for workspace: ${workspace}`);
+    } catch (error) {
+      console.error('Failed to delete existing ERP documents:', error);
+      // Don't throw - just log and continue
+    }
+  }
+
+  /**
    * Upload ERP/Excel document with parsing
    */
   async uploadERPDocument(
@@ -151,6 +177,9 @@ export class StorageService {
     workspace: WorkspaceType = 'purchaser'
   ): Promise<ERPDocument> {
     try {
+      // Delete existing ERP documents for this user and workspace
+      await this.deleteUserERPDocuments(userId, workspace);
+      
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       
       if (!['xlsx', 'xls'].includes(fileExtension || '')) {

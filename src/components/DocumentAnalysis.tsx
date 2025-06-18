@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Upload, FileText, X, Download } from "lucide-react";
 import { toast } from "sonner";
-import PropertyManagementChat from "@/components/PropertyManagementChat";
+import PropertyManagerChat from "@/components/PropertyManagerChat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface DocumentAnalysisProps {
@@ -383,10 +383,9 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                     </p>
                   </div>
                   
-                  <PropertyManagementChat 
+                  <PropertyManagerChat 
+                    hideNavigation={true}
                     uploadedFiles={uploadedFiles}
-                    onCorrectionsApplied={() => {}}
-                    applyBatchCorrectionsFromChat={() => {}}
                   />
                 </div>
               )}

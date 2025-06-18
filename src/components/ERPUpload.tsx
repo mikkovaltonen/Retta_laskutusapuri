@@ -79,8 +79,11 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       setError(null);
       
       // Fetch the sample Excel file from public directory with cache busting
-      const cacheBuster = Date.now();
-      const response = await fetch(`/example_purchase_orders.xlsx?v=${cacheBuster}`);
+      const cacheBuster = Date.now() + Math.random().toString(36).substring(7);
+      const sampleFile = currentWorkspace === 'purchaser' 
+        ? 'example_purchase_orders.xlsx' 
+        : 'example_sales_invoices.xlsx';
+      const response = await fetch(`/${sampleFile}?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
       }
@@ -88,7 +91,9 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       const arrayBuffer = await response.arrayBuffer();
       
       // Create a File-like object from the fetched data
-      const fileName = 'Sample Purchase Orders.xlsx';
+      const fileName = currentWorkspace === 'purchaser' 
+        ? 'Sample Purchase Orders.xlsx'
+        : 'Sample Sales Invoices.xlsx';
       
       const fileObject = {
         name: fileName,
@@ -106,7 +111,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       // Upload using the existing upload function
       const uploadedDoc = await storageService.uploadERPDocument(fileObject, user.uid, currentWorkspace);
       onUploadComplete?.(uploadedDoc);
-      toast.success('Sample ERP data loaded successfully!');
+      toast.success(`Sample ${currentWorkspace === 'purchaser' ? 'purchase order' : 'sales invoice'} data loaded successfully!`);
       console.log('✅ Successfully loaded sample ERP data');
       
     } catch (err) {
@@ -183,7 +188,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
               className="bg-green-600 hover:bg-green-700 text-white"
               size="sm"
             >
-              📊 Load Sample Transaction Data
+              📊 Load Sample {currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} Data
             </Button>
           </div>
           <div className="text-sm text-orange-700">

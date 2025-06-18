@@ -70,6 +70,25 @@ export const ERPManager: React.FC = () => {
     }
   };
 
+  const handleClearAllDocuments = async () => {
+    if (!user) return;
+    
+    if (!confirm(`Clear all ${currentWorkspace} ERP documents? This will delete ALL your existing data in this workspace.`)) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await storageService.deleteUserERPDocuments(user.uid, currentWorkspace);
+      await loadDocuments(); // Refresh the list
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear documents');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownload = async (doc: ERPDocument) => {
     try {
       const content = await storageService.downloadERPDocument(doc);
@@ -189,13 +208,24 @@ export const ERPManager: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   <strong>Current ERP simulation data:</strong> Only one Excel file can be active at a time.
                 </p>
-                <Button 
-                  onClick={handleReplaceData} 
-                  variant="outline"
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                  Replace Data
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleClearAllDocuments} 
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    size="sm"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Clear All
+                  </Button>
+                  <Button 
+                    onClick={handleReplaceData} 
+                    variant="outline"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    Replace Data
+                  </Button>
+                </div>
               </div>
               
               {documents.map((doc) => (

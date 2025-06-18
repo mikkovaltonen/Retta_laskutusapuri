@@ -25,7 +25,9 @@ const WorkspaceAdmin = () => {
           <p className="text-gray-600 mt-1">
             {currentWorkspace === 'purchaser' 
               ? 'Configure procurement integrations, manage supplier data, and optimize purchasing workflows'
-              : 'Manage invoicing integrations, configure billing processes, and track financial operations'
+              : currentWorkspace === 'invoicer'
+              ? 'Manage invoicing integrations, configure billing processes, and track financial operations'
+              : 'Configure competitive bidding prompts and manage market research operations'
             }
           </p>
         </div>

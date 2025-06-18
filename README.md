@@ -30,10 +30,11 @@ Meet the Propertius – your AI assistant for high standard professional propert
 - **Procurement Policy Compliance**: Ensure adherence to internal guidelines
 
 ### **Invoicing Workspace**  
-- **Invoice Processing**: Automated analysis and categorization
+- **Invoice Processing**: Automated analysis and categorization of sales invoices
+- **Purchase Order Access**: Full access to procurement data for cross-referencing
 - **Payment Tracking**: Monitor payment status and overdue invoices
-- **Financial Analytics**: Generate insights from billing data
-- **Billing Process Optimization**: Streamline invoicing workflows
+- **Financial Analytics**: Generate insights from both billing and procurement data
+- **Billing Process Optimization**: Streamline invoicing workflows with procurement context
 
 ## Technologies
 
@@ -68,9 +69,11 @@ The application uses two distinct messaging systems:
 - **Location**: `PropertyManagerChat.tsx` lines 154-158
 
 #### Function Calling System
-- **Purchase Orders**: `search_purchase_orders` function for ERP data access
-- **Real-time Data**: Direct access to Excel-based purchase order information
-- **Structured Results**: Supplier details, pricing, contact information, delivery dates
+- **Purchase Orders**: `search_purchase_orders` function for ERP data access (available in both workspaces)
+- **Sales Invoices**: `search_invoices` function for billing data access (invoicing workspace only)
+- **Dual API Access**: Invoicing workspace gets both purchase order and invoice APIs for comprehensive analysis
+- **Real-time Data**: Direct access to Excel-based purchase order and sales invoice information
+- **Structured Results**: Supplier details, pricing, contact information, delivery dates, payment status
 
 ## Architecture: Function Declarations
 

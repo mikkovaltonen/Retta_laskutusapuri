@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { erpApiService, SearchCriteria, SearchResult } from '../lib/erpApiService';
+import { salesInvoiceApiService, InvoiceSearchCriteria, InvoiceSearchResult } from '../lib/salesInvoiceApiService';
 import { useAuth } from '../hooks/useAuth';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { Button } from './ui/button';
@@ -12,19 +13,30 @@ import { Search, Database, Clock, FileText, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 
 export const ERPApiTester: React.FC = () => {
-  const [searchCriteria, setSearchCriteria] = useState<SearchCriteria>({});
-  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
+  const [purchaseSearchCriteria, setPurchaseSearchCriteria] = useState<SearchCriteria>({});
+  const [invoiceSearchCriteria, setInvoiceSearchCriteria] = useState<InvoiceSearchCriteria>({});
+  const [searchResult, setSearchResult] = useState<SearchResult | InvoiceSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
   const { user } = useAuth();
   const { currentWorkspace, workspaceConfig } = useWorkspace();
 
-  const handleInputChange = (field: keyof SearchCriteria, value: string) => {
-    setSearchCriteria(prev => ({
-      ...prev,
-      [field]: value || undefined
-    }));
+  const isPurchaseWorkspace = currentWorkspace === 'purchaser';
+  const searchCriteria = isPurchaseWorkspace ? purchaseSearchCriteria : invoiceSearchCriteria;
+
+  const handleInputChange = (field: string, value: string) => {
+    if (isPurchaseWorkspace) {
+      setPurchaseSearchCriteria(prev => ({
+        ...prev,
+        [field]: value || undefined
+      }));
+    } else {
+      setInvoiceSearchCriteria(prev => ({
+        ...prev,
+        [field]: value || undefined
+      }));
+    }
   };
 
   const handleSearch = async () => {
@@ -37,7 +49,9 @@ export const ERPApiTester: React.FC = () => {
     setError(null);
 
     try {
-      const result = await erpApiService.searchRecords(user.uid, searchCriteria);
+      const result = isPurchaseWorkspace
+        ? await erpApiService.searchRecords(user.uid, purchaseSearchCriteria)
+        : await salesInvoiceApiService.searchInvoices(user.uid, invoiceSearchCriteria);
       setSearchResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
@@ -50,7 +64,9 @@ export const ERPApiTester: React.FC = () => {
     if (!user) return;
 
     try {
-      const fields = await erpApiService.getAvailableFields(user.uid);
+      const fields = isPurchaseWorkspace
+        ? await erpApiService.getAvailableFields(user.uid)
+        : await salesInvoiceApiService.getAvailableFields(user.uid);
       setAvailableFields(fields);
     } catch (err) {
       console.error('Failed to load available fields:', err);
@@ -99,74 +115,125 @@ export const ERPApiTester: React.FC = () => {
 
           {/* Filter Documentation */}
           <div className="p-4 bg-green-50 border border-green-200 rounded">
-            <h4 className="font-medium text-green-800 mb-3">📋 Purchase Order API Field Mapping</h4>
+            <h4 className="font-medium text-green-800 mb-3">
+              📋 {isPurchaseWorkspace ? 'Purchase Order' : 'Sales Invoice'} API Field Mapping
+            </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <h5 className="font-medium text-green-700 mb-2">📦 Supplier Name Filter</h5>
+                <h5 className="font-medium text-green-700 mb-2">
+                  {isPurchaseWorkspace ? '📦 Supplier Name Filter' : '🏢 Customer Name Filter'}
+                </h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches column:</strong> "Supplier Name"
+                  <strong>Searches column:</strong> "{isPurchaseWorkspace ? 'Supplier Name' : 'Customer Name'}"
                 </p>
                 <p className="text-green-600 text-xs">
-                  Finds suppliers like "Huolto-Karhu Oy", "TechCorp", etc.
+                  {isPurchaseWorkspace 
+                    ? 'Finds suppliers like "Huolto-Karhu Oy", "TechCorp", etc.'
+                    : 'Finds customers like "Asunto Oy Kukkakatu", "Kiinteistö Oy Metsäkoti", etc.'
+                  }
                 </p>
               </div>
               
-              <div>
-                <h5 className="font-medium text-green-700 mb-2">🛍️ Product/Service Description</h5>
-                <p className="text-green-600 mb-1">
-                  <strong>Searches column:</strong> "Description"
-                </p>
-                <p className="text-green-600 text-xs">
-                  Finds services like "Kattoremontti", "Putkiston huolto", etc.
-                </p>
-              </div>
-              
-              <div>
-                <h5 className="font-medium text-green-700 mb-2">📅 Delivery Date Filter</h5>
-                <p className="text-green-600 mb-1">
-                  <strong>Searches column:</strong> "Receive By"
-                </p>
-                <p className="text-green-600 text-xs">
-                  Filter by when service/product should be delivered
-                </p>
-              </div>
-              
-              <div>
-                <h5 className="font-medium text-green-700 mb-2">👤 Property Manager</h5>
-                <p className="text-green-600 mb-1">
-                  <strong>Searches column:</strong> "Buyer Name"
-                </p>
-                <p className="text-green-600 text-xs">
-                  Find orders by property manager like "Erika Sundström"
-                </p>
-              </div>
-              
-              <div>
-                <h5 className="font-medium text-green-700 mb-2">📋 PO Number</h5>
-                <p className="text-green-600 mb-1">
-                  <strong>Available in results:</strong> "PO Number"
-                </p>
-                <p className="text-green-600 text-xs">
-                  Unique purchase order identifier (e.g., 107000)
-                </p>
-              </div>
-              
-              <div>
-                <h5 className="font-medium text-green-700 mb-2">💰 Pricing Info</h5>
-                <p className="text-green-600 mb-1">
-                  <strong>Available:</strong> Unit Price, Line Amount, VAT %
-                </p>
-                <p className="text-green-600 text-xs">
-                  Complete pricing breakdown per order line
-                </p>
-              </div>
+              {isPurchaseWorkspace ? (
+                <>
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">🛍️ Product Description</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Description"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Finds products like "Kattoremontti", "Putkiston huolto", etc.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">📅 Delivery Date Filter</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Receive By"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Filter by when product should be delivered
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">👤 Buyer Name</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Buyer Name"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Find orders by buyer like "Erika Sundström"
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">🛍️ Service Description</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Service Description"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Finds services like "Kattoremontti", "Siivouspalvelut", etc.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">📅 Invoice Date Filter</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Invoice Date"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Filter by invoice billing date
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">⏰ Due Date Filter</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Due Date"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Filter by payment due date
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">👤 Approver Name</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Approved By"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Find invoices by approver like "Erika Sundström"
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h5 className="font-medium text-green-700 mb-2">💳 Payment Status</h5>
+                    <p className="text-green-600 mb-1">
+                      <strong>Searches column:</strong> "Payment Status"
+                    </p>
+                    <p className="text-green-600 text-xs">
+                      Filter by status: "Paid", "Pending", "Overdue"
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
               <p className="text-blue-700 text-sm">
-                <strong>💡 Searchable Fields:</strong> Supplier Name, Description, Receive By, Buyer Name
+                <strong>💡 Searchable Fields:</strong> {
+                  isPurchaseWorkspace 
+                    ? 'Supplier Name, Description, Receive By, Buyer Name'
+                    : 'Customer Name, Service Description, Invoice Date, Due Date, Approver Name, Payment Status'
+                }
               </p>
               <p className="text-blue-700 text-xs mt-1">
-                <strong>📊 All Available Data:</strong> PO Number, Supplier Details, Product Code, Quantity, Unit, Pricing, Contact Info, Invoice Details
+                <strong>📊 All Available Data:</strong> {
+                  isPurchaseWorkspace
+                    ? 'PO Number, Supplier Details, Product Code, Quantity, Unit, Pricing, Contact Info'
+                    : 'Invoice Number, Supplier Details, Service Details, Amount, Due Dates, Payment Status, Approver Info'
+                }
               </p>
             </div>
           </div>
@@ -189,64 +256,164 @@ export const ERPApiTester: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="supplier" className="flex items-center gap-2">
-                📦 Supplier Name
-                <span className="text-xs text-gray-500">(searches: "Supplier Name")</span>
+                {isPurchaseWorkspace ? '📦 Supplier Name' : '🏢 Customer Name'}
+                <span className="text-xs text-gray-500">
+                  (searches: "{isPurchaseWorkspace ? 'Supplier Name' : 'Customer Name'}")
+                </span>
               </Label>
               <Input
                 id="supplier"
-                placeholder="e.g., Huolto-Karhu, TechCorp, Kiinteistopalvelut"
-                value={searchCriteria.supplierName || ''}
-                onChange={(e) => handleInputChange('supplierName', e.target.value)}
+                placeholder={isPurchaseWorkspace 
+                  ? "e.g., Huolto-Karhu, TechCorp, Kiinteistopalvelut"
+                  : "e.g., Asunto Oy Kukkakatu, Kiinteistö Oy Metsäkoti"
+                }
+                value={isPurchaseWorkspace 
+                  ? (searchCriteria as any).supplierName || ''
+                  : (searchCriteria as any).customerName || ''
+                }
+                onChange={(e) => handleInputChange(
+                  isPurchaseWorkspace ? 'supplierName' : 'customerName', 
+                  e.target.value
+                )}
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="product" className="flex items-center gap-2">
-                🛍️ Service/Product Description
-                <span className="text-xs text-gray-500">(searches: "Description")</span>
-              </Label>
-              <Input
-                id="product"
-                placeholder="e.g., Kattoremontti, Putkiston huolto, Sähkötyöt"
-                value={searchCriteria.productDescription || ''}
-                onChange={(e) => handleInputChange('productDescription', e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="buyer" className="flex items-center gap-2">
-                👤 Property Manager
-                <span className="text-xs text-gray-500">(searches: "Buyer Name")</span>
-              </Label>
-              <Input
-                id="buyer"
-                placeholder="e.g., Erika, Mikael, property manager name"
-                value={searchCriteria.buyerName || ''}
-                onChange={(e) => handleInputChange('buyerName', e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="dateFrom">📅 Delivery Date From</Label>
-              <Input
-                id="dateFrom"
-                type="date"
-                value={searchCriteria.dateFrom || ''}
-                onChange={(e) => handleInputChange('dateFrom', e.target.value)}
-              />
-              <p className="text-xs text-gray-500">Service delivery date range start</p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="dateTo">📅 Delivery Date To</Label>
-              <Input
-                id="dateTo"
-                type="date"
-                value={searchCriteria.dateTo || ''}
-                onChange={(e) => handleInputChange('dateTo', e.target.value)}
-              />
-              <p className="text-xs text-gray-500">Service delivery date range end</p>
-            </div>
+            {isPurchaseWorkspace ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="product" className="flex items-center gap-2">
+                    🛍️ Product Description
+                    <span className="text-xs text-gray-500">(searches: "Description")</span>
+                  </Label>
+                  <Input
+                    id="product"
+                    placeholder="e.g., Kattoremontti, Putkiston huolto, Sähkötyöt"
+                    value={purchaseSearchCriteria.productDescription || ''}
+                    onChange={(e) => handleInputChange('productDescription', e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="buyer" className="flex items-center gap-2">
+                    👤 Buyer Name
+                    <span className="text-xs text-gray-500">(searches: "Buyer Name")</span>
+                  </Label>
+                  <Input
+                    id="buyer"
+                    placeholder="e.g., Erika, Mikael, buyer name"
+                    value={purchaseSearchCriteria.buyerName || ''}
+                    onChange={(e) => handleInputChange('buyerName', e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dateFrom">📅 Delivery Date From</Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={purchaseSearchCriteria.dateFrom || ''}
+                    onChange={(e) => handleInputChange('dateFrom', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Product delivery date range start</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dateTo">📅 Delivery Date To</Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={purchaseSearchCriteria.dateTo || ''}
+                    onChange={(e) => handleInputChange('dateTo', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Product delivery date range end</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="service" className="flex items-center gap-2">
+                    🛍️ Service Description
+                    <span className="text-xs text-gray-500">(searches: "Service Description")</span>
+                  </Label>
+                  <Input
+                    id="service"
+                    placeholder="e.g., Kattoremontti, Siivouspalvelut, Sähkötyöt"
+                    value={invoiceSearchCriteria.serviceDescription || ''}
+                    onChange={(e) => handleInputChange('serviceDescription', e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="approver" className="flex items-center gap-2">
+                    👤 Approver Name
+                    <span className="text-xs text-gray-500">(searches: "Approved By")</span>
+                  </Label>
+                  <Input
+                    id="approver"
+                    placeholder="e.g., Erika, Mikael, approver name"
+                    value={invoiceSearchCriteria.approverName || ''}
+                    onChange={(e) => handleInputChange('approverName', e.target.value)}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="invoiceDateFrom">📅 Invoice Date From</Label>
+                  <Input
+                    id="invoiceDateFrom"
+                    type="date"
+                    value={invoiceSearchCriteria.invoiceDateFrom || ''}
+                    onChange={(e) => handleInputChange('invoiceDateFrom', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Invoice billing date range start</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="invoiceDateTo">📅 Invoice Date To</Label>
+                  <Input
+                    id="invoiceDateTo"
+                    type="date"
+                    value={invoiceSearchCriteria.invoiceDateTo || ''}
+                    onChange={(e) => handleInputChange('invoiceDateTo', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Invoice billing date range end</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dueDateFrom">⏰ Due Date From</Label>
+                  <Input
+                    id="dueDateFrom"
+                    type="date"
+                    value={invoiceSearchCriteria.dueDateFrom || ''}
+                    onChange={(e) => handleInputChange('dueDateFrom', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Payment due date range start</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="dueDateTo">⏰ Due Date To</Label>
+                  <Input
+                    id="dueDateTo"
+                    type="date"
+                    value={invoiceSearchCriteria.dueDateTo || ''}
+                    onChange={(e) => handleInputChange('dueDateTo', e.target.value)}
+                  />
+                  <p className="text-xs text-gray-500">Payment due date range end</p>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="paymentStatus" className="flex items-center gap-2">
+                    💳 Payment Status
+                    <span className="text-xs text-gray-500">(searches: "Payment Status")</span>
+                  </Label>
+                  <Input
+                    id="paymentStatus"
+                    placeholder="e.g., Paid, Pending, Overdue"
+                    value={invoiceSearchCriteria.paymentStatus || ''}
+                    onChange={(e) => handleInputChange('paymentStatus', e.target.value)}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* Action Buttons */}

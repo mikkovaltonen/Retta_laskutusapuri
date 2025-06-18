@@ -3,10 +3,15 @@ import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 
 // Workspace types
-export type WorkspaceType = 'purchaser' | 'invoicer';
+export type WorkspaceType = 'purchaser' | 'invoicer' | 'competitive_bidding';
 
 // Helper function to get workspace-specific collection names
+// competitive_bidding shares knowledge with purchaser, but has separate prompts and other collections
 const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+  // Only share knowledge collection between competitive_bidding and purchaser
+  if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
+    return 'purchaser_knowledge';
+  }
   return `${workspace}_${baseCollection}`;
 };
 

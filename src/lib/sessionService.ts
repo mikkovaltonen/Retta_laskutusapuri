@@ -33,7 +33,11 @@ export class SessionService {
   async getLatestSystemPrompt(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<SystemPromptVersion | null> {
     try {
       // Helper function to get workspace-specific collection names
+      // Only knowledge is shared between competitive_bidding and purchaser
       const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
+        if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
+          return 'purchaser_knowledge';
+        }
         return `${workspace}_${baseCollection}`;
       };
 
@@ -66,17 +70,6 @@ export class SessionService {
     }
   }
 
-  /**
-   * Get all knowledge documents for a user
-   */
-  async getUserKnowledgeDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<KnowledgeDocument[]> {
-    try {
-      return await storageService.getUserDocuments(userId, workspace);
-    } catch (error) {
-      console.error('Failed to fetch knowledge documents:', error);
-      return [];
-    }
-  }
 
   /**
    * Build knowledge context from documents
@@ -131,7 +124,9 @@ Please use this internal knowledge to provide accurate, company-specific guidanc
       const aiModel = latestPrompt.aiModel || 'gemini-2.5-pro-preview-06-05';
 
       // Get knowledge documents
-      const documents = await this.getUserKnowledgeDocuments(userId, workspace);
+      console.log(`🔍 Loading knowledge documents for chat session: workspace=${workspace}, userId=${userId}`);
+      const documents = await storageService.getUserDocuments(userId, workspace);
+      console.log(`📄 Chat session will use ${documents.length} documents from ${workspace === 'competitive_bidding' ? 'purchaser' : workspace}_knowledge collection`);
       
       // Build knowledge context
       const knowledgeContext = await this.buildKnowledgeContext(documents);
