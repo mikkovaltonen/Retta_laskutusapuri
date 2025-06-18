@@ -46,6 +46,99 @@ Meet the Propertius – your AI assistant for high standard professional propert
 - **State Management**: React Hooks
 - **Authentication**: Firebase Auth with custom user management
 
+## Excel Data Flow Architecture
+
+### 📊 ERP Data Processing Pipeline
+
+Propertius processes Excel files through a sophisticated data conversion and storage system:
+
+#### **1. Excel File Upload**
+```
+User uploads .xlsx/.xls file → storageService.uploadERPDocument()
+```
+- **File Types**: Excel (.xlsx, .xls) purchase orders and invoices
+- **Size Limit**: 1MB per file (Firestore document limit)
+- **Validation**: File type and structure checking
+
+#### **2. Excel → Firestore Conversion**
+```
+Excel File → XLSX.js Processing → Firebase Firestore Document
+```
+
+**Data Transformation:**
+- **Raw Excel**: Binary .xlsx file data
+- **Sheet Parsing**: `XLSX.utils.sheet_to_json()` converts to array of arrays
+- **CSV Conversion**: `XLSX.utils.sheet_to_csv()` for search-friendly format
+- **JSON Storage**: Arrays converted to JSON strings for Firestore compatibility
+
+**Firestore Document Structure:**
+```json
+{
+  "name": "Purchase_Orders_2024.xlsx",
+  "originalFormat": "xlsx", 
+  "content": "Order Number,Supplier Name,Description,Qty...", // CSV format
+  "rawDataJson": "[[\"PO-001\",\"Supplier A\",\"Product X\",5]]", // JSON array string
+  "headersJson": "[\"Order Number\",\"Supplier Name\",\"Description\"]", // Headers as JSON
+  "sheetsJson": "[\"Sheet1\"]", // Sheet names
+  "rowCount": 25,
+  "columnCount": 8,
+  "uploadedAt": "2024-06-18T10:30:00Z",
+  "userId": "user123",
+  "type": "erp-integration"
+}
+```
+
+#### **3. AI Function Call Data Access**
+```
+Chatbot Request → searchRecords() → Firestore Query → Combined Data Processing
+```
+
+**Function Call Pipeline:**
+1. **AI Triggers**: `search_purchase_orders` or `create_purchase_order`
+2. **Data Retrieval**: `getUserERPDocuments()` fetches all user's documents
+3. **Data Combination**: All documents merged into single dataset
+4. **CSV Processing**: Search and filter operations on combined CSV data
+5. **Results**: Structured JSON response to AI
+
+#### **4. Multi-Document Search**
+```
+Document 1 + Document 2 + Document 3 → Combined Dataset → Search Results
+```
+
+**How Multiple Documents Work:**
+- **Header Unification**: First document's headers used for consistency
+- **Data Merging**: All rows from all documents combined
+- **Search Scope**: AI can find data across all uploaded Excel files
+- **Real-time**: No pre-processing required, combined on-demand
+
+#### **5. AI-Generated Purchase Orders**
+```
+AI creates new Purchase Order → Excel generation → Firestore storage → Download link
+```
+
+**Creation Flow:**
+1. **AI Function**: `create_purchase_order` with order details
+2. **Excel Generation**: XLSX.js creates new .xlsx file in memory
+3. **Dual Output**:
+   - **Download Link**: `URL.createObjectURL()` for immediate download
+   - **Firestore Storage**: Same conversion process as uploaded files
+4. **Search Integration**: New orders immediately searchable via API
+
+### 🔍 **Key Advantages**
+
+- **No File Storage Needed**: Excel data lives as searchable text in Firestore
+- **Instant Search**: No need to re-parse Excel files for each search
+- **Cross-Document Queries**: AI can find patterns across multiple uploads
+- **Version Control**: Each upload is separate, allowing data evolution tracking
+- **API Consistency**: Same search interface for uploaded and AI-generated data
+
+### ⚡ **Performance Characteristics**
+
+- **Upload Speed**: Excel → Firestore conversion happens during upload
+- **Search Speed**: Fast text-based filtering on pre-processed CSV data  
+- **Memory Efficiency**: No need to keep Excel files in memory
+- **Scalability**: Limited by Firestore document size (1MB) and pricing
+
 ## System Architecture
 
 ### System Prompt vs Welcome Message

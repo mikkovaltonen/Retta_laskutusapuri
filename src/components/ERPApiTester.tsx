@@ -50,7 +50,7 @@ export const ERPApiTester: React.FC = () => {
 
     try {
       const result = isPurchaseWorkspace
-        ? await erpApiService.searchRecords(user.uid, purchaseSearchCriteria)
+        ? await erpApiService.searchRecords(user.uid, purchaseSearchCriteria, currentWorkspace)
         : await salesInvoiceApiService.searchInvoices(user.uid, invoiceSearchCriteria);
       setSearchResult(result);
     } catch (err) {
@@ -65,7 +65,7 @@ export const ERPApiTester: React.FC = () => {
 
     try {
       const fields = isPurchaseWorkspace
-        ? await erpApiService.getAvailableFields(user.uid)
+        ? await erpApiService.getAvailableFields(user.uid, currentWorkspace)
         : await salesInvoiceApiService.getAvailableFields(user.uid);
       setAvailableFields(fields);
     } catch (err) {
@@ -268,8 +268,8 @@ export const ERPApiTester: React.FC = () => {
                   : "e.g., Asunto Oy Kukkakatu, Kiinteistö Oy Metsäkoti"
                 }
                 value={isPurchaseWorkspace 
-                  ? (searchCriteria as any).supplierName || ''
-                  : (searchCriteria as any).customerName || ''
+                  ? (searchCriteria as SearchCriteria).supplierName || ''
+                  : (searchCriteria as InvoiceSearchCriteria).customerName || ''
                 }
                 onChange={(e) => handleInputChange(
                   isPurchaseWorkspace ? 'supplierName' : 'customerName', 

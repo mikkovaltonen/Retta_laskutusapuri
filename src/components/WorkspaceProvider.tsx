@@ -13,6 +13,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   // Determine workspace from URL
   const getWorkspaceFromPath = (pathname: string): WorkspaceType => {
     if (pathname.includes('/invoicer')) return 'invoicer';
+    if (pathname.includes('/competitive_bidding')) return 'competitive_bidding';
     return 'purchaser'; // default
   };
 
