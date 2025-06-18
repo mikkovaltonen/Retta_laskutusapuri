@@ -1,7 +1,7 @@
 import { storageService, ERPDocument, WorkspaceType } from './storageService';
 import * as XLSX from 'xlsx';
 import { db } from './firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, doc } from 'firebase/firestore';
 
 // Helper function to get workspace-specific collection names
 const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
@@ -680,39 +680,37 @@ export class ERPApiService {
         requestId: requestId
       });
 
-      // Save to Firestore for future searches - individual columns
+      // Save to purchaser_erpDocuments collection - each row as separate document
       try {
-        // Save metadata document
-        const docData = {
-          name: fileName,
-          originalFormat: 'xlsx',
-          sheetsJson: JSON.stringify(['Purchase Order']),
-          rowCount: excelRows.length,
-          columnCount: Object.keys(excelRows[0] || {}).length,
-          size: excelBuffer.byteLength,
-          uploadedAt: new Date(),
-          userId,
-          type: 'erp-integration' as const
-        };
-
-        const docRef = await addDoc(collection(db, getWorkspaceCollectionName('erpDocuments', workspace)), docData);
+        console.log(`💾 Saving ${excelRows.length} purchase order rows to purchaser_erpDocuments...`);
         
-        // Save each row as separate document with individual columns
+        // Save each row as separate document with order number + index as document ID
         const recordPromises = excelRows.map((record, index) => {
+          // Create unique document ID using order number and row index
+          const documentId = `${orderData.orderNumber}_row_${index + 1}`;
+          
           const recordData = {
-            parentDocumentId: docRef.id,
-            rowIndex: index + 1,
             userId,
             uploadedAt: new Date(),
-            ...record // Each Excel column becomes its own Firestore field
+            originalFileName: fileName,
+            rowIndex: index + 1,
+            createdViaAPI: true, // Mark as API-created vs uploaded
+            ...record // All Excel columns as individual Firestore fields
           };
-          return addDoc(collection(db, getWorkspaceCollectionName('erpRecords', workspace)), recordData);
+          
+          // Log first record structure as example
+          if (index === 0) {
+            console.log(`📄 Sample purchase order record structure:`, Object.keys(recordData));
+            console.log(`🆔 Using document ID: ${documentId}`);
+          }
+          
+          return setDoc(doc(db, 'purchaser_erpDocuments', documentId), recordData);
         });
         
         await Promise.all(recordPromises);
-        console.log(`[CreatePurchaseOrder] Saved metadata and ${excelRows.length} individual records to Firestore`);
+        console.log(`✅ [CreatePurchaseOrder] Saved ${excelRows.length} individual records to purchaser_erpDocuments`);
       } catch (firestoreError) {
-        console.warn('Failed to save to Firestore, but Excel file created successfully:', firestoreError);
+        console.warn('Failed to save to purchaser_erpDocuments, but Excel file created successfully:', firestoreError);
       }
 
       return {
