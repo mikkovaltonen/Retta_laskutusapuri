@@ -1,40 +1,34 @@
-# Propertius - Professional Property Management AI
+# Reatta Laskutusapuri - AI-Powered Invoicing Assistant
 
-Meet the Propertius – your AI assistant for high standard professional property management. Advanced procurement optimization, intelligent invoicing automation, and comprehensive property operations management in one unified platform.
+Meet the Reatta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Älykkäät laskutusratkaisut automatisoituine prosesseineen ja analytiikoineen.
 
 ## Features
 
-### 🏢 **Dual Workspace Architecture**
-- **Propertius Procurement**: Advanced purchasing optimization and supplier intelligence
-- **Propertius Invoicing**: Intelligent billing automation and financial operations
-- **Seamless Workspace Switching**: Context-aware navigation between procurement and invoicing
+### 🏢 **Invoicing-Focused Architecture**
+- **Reatta Laskutus**: Intelligent billing automation and financial operations
+- **Streamlined Interface**: Single-workspace focus on invoicing excellence
 
 ### 🤖 **AI-Powered Operations**
 - **Document Intelligence**: Upload and analyze PDF, Excel, CSV, and Word documents  
-- **Real-time ERP Integration**: Direct access to purchase order and invoice data via function calling
-- **Interactive Chat Interface**: Natural language conversation with workspace-specific AI assistants
-- **Knowledge Base Integration**: Workspace-specific internal policies and procedures
+- **Real-time ERP Integration**: Direct access to invoice data via function calling
+- **Interactive Chat Interface**: Natural language conversation with invoicing AI assistant
+- **Knowledge Base Integration**: Invoicing-specific internal policies and procedures
 
 ### 📊 **Data Management**
-- **Workspace-Isolated Storage**: Separate data collections for procurement and invoicing
-- **System Prompt Versioning**: Track and evaluate different AI configurations per workspace
+- **Secure Storage**: Data collections for invoicing documents and analysis
+- **System Prompt Versioning**: Track and evaluate different AI configurations
 - **Continuous Improvement Tracking**: Monitor AI performance and user feedback
 - **Structured Data Export**: Download extracted data as CSV files
 
 ## Use Cases
 
-### **Procurement Workspace**
-- **Supplier Intelligence**: Analyze supplier performance and pricing trends
-- **Purchase Order Management**: Search and analyze procurement history
-- **Cost Optimization**: Identify savings opportunities through AI insights
-- **Procurement Policy Compliance**: Ensure adherence to internal guidelines
-
-### **Invoicing Workspace**  
+### **Invoicing Operations**
 - **Invoice Processing**: Automated analysis and categorization of sales invoices
-- **Purchase Order Access**: Full access to procurement data for cross-referencing
-- **Payment Tracking**: Monitor payment status and overdue invoices
-- **Financial Analytics**: Generate insights from both billing and procurement data
-- **Billing Process Optimization**: Streamline invoicing workflows with procurement context
+- **Payment Tracking**: Monitor payment status and overdue invoices  
+- **Financial Analytics**: Generate insights from billing data
+- **Billing Process Optimization**: Streamline invoicing workflows
+- **Document Intelligence**: Extract key information from invoice documents
+- **Compliance Monitoring**: Ensure adherence to invoicing policies and procedures
 
 ## Technologies
 

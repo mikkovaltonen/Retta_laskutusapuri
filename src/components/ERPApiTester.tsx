@@ -99,10 +99,7 @@ export const ERPApiTester: React.FC = () => {
             {workspaceConfig[currentWorkspace].apiTestTitle}
           </CardTitle>
           <CardDescription>
-            {currentWorkspace === 'purchaser' 
-              ? 'Test the internal ERP API with different purchase order search criteria'
-              : 'Test the internal ERP API with different sales invoice search criteria'
-            }
+            Testaa sisäistä ERP API:a eri ostolaskuhakukriteereillä
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -116,109 +113,49 @@ export const ERPApiTester: React.FC = () => {
           {/* Filter Documentation */}
           <div className="p-4 bg-green-50 border border-green-200 rounded">
             <h4 className="font-medium text-green-800 mb-3">
-              📋 {isPurchaseWorkspace ? 'Purchase Order' : 'Sales Invoice'} API Field Mapping
+              📋 Ostolasku API Kenttäkartoitus
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <h5 className="font-medium text-green-700 mb-2">
-                  {isPurchaseWorkspace ? '📦 Supplier Name Filter' : '🏢 Customer Name Filter'}
-                </h5>
+                <h5 className="font-medium text-green-700 mb-2">🏢 Toimittajan Nimi</h5>
                 <p className="text-green-600 mb-1">
-                  <strong>Searches column:</strong> "{isPurchaseWorkspace ? 'Supplier Name' : 'Customer Name'}"
+                  <strong>Hakee sarakkeesta:</strong> "Supplier Name"
                 </p>
                 <p className="text-green-600 text-xs">
-                  {isPurchaseWorkspace 
-                    ? 'Finds suppliers like "Huolto-Karhu Oy", "TechCorp", etc.'
-                    : 'Finds customers like "Asunto Oy Kukkakatu", "Kiinteistö Oy Metsäkoti", etc.'
-                  }
+                  Löytää toimittajia kuten "Huolto-Karhu Oy", "TechCorp", jne.
                 </p>
               </div>
               
-              {isPurchaseWorkspace ? (
-                <>
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">🛍️ Product Description</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Description"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Finds products like "Kattoremontti", "Putkiston huolto", etc.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">📅 Delivery Date Filter</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Receive By"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Filter by when product should be delivered
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">👤 Buyer Name</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Buyer Name"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Find orders by buyer like "Erika Sundström"
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">🛍️ Service Description</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Service Description"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Finds services like "Kattoremontti", "Siivouspalvelut", etc.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">📅 Invoice Date Filter</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Invoice Date"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Filter by invoice billing date
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">⏰ Due Date Filter</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Due Date"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Filter by payment due date
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">👤 Approver Name</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Approved By"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Find invoices by approver like "Erika Sundström"
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h5 className="font-medium text-green-700 mb-2">💳 Payment Status</h5>
-                    <p className="text-green-600 mb-1">
-                      <strong>Searches column:</strong> "Payment Status"
-                    </p>
-                    <p className="text-green-600 text-xs">
-                      Filter by status: "Paid", "Pending", "Overdue"
-                    </p>
-                  </div>
-                </>
-              )}
+              <div>
+                <h5 className="font-medium text-green-700 mb-2">💰 Laskun Summa</h5>
+                <p className="text-green-600 mb-1">
+                  <strong>Hakee sarakkeesta:</strong> "Amount"
+                </p>
+                <p className="text-green-600 text-xs">
+                  Hakee summalla kuten "1500", "&gt;1000", jne.
+                </p>
+              </div>
+              
+              <div>
+                <h5 className="font-medium text-green-700 mb-2">📅 Laskun Päivämäärä</h5>
+                <p className="text-green-600 mb-1">
+                  <strong>Hakee sarakkeesta:</strong> "Invoice Date"
+                </p>
+                <p className="text-green-600 text-xs">
+                  Suodattaa laskutuspäivämäärän mukaan
+                </p>
+              </div>
+              
+              <div>
+                <h5 className="font-medium text-green-700 mb-2">🏷️ Laskun Tila</h5>
+                <p className="text-green-600 mb-1">
+                  <strong>Hakee sarakkeesta:</strong> "Status"
+                </p>
+                <p className="text-green-600 text-xs">
+                  Tilat kuten "Paid", "Pending", "Overdue"
+                </p>
+              </div>
+              
             </div>
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
               <p className="text-blue-700 text-sm">

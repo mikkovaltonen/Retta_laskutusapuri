@@ -6,8 +6,8 @@ import { LogOut, Settings, FileText, Database, ArrowLeft, Bot, AlertTriangle } f
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import DocumentAnalysis from "@/components/DocumentAnalysis";
-import { KnowledgeManager } from "@/components/KnowledgeManager";
-import { ERPManager } from "@/components/ERPManager";
+import { PriceListUpload } from "@/components/PriceListUpload";
+import { OrderUpload } from "@/components/OrderUpload";
 import { ERPApiTester } from "@/components/ERPApiTester";
 import {
   Dialog,
@@ -28,8 +28,8 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
   const { user, logout } = useAuth();
   const { currentWorkspace } = useWorkspace();
   const [isLoading, setIsLoading] = useState(false);
-  const [showPdfUpload, setShowPdfUpload] = useState(false);
-  const [showExcelUpload, setShowExcelUpload] = useState(false);
+  const [showPriceListUpload, setShowPriceListUpload] = useState(false);
+  const [showOrderUpload, setShowOrderUpload] = useState(false);
   const [showApiTester, setShowApiTester] = useState(false);
 
   const handleLogout = () => {
@@ -61,8 +61,8 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               <div className="flex items-center gap-3">
                 <Bot className="h-8 w-8" />
                 <div>
-                  <h1 className="text-2xl font-bold">Propertius Admin</h1>
-                  <p className="text-gray-300">Professional Property Management Configuration</p>
+                  <h1 className="text-2xl font-bold">Reatta Admin</h1>
+                  <p className="text-gray-300">Laskutusapurin Konfiguraatio</p>
                 </div>
               </div>
             </div>
@@ -138,72 +138,73 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
           
           {/* AI Prompt Management - Moved to featured section above */}
 
-          {/* Internal Knowledge Upload - Hidden for competitive_bidding workspace */}
+
+          {/* Price List Upload - Hidden for competitive_bidding workspace */}
           {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
-                <FileText className="mr-3 h-6 w-6" />
-                {currentWorkspace === 'purchaser' ? 'Procurement Internal Knowledge' : 'Invoicing Internal Knowledge'}
+                <Database className="mr-3 h-6 w-6" />
+                Hinnasto Data
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Upload markdown and text documents containing internal {currentWorkspace === 'purchaser' ? 'procurement policies, procedures, and purchasing guidelines' : 'invoicing policies, billing procedures, and financial workflows'} for AI analysis.
+                Lataa hinnasto-data Excel-tiedostosta (Hinnasto välilehti).
               </p>
-              <Dialog open={showPdfUpload} onOpenChange={setShowPdfUpload}>
+              <Dialog open={showPriceListUpload} onOpenChange={setShowPriceListUpload}>
                 <DialogTrigger asChild>
                   <Button 
                     className="w-full bg-gray-700 hover:bg-gray-600 text-white"
                   >
-                    <FileText className="mr-2 h-4 w-4" />
-                    Manage Knowledge Documents
+                    <Database className="mr-2 h-4 w-4" />
+                    Manage Price List Data
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Procurement Internal Knowledge' : 'Invoicing Internal Knowledge'} Management</DialogTitle>
+                    <DialogTitle>Hinnasto Datan Hallinta</DialogTitle>
                     <DialogDescription>
-                      Upload and manage markdown and text documents for your internal knowledge base.
+                      Lataa ja hallinnoi hinnasto-dataa Excel-tiedostosta.
                     </DialogDescription>
                   </DialogHeader>
-                  <KnowledgeManager />
+                  <PriceListUpload />
                 </DialogContent>
               </Dialog>
             </CardContent>
           </Card>
           )}
 
-          {/* ERP/P2P Integration Simulation - Hidden for competitive_bidding workspace */}
+          {/* Order Upload - Hidden for competitive_bidding workspace */}
           {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <Database className="mr-3 h-6 w-6" />
-                {currentWorkspace === 'purchaser' ? 'Purchase Order Integration' : 'Sales Invoice Integration'}
+                Tilaus Data
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Upload and manage your structured Excel file to simulate {currentWorkspace === 'purchaser' ? 'purchase order' : 'sales invoice'} ERP integration.
+                Lataa tilaus-data Excel-tiedostosta (Tilaus välilehti).
               </p>
-              <Dialog open={showExcelUpload} onOpenChange={setShowExcelUpload}>
+              <Dialog open={showOrderUpload} onOpenChange={setShowOrderUpload}>
                 <DialogTrigger asChild>
                   <Button 
                     className="w-full bg-gray-700 hover:bg-gray-600 text-white"
                   >
                     <Database className="mr-2 h-4 w-4" />
-                    Manage ERP Data
+                    Manage Order Data
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} Integration Management</DialogTitle>
+                    <DialogTitle>Tilaus Datan Hallinta</DialogTitle>
                     <DialogDescription>
-                      Upload and manage your structured Excel file to simulate ERP integration.
+                      Lataa ja hallinnoi tilaus-dataa Excel-tiedostosta.
                     </DialogDescription>
                   </DialogHeader>
-                  <ERPManager />
+                  <OrderUpload />
                 </DialogContent>
               </Dialog>
             </CardContent>
@@ -216,12 +217,12 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <Database className="mr-3 h-6 w-6" />
-                {currentWorkspace === 'purchaser' ? 'Purchase Order API Tester' : 'Sales Invoice API Tester'}
+                Ostolasku API Testaus
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Test the internal ERP API with search functionality. Search by {currentWorkspace === 'purchaser' ? 'supplier, product, date range, or buyer name' : 'customer, invoice amount, date range, or invoice status'}.
+                Testaa sisäistä ERP API:a hakutoiminnallisuudella. Hae toimittajan, summan, päivämäärän tai ostolaskun tilan perusteella.
               </p>
               <Dialog open={showApiTester} onOpenChange={setShowApiTester}>
                 <DialogTrigger asChild>
@@ -234,9 +235,9 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>{currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} API Testing Interface</DialogTitle>
+                    <DialogTitle>Ostolasku API Testaus Interface</DialogTitle>
                     <DialogDescription>
-                      Test the ERP search API with different criteria and verify functionality.
+                      Testaa ERP haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
                     </DialogDescription>
                   </DialogHeader>
                   <ERPApiTester />
