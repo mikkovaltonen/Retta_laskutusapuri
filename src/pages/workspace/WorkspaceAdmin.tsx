@@ -23,12 +23,7 @@ const WorkspaceAdmin = () => {
             {workspaceConfig[currentWorkspace].adminTitle}
           </h1>
           <p className="text-gray-600 mt-1">
-            {currentWorkspace === 'purchaser' 
-              ? 'Configure procurement integrations, manage supplier data, and optimize purchasing workflows'
-              : currentWorkspace === 'invoicer'
-              ? 'Manage invoicing integrations, configure billing processes, and track financial operations'
-              : 'Configure competitive bidding prompts and manage market research operations'
-            }
+            Hallinnoi laskutusintegraatioita, konfiguroi ostolaskuprosesseja ja seuraa taloudellisia toimintoja
           </p>
         </div>
         

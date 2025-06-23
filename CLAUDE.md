@@ -1,7 +1,7 @@
 # Claude Code Instructions
 
 ## Project Overview
-This is a Procurement AI Agent Evaluator application built with React, TypeScript, and Vite. It provides AI-powered document analysis and procurement intelligence evaluation capabilities with user authentication.
+This is a Reatta Laskutusapuri (Invoicing Assistant) application built with React, TypeScript, and Vite. It provides AI-powered document analysis and invoicing intelligence capabilities with user authentication.
 
 ## Development Commands
 
@@ -36,7 +36,7 @@ npm run preview
 - **AI Integration**: Google Gemini
 - **State Management**: React Hooks
 - **Authentication**: Custom auth system
-- **File Processing**: Support for PDF, Excel, CSV, Word documents
+- **File Processing**: Support for PDF, Excel, CSV, Word documents for invoicing
 - **Database**: Firebase Firestore for prompt versioning
 
 ## Project Structure
@@ -50,9 +50,9 @@ npm run preview
 
 ## Important Notes
 - The project uses environment variables for API keys (see .env.example)
-- The application uses Google Gemini for AI document analysis
+- The application uses Google Gemini for AI document analysis focused on invoicing
 - Authentication is required for most features
-- Data processing includes document upload and AI analysis
+- Data processing includes invoice document upload and AI analysis
 - System prompt versioning is stored in Firebase Firestore
 
 ## Known Issues
@@ -78,10 +78,10 @@ npm run preview
 - **Preview capability**: For supported document types
 
 ### AI Analysis
-- **Document intelligence**: Extract key information from procurement documents
+- **Document intelligence**: Extract key information from invoice documents
 - **Structured output**: Format data for easy consumption
-- **Interactive chat**: Natural language questions about documents
-- **Quick actions**: Pre-built analysis prompts
+- **Interactive chat**: Natural language questions about invoices
+- **Quick actions**: Pre-built invoicing analysis prompts
 
 ### System Prompt Versioning
 - **Version management**: Automatic versioning with sequential numbers

@@ -9,8 +9,8 @@ const Index = () => {
     <div className="min-h-screen bg-white font-sans">
       <nav className="flex justify-between items-center px-8 py-6 bg-white shadow-sm">
         <Link to="/" className="flex flex-col">
-          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>PROPERTIUS</span>
-          <span className="text-sm font-light" style={{color: '#1e2a54'}}>Ammattitaitoinen Kiinteistönhallinta</span>
+          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>REATTA</span>
+          <span className="text-sm font-light" style={{color: '#1e2a54'}}>Laskutusapuri</span>
         </Link>
         <div className="flex gap-4">
           <Button
@@ -27,13 +27,13 @@ const Index = () => {
 
       <main className="container mx-auto px-8 py-20 text-center">
         <h1 className="text-6xl font-light mb-8 leading-tight">
-          <span style={{color: '#003d3b'}}>Propertius</span>
+          <span style={{color: '#003d3b'}}>Reatta Laskutusapuri</span>
         </h1>
         <p className="text-xl mb-6 font-light max-w-3xl mx-auto" style={{color: '#003d3b'}}>
-          Tutustu Propertiukseen – tekoälyavustajasi korkeatasoista kiinteistönhallintaa varten
+          Tutustu Reatta Laskutusapuriin – tekoälyapurisi laskutuksen tehostamisessa
         </p>
         <p className="text-lg mb-12 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
-          Ammattimaiseen ostamiseen ja laskutukseen keskittyvä avustaja, jolla säästät aikaa ja rahaa sekä parannat päätöksenteon läpinäkyvyyttä ja laatua kiinteistönhallinnan päivittäisissä tehtävissä
+          Älykkäiseen laskutukseen keskittyvä apuri, jolla säästät aikaa ja parannat laskutusprosessin laatua ja tehokkuutta
         </p>
         <div className="flex justify-center gap-6 flex-wrap">
           <RegisterButton />
@@ -49,36 +49,29 @@ const Index = () => {
 
         <section className="mt-20">
           <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-3xl p-12 shadow-lg" style={{borderColor: '#80ffb7', border: '1px solid'}}>
-            <h2 className="text-4xl font-light mb-8 text-center" style={{color: '#003d3b'}}>Miksi tekoälyagentit voisivat olla vaihtoehto?</h2>
+            <h2 className="text-4xl font-light mb-8 text-center" style={{color: '#003d3b'}}>Miksi tekoälyapuri laskutukseen?</h2>
             <div className="max-w-4xl mx-auto space-y-6 text-lg font-light leading-relaxed" style={{color: '#1e2a54'}}>
               <p>
-                AI-agentit voivat säästää aikaa kiinteistönhoitajilta (KH). AI-agentti voi myös parantaa työn laatua tarjoamalla enemmän tietoa aiemmin käytetyistä toimittajista.
+                AI-apuri voi säästää aikaa laskutusprosesseissa ja parantaa laskutuksen laatua. Apuri voi automatisoida rutiininomaiset laskutuksen tehtävät ja varmistaa laskujen oikeellisuuden.
               </p>
               <p>
-                AI-agentit voisivat myös automatisoida transaktionaalisia tehtäviä, mikä mahdollistaisi kiinteistönhoitajien keskittymisen laskutettavaan lisätyöhön. AI-agentit voisivat myös säästää aikaa muista transaktionaalisista tehtävistä organisaatiossa.
+                Laskutusapuri voi myös nopeuttaa laskutusprosessia, mikä parantaa kassavirtaa ja vähentää virheitä. Tämä mahdollistaa keskittymisen asiakaspalveluun ja muihin arvoa tuottaviin tehtäviin.
               </p>
             </div>
           </div>
         </section>
 
         <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Ammattimaisen Hankinnan Haaste</h2>
-          <div className="mb-20 bg-white rounded-2xl shadow-xl overflow-hidden" style={{borderColor: '#80ffb7', border: '1px solid'}}>
-            <img src="/problem.png" alt="Professional Procurement Cost Problem Analysis" className="w-full h-auto" />
-          </div>
-        </section>
-
-        <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Ammattiostojan Keskeiset Hyödyt</h2>
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Laskutusapurin Keskeiset Hyödyt</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             <Card className="p-8 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl" style={{borderColor: '#80ffb7', border: '1px solid'}}>
               <CardContent className="space-y-6">
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <DollarSign className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Säästä 1-5% Hankintakustannuksista</h3>
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Nopeampi Kassavirta</h3>
                 <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
-                  Tämä tapahtuu käyttämällä ennalta neuvoteltuja sopimuksia ja helpolla AI-avusteisella ammattimaisella ostamisella.
+                  Automatisoitu laskutusprosessi nopeuttaa laskujen käsittelyä ja vähentää maksuviiveitä.
                 </p>
               </CardContent>
             </Card>
@@ -86,11 +79,11 @@ const Index = () => {
             <Card className="p-8 shadow-xl hover:shadow-2xl transition-all duration-300 hover:transform hover:-translate-y-2 rounded-2xl" style={{borderColor: '#80ffb7', border: '1px solid'}}>
               <CardContent className="space-y-6">
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
-                  <Upload className="h-8 w-8 text-white" />
+                  <FileText className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Palvele Enemmän Asiakkaita Samalla Resurssivarauksella</h3>
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Vähemmän Virheitä</h3>
                 <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
-                  Tämä tapahtuu kiinteistönhoitajien aikansäästön kautta.
+                  AI tarkistaa laskujen oikeellisuuden automaattisesti ja vähentää inhimillisiä virheitä.
                 </p>
               </CardContent>
             </Card>
@@ -100,9 +93,9 @@ const Index = () => {
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <Brain className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Tarjoa Läpinäkyvyyttä Kiinteistönhoitajien Ostopäätöksiin</h3>
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Älykkäät Raportointi</h3>
                 <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
-                  Tämä tapahtuu AI:n dokumentoidessa hankintapäätökset keskusteluhistoriaan.
+                  Seuranta ja analytiikka laskutusprosessin tehokkuudesta ja suorituskyvystä.
                 </p>
               </CardContent>
             </Card>
@@ -110,29 +103,31 @@ const Index = () => {
         </section>
 
         <section className="mt-32">
-          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Ammattiostojaratkaisumme</h2>
-          <div className="grid md:grid-cols-3 gap-8 items-start p-10 rounded-3xl shadow-xl" style={{backgroundColor: '#ffede5', borderColor: '#80ffb7', border: '1px solid'}}>
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Laskutuksen Haasteet</h2>
+          <div className="mb-20 bg-white rounded-2xl shadow-xl overflow-hidden" style={{borderColor: '#80ffb7', border: '1px solid'}}>
+            <img src="/problem.png" alt="Laskutuksen haasteet ja kustannusanalyysi" className="w-full h-auto" />
+          </div>
+        </section>
+
+        <section className="mt-32">
+          <h2 className="text-4xl font-light mb-16" style={{color: '#003d3b'}}>Ratkaisumme</h2>
+          <div className="grid md:grid-cols-2 gap-8 items-start p-10 rounded-3xl shadow-xl" style={{backgroundColor: '#ffede5', borderColor: '#80ffb7', border: '1px solid'}}>
             <div>
               <h3 className="text-2xl font-light mb-4" style={{color: '#003d3b'}}>Ratkaisun Yleiskatsaus</h3>
-              <p className="mb-6 font-light leading-relaxed text-sm" style={{color: '#1e2a54'}}>Kaavio, joka havainnollistaa ammattiostojaratkaisumme pääkomponentit ja työnkulun.</p>
-              <img src="/solution_overview.png" alt="Solution Overview" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
+              <p className="mb-6 font-light leading-relaxed text-sm" style={{color: '#1e2a54'}}>Kaavio, joka havainnollistaa laskutusratkaisumme pääkomponentit ja työnkulun.</p>
+              <img src="/solution_overview.png" alt="Laskutusratkaisun yleiskatsaus" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
             </div>
             <div>
               <h3 className="text-2xl font-light mb-4" style={{color: '#003d3b'}}>Kehittynyt Arkkitehtuuri</h3>
-              <p className="mb-6 font-light leading-relaxed text-sm" style={{color: '#1e2a54'}}>Kehittynyt arkkitehtuuri, joka esittää kokonaisvaltaisen hankinta-automaatiojärjestelmän.</p>
-              <img src="/solution_overview2.png" alt="Enhanced Architecture" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-light mb-4" style={{color: '#003d3b'}}>Ammattiostojan Teknologiapino</h3>
-              <p className="mb-6 font-light leading-relaxed text-sm" style={{color: '#1e2a54'}}>Täydellinen teknologiapino ja työkalut ammattimaisen hankinnan automaatioon.</p>
-              <img src="/professiona_buyer_tech_stack.png" alt="Professional Buyer Tech Stack" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
+              <p className="mb-6 font-light leading-relaxed text-sm" style={{color: '#1e2a54'}}>Kehittynyt arkkitehtuuri, joka esittää kokonaisvaltaisen laskutusautomaatiojärjestelmän.</p>
+              <img src="/solution_overview1.png" alt="Kehittynyt laskutusarkkitehtuuri" className="rounded-2xl shadow-lg w-full h-auto" style={{borderColor: '#80ffb7', border: '1px solid'}} />
             </div>
           </div>
         </section>
 
         <section className="mt-32 mb-20">
           <h2 className="text-4xl font-light mb-10 text-center" style={{color: '#003d3b'}}>
-            Aloita <span style={{color: '#1e2a54'}}>Ammattiostojan AI-Arviointi</span>
+            Aloita <span style={{color: '#1e2a54'}}>Laskutusapurin Käyttö</span>
           </h2>
           <div className="flex justify-center gap-6 flex-wrap">
             <RegisterButton />
@@ -204,13 +199,13 @@ const Index = () => {
         </section>
 
         <section className="mt-32 mb-20">
-          <h2 className="text-4xl font-light mb-16 text-center" style={{color: '#003d3b'}}>Tietoa Rettasta</h2>
+          <h2 className="text-4xl font-light mb-16 text-center" style={{color: '#003d3b'}}>Tietoa Reattasta</h2>
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden max-w-2xl mx-auto" style={{borderColor: '#80ffb7', border: '1px solid'}}>
             <img src="/retta.png" alt="Retta - Luotettavaa ja mutkatonta isännöintiä" className="w-full h-auto" />
           </div>
           <div className="text-center mt-12">
             <p className="text-xl mb-8 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
-              Luotettavaa ja mutkatonta isännöintiä - Professional procurement solutions that transform how purchasing is managed.
+              Luotettavaa ja mutkatonta isännöintiä - Älykkäät laskutusratkaisut jotka tehostavat laskutusprosessia.
             </p>
             <div className="flex justify-center gap-6">
               <Button

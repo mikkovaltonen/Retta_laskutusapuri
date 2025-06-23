@@ -49,9 +49,9 @@ export const LoginButton = () => {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Login to Your Account</DialogTitle>
+          <DialogTitle>Kirjaudu Tilillesi</DialogTitle>
           <DialogDescription>
-            Access your insurance management dashboard.
+            Käytä Reatta Laskutusapuria.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">

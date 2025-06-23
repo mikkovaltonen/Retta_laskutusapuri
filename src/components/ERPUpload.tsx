@@ -80,9 +80,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       
       // Fetch the sample Excel file from public directory with cache busting
       const cacheBuster = Date.now() + Math.random().toString(36).substring(7);
-      const sampleFile = currentWorkspace === 'purchaser' 
-        ? 'example_purchase_orders.xlsx' 
-        : 'example_sales_invoices.xlsx';
+      const sampleFile = 'esimerkki_data.xlsx';
       const response = await fetch(`/${sampleFile}?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
@@ -90,10 +88,8 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       
       const arrayBuffer = await response.arrayBuffer();
       
-      // Create a File-like object from the fetched data
-      const fileName = currentWorkspace === 'purchaser' 
-        ? 'Sample Purchase Orders.xlsx'
-        : 'Sample Sales Invoices.xlsx';
+      // Create a File-like object from the fetched data - keep original filename
+      const fileName = sampleFile;
       
       const fileObject = {
         name: fileName,
@@ -111,7 +107,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       // Upload using the existing upload function
       const uploadedDoc = await storageService.uploadERPDocument(fileObject, user.uid, currentWorkspace);
       onUploadComplete?.(uploadedDoc);
-      toast.success(`Sample ${currentWorkspace === 'purchaser' ? 'purchase order' : 'sales invoice'} data loaded successfully!`);
+      toast.success('Esimerkki ostolaskudata ladattu onnistuneesti!');
       console.log('✅ Successfully loaded sample ERP data');
       
     } catch (err) {
@@ -128,13 +124,10 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="w-5 h-5" />
-          {currentWorkspace === 'purchaser' ? 'Purchase Order Data Upload' : 'Sales Invoice Data Upload'}
+          Ostolasku Datan Lataus
         </CardTitle>
         <CardDescription>
-          {currentWorkspace === 'purchaser' 
-            ? 'Upload your Excel file with purchase order data to simulate ERP integration'
-            : 'Upload your Excel file with sales invoice data to simulate ERP integration'
-          }
+          Lataa Excel-tiedostosi ostolaskudatalla ERP-integraation simulointiin
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -188,16 +181,8 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
               className="bg-green-600 hover:bg-green-700 text-white"
               size="sm"
             >
-              📊 Load Sample {currentWorkspace === 'purchaser' ? 'Purchase Order' : 'Sales Invoice'} Data
+              📊 Lataa Esimerkki Ostolaskudata
             </Button>
-          </div>
-          <div className="text-sm text-orange-700">
-            <p className="mb-2"><strong>🤖 Need help converting your data?</strong></p>
-            <p className="text-xs bg-white p-2 rounded border border-orange-300 font-mono">
-              "Convert my Excel data to match the structure shown in the loaded sample data. 
-              Keep the same column names and data formats."
-            </p>
-            <p className="text-xs mt-1">Load sample data first, then copy your data and this prompt to ChatGPT for automatic conversion.</p>
           </div>
         </div>
 

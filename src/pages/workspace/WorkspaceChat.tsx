@@ -1,15 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useWorkspace } from '@/hooks/useWorkspace';
 import { WorkspaceLayout } from '@/components/WorkspaceLayout';
-import PropertyManagerChat from '@/components/PropertyManagerChat';
-import CompetitiveBiddingChat from '@/components/CompetitiveBiddingChat';
+import DocumentAnalysis from '@/components/DocumentAnalysis';
 
 const WorkspaceChat = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const { currentWorkspace, workspaceConfig } = useWorkspace();
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -24,22 +24,17 @@ const WorkspaceChat = () => {
             {workspaceConfig[currentWorkspace].chatTitle}
           </h1>
           <p className="text-gray-600 mt-1">
-            {currentWorkspace === 'purchaser' 
-              ? 'Ammattimainen hankintahallinta tekoälykäyttöisellä kustannusoptimoinnilla ja toimittaja-analytiikalla'
-              : currentWorkspace === 'invoicer'
-              ? 'Virtaviivaistetut laskutustyönkulut älykkäällä automaatiolla ja maksuseurannalla'
-              : 'Markkinatietojen hankinta ja kilpailutus Google-haulla ja ammattimaisella analytiikalla'
-            }
+            Virtaviivaistetut laskutustyönkulut älykkäällä automaatiolla ja maksuseurannalla
           </p>
         </div>
         
-        {/* Chat component without its own navigation since we have workspace navigation */}
+        {/* Document analysis component for invoicing */}
         <div className="bg-white rounded-lg shadow-sm">
-          {currentWorkspace === 'competitive_bidding' ? (
-            <CompetitiveBiddingChat onLogout={handleLogout} hideNavigation={true} />
-          ) : (
-            <PropertyManagerChat onLogout={handleLogout} hideNavigation={true} />
-          )}
+          <DocumentAnalysis 
+            isLoading={isLoading}
+            setIsLoading={setIsLoading}
+            fileFilter="all"
+          />
         </div>
       </div>
     </WorkspaceLayout>
