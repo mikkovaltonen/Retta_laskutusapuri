@@ -50,7 +50,7 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
               style={{ color: '#003d3b' }}
             >
               <Home className="w-5 h-5 mr-2" />
-              Reatta
+              Retta
             </Button>
           </div>
 
@@ -69,7 +69,7 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
                   className={currentWorkspace === 'invoicer' ? 'bg-blue-50' : ''}
                 >
                   <div className="flex flex-col">
-                    <span className="font-medium">Reatta Laskutus</span>
+                    <span className="font-medium">Retta Laskutus</span>
                     <span className="text-sm text-gray-500">Myyntilaskujen hallinta</span>
                   </div>
                 </DropdownMenuItem>

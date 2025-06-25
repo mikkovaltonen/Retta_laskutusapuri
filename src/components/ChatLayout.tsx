@@ -108,6 +108,7 @@ export const ChatLayout: React.FC = () => {
           id: `${doc.id}_${laskuIndex}`,
           docId: doc.id,
           firestoreDocId: lasku.id, // The real Firestore document ID
+          asiakasnumero: lasku.asiakasnumero,
           laskuotsikko: lasku.laskuotsikko || 'Myyntilasku',
           luontipaiva: lasku.luontipaiva,
           kokonaissumma: lasku.kokonaissumma,
@@ -338,7 +339,21 @@ export const ChatLayout: React.FC = () => {
                       {invoice.laskuotsikko}
                     </td>
                     <td className="border-b px-2 py-1 text-xs">
-                      {invoice.luontipaiva ? new Date(invoice.luontipaiva).toLocaleDateString('fi-FI') : '-'}
+                      {invoice.luontipaiva ? (() => {
+                        // Handle Firebase Timestamp
+                        if (invoice.luontipaiva && typeof invoice.luontipaiva === 'object' && 'seconds' in invoice.luontipaiva) {
+                          const date = new Date(invoice.luontipaiva.seconds * 1000);
+                          return date.toLocaleDateString('fi-FI');
+                        }
+                        // Handle Excel date format (number of days since 1900-01-01)
+                        if (typeof invoice.luontipaiva === 'number') {
+                          const excelEpoch = new Date(1900, 0, 1);
+                          const date = new Date(excelEpoch.getTime() + (invoice.luontipaiva - 2) * 24 * 60 * 60 * 1000);
+                          return date.toLocaleDateString('fi-FI');
+                        }
+                        // Handle normal ISO date string
+                        return new Date(invoice.luontipaiva).toLocaleDateString('fi-FI');
+                      })() : '-'}
                     </td>
                     <td className="border-b px-2 py-1 text-xs">
                       {invoice.kokonaissumma ? `${invoice.kokonaissumma}€` : '-'}
@@ -610,7 +625,7 @@ export const ChatLayout: React.FC = () => {
                 ERP Data
               </CardTitle>
               <CardDescription className="mt-2">
-                Katso erp:ssä olevila laskutuksen lähtötietoja ja editoi luomiasi laskuja
+                Katso ERPiin ylläpidettyjä laskutuksen lähtötietoja ja editoi AI:n generoimia myyntilaskuja
               </CardDescription>
               <Button
                 variant="outline"

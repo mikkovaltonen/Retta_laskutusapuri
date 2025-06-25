@@ -1,7 +1,7 @@
 # Claude Code Instructions
 
 ## Project Overview
-This is a Reatta Laskutusapuri (Invoicing Assistant) application built with React, TypeScript, and Vite. It provides AI-powered document analysis and invoicing intelligence capabilities with user authentication.
+This is a Retta Laskutusapuri (Invoicing Assistant) application built with React, TypeScript, and Vite. It provides AI-powered document analysis and invoicing intelligence capabilities with user authentication.
 
 ## Development Commands
 
@@ -84,7 +84,6 @@ npm run preview
 - **Function calling**: Automated database queries based on user questions
 - **Invoice generation**: AI-powered sales invoice creation from purchase invoices
 - **Data correlation**: Cross-reference between price lists, orders, and purchase invoices
-- **Margin optimization**: Automatic pricing with profitable margins for re-billing
 
 ### System Prompt Versioning
 - **Version management**: Automatic versioning with sequential numbers
@@ -199,7 +198,7 @@ All functions return results in table format using Markdown syntax:
 • "Luo myyntilasku ostolaskun pohjalta"
 • "Mikä on tuotteen 2078 myyntihinta?"
 • "Hae asiakkaan 11111 ostolaskut"
-• "Laske katemarginaali tuotteelle"
+• "Tarkista tuotteiden saatavuus hinnastossa"
 • "Näytä kaikki myyntilaskut"
 
 Voit myös ladata ostolaskuja JSON-muodossa ja pyytää minua luomaan niiden pohjalta kannattavia myyntilaskuja!
@@ -218,7 +217,7 @@ Miten voin auttaa?
 2. **Main Use Case**: "Luo myyntilasku ostolaskun pohjalta" (Create sales invoice from purchase invoice)
 3. **Pricing Queries**: Product price lookups from price list
 4. **Data Search**: Customer and invoice searches
-5. **Profitability**: Margin calculations
+5. **Pricing**: Product price lookups and comparisons
 6. **Results Tracking**: View created sales invoices
 7. **File Upload**: JSON upload functionality for purchase invoices
 

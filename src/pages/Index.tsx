@@ -9,7 +9,7 @@ const Index = () => {
     <div className="min-h-screen bg-white font-sans">
       <nav className="flex justify-between items-center px-8 py-6 bg-white shadow-sm">
         <Link to="/" className="flex flex-col">
-          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>REATTA</span>
+          <span className="text-2xl font-light tracking-wide" style={{color: '#003d3b'}}>RETTA</span>
           <span className="text-sm font-light" style={{color: '#1e2a54'}}>Laskutusapuri</span>
         </Link>
         <div className="flex gap-4">
@@ -27,10 +27,10 @@ const Index = () => {
 
       <main className="container mx-auto px-8 py-20 text-center">
         <h1 className="text-6xl font-light mb-8 leading-tight">
-          <span style={{color: '#003d3b'}}>Reatta Laskutusapuri</span>
+          <span style={{color: '#003d3b'}}>Retta Laskutusapuri</span>
         </h1>
         <p className="text-xl mb-6 font-light max-w-3xl mx-auto" style={{color: '#003d3b'}}>
-          Tutustu Reatta Laskutusapuriin – tekoälyapurisi laskutuksen tehostamisessa
+          Tutustu Retta Laskutusapuriin – tekoälyapurisi laskutuksen tehostamisessa
         </p>
         <p className="text-lg mb-12 font-light max-w-2xl mx-auto" style={{color: '#1e2a54'}}>
           Älykkäiseen laskutukseen keskittyvä apuri, jolla säästät aikaa ja parannat laskutusprosessin laatua ja tehokkuutta
@@ -199,7 +199,7 @@ const Index = () => {
         </section>
 
         <section className="mt-32 mb-20">
-          <h2 className="text-4xl font-light mb-16 text-center" style={{color: '#003d3b'}}>Tietoa Reattasta</h2>
+          <h2 className="text-4xl font-light mb-16 text-center" style={{color: '#003d3b'}}>Tietoa Rettasta</h2>
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden max-w-2xl mx-auto" style={{borderColor: '#80ffb7', border: '1px solid'}}>
             <img src="/retta.png" alt="Retta - Luotettavaa ja mutkatonta isännöintiä" className="w-full h-auto" />
           </div>

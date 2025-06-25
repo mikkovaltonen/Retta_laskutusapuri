@@ -51,7 +51,7 @@ export const LoginButton = () => {
         <DialogHeader>
           <DialogTitle>Kirjaudu Tilillesi</DialogTitle>
           <DialogDescription>
-            Käytä Reatta Laskutusapuria.
+            Käytä Retta Laskutusapuria.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">

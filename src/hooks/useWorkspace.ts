@@ -18,7 +18,7 @@ export interface WorkspaceContextType {
 
 export const workspaceConfigs = {
   invoicer: {
-    name: 'Reatta Laskutus', 
+    name: 'Retta Laskutus', 
     chatTitle: 'Retta - omien kulujen laskuttajan työpöytä',
     adminTitle: 'Laskutuksen hallinta',
     erpTitle: 'Myyntilaskujen integraatio',

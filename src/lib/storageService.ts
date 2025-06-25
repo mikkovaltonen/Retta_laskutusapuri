@@ -763,7 +763,7 @@ export class StorageService {
       const recordsSnapshot = await getDocs(recordsQ);
       const jsonData = recordsSnapshot.docs.map(recordDoc => {
         const recordData = recordDoc.data();
-        const { userId, uploadedAt, createdAt, luontipaiva, ...invoiceData } = recordData;
+        const { userId, uploadedAt, createdAt, ...invoiceData } = recordData;
         return {
           id: recordDoc.id,
           ...invoiceData
@@ -783,7 +783,7 @@ export class StorageService {
           fileGroups.set(fileName, []);
         }
         
-        const { userId, uploadedAt, createdAt, luontipaiva, ...invoiceData } = data;
+        const { userId, uploadedAt, createdAt, ...invoiceData } = data;
         fileGroups.get(fileName)!.push({
           id: doc.id,
           ...invoiceData
@@ -805,7 +805,7 @@ export class StorageService {
           jsonData: records,
           sheets: ['Myyntilaskut'],
           size: records.length * 200,
-          uploadedAt: firstRecordData?.luontipaiva || firstRecordData?.uploadedAt || new Date(),
+          uploadedAt: new Date(firstRecordData?.luontipaiva || firstRecordData?.uploadedAt || new Date()),
           userId: userId,
           type: 'erp-integration' as const,
           storageUrl: '',

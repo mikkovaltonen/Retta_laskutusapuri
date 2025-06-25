@@ -1,11 +1,11 @@
-# Reatta Laskutusapuri - AI-Powered Invoicing Assistant
+# Retta Laskutusapuri - AI-Powered Invoicing Assistant
 
-Meet the Reatta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Älykkäät laskutusratkaisut automatisoituine prosesseineen ja analytiikoineen.
+Meet the Retta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Älykkäät laskutusratkaisut automatisoituine prosesseineen ja analytiikoineen.
 
 ## Features
 
 ### 🏢 **Invoicing-Focused Architecture**
-- **Reatta Laskutus**: Intelligent billing automation and financial operations
+- **Retta Laskutus**: Intelligent billing automation and financial operations
 - **Streamlined Interface**: Single-workspace focus on invoicing excellence
 
 ### 🤖 **AI-Powered Operations**

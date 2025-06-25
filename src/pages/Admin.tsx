@@ -63,7 +63,7 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               <div className="flex items-center gap-3">
                 <Bot className="h-8 w-8" />
                 <div>
-                  <h1 className="text-2xl font-bold">Reatta Admin</h1>
+                  <h1 className="text-2xl font-bold">Retta Admin</h1>
                   <p className="text-gray-300">Laskutusapurin Konfiguraatio</p>
                 </div>
               </div>

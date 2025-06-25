@@ -432,12 +432,13 @@ class GeminiChatService {
       const functionCalls: string[] = [];
       let finalContent = '';
       
-      if (response.functionCalls && typeof response.functionCalls === 'function' && response.functionCalls().length > 0) {
-        console.log('🔧 Function calls detected:', response.functionCalls().length);
+      const functionCallsArray = response.functionCalls && typeof response.functionCalls === 'function' ? response.functionCalls() : null;
+      if (functionCallsArray && Array.isArray(functionCallsArray) && functionCallsArray.length > 0) {
+        console.log('🔧 Function calls detected:', functionCallsArray.length);
         
         const functionResponses = [];
         
-        for (const call of response.functionCalls()) {
+        for (const call of functionCallsArray) {
           const functionName = call.name;
           const args = call.args;
           

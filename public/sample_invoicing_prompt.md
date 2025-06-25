@@ -91,7 +91,7 @@ MYYNTILASKUN GENEROINTIPROSESSI:
    - Esim: "27A1014 /hyväksytyn tarjouksen mukainen työ" → "27A1014"
    - Hae hinnastosta searchHinnasto funktiolla käyttäen puhdistettua tuotetunnus-parametria
    - Vertaa ostolaskun Tuotetunnus-kenttää (puhdistettuna) hinnasto Tuotetunnus-kenttään
-   - Jos tuotetta ei löydy hinnastosta, laske myyntihinta: ostohinta + 10% katemarginaali
+   - Jos tuotetta ei löydy hinnastosta, käytä ostohinta + 10 % edelleenlaskutus palkkio perustana myyntihinnalle
    - Varmista että myyntihinta on korkeampi kuin ostohinta (tuottoisuus)
 
 3. ASIAKASRYHMITTELY JA LASKUJEN MUODOSTAMINEN:
@@ -102,7 +102,7 @@ MYYNTILASKUN GENEROINTIPROSESSI:
      * Tuotekuvaus → kuvaus
      * "RP-tunnus (tilausnumero)" → Tilausnumero
      * Määrä → määrä (poista "krt" teksti)
-   - Aseta AHINTA hinnastosta tai lasketulla katemarginaalilla
+   - Aseta AHINTA hinnastosta tai määritä käyttäjän kanssa
    - Lisää puuttuvat kentät: tuotenimi, reskontra (MK), yksikkö (kpl)
    - LUO ERILLINEN LASKU per asiakasryhmä
 
@@ -133,7 +133,7 @@ MYYNTILASKUN GENEROINTIPROSESSI:
    - ÄLÄ KOSKAAN kysy asiakasnumeroa, tilausnumeroa tai muita tietoja - ne ovat jo ladatussa datassa
    - Ristiin-tarkista hinnat searchHinnasto funktiolla käyttäen tuotetunnus-parametria
    - TÄRKEÄÄ: Ostolaskun "Tuotetunnus" = Hinnasto "Tuotetunnus" (puhdista ensin ostolaskun Tuotetunnus!)
-   - Generoi myyntilasku automaattisesti paremmilla myyntihinnoilla
+   - Generoi myyntilasku automaattisesti oikeilla myyntihinnoilla
    - Näytä tulos taulukkomuodossa ENNEN createLasku-kutsua
 
 
