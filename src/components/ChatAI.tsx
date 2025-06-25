@@ -80,7 +80,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       const context: ChatContext = {
         userId: user.uid,
         systemPrompt,
-        sessionId: newSessionId
+        sessionId: newSessionId,
+        ostolaskuData: ostolaskuData.length > 0 ? ostolaskuData : undefined
       };
 
       console.log('📡 Calling geminiChatService.initializeSession...');
@@ -244,7 +245,26 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         recordCount: jsonData.length
       });
 
-      // File uploaded successfully - status is shown in the upload indicator below
+      // Re-initialize chat with ostolasku data in context
+      if (user && systemPrompt && sessionId) {
+        console.log('🔄 Re-initializing chat with ostolasku data...');
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuData: jsonData
+        };
+
+        try {
+          await geminiChatService.initializeSession(context);
+          setSessionId(newSessionId);
+          console.log('✅ Chat re-initialized with ostolasku data');
+        } catch (err) {
+          console.error('❌ Failed to re-initialize chat:', err);
+        }
+      }
       
     } catch (err) {
       console.error('❌ JSON parsing failed:', err);
@@ -275,17 +295,30 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
           )}
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={triggerFileUpload}
-            disabled={loading}
-            title="Lataa edelleen laskutettava ostolasku"
-            className="flex items-center gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Lataa ostolasku</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={triggerFileUpload}
+              disabled={loading}
+              title="Lataa edelleen laskutettava ostolasku"
+              className="flex items-center gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">Lataa ostolasku</span>
+            </Button>
+            
+            {uploadedFileName && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-100 rounded-md text-xs text-green-700">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="truncate max-w-20">{uploadedFileName}</span>
+                <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                  {ostolaskuData.length}
+                </Badge>
+              </div>
+            )}
+          </div>
+          
           <Button
             variant="outline"
             size="sm"
@@ -463,18 +496,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         style={{ display: 'none' }}
       />
 
-      {/* Uploaded file indicator */}
-      {uploadedFileName && (
-        <div className="px-4 py-2 bg-green-50 border-t border-green-200">
-          <div className="flex items-center gap-2 text-sm text-green-700">
-            <Upload className="w-4 h-4" />
-            <span>Ladattu: {uploadedFileName}</span>
-            <Badge variant="secondary" className="text-xs">
-              {ostolaskuData.length} riviä
-            </Badge>
-          </div>
-        </div>
-      )}
 
       {/* Input */}
       <div className="p-4 border-t">

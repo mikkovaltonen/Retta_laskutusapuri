@@ -18,6 +18,7 @@ export interface ChatContext {
   userId: string;
   systemPrompt: string;
   sessionId: string;
+  ostolaskuData?: any[];
 }
 
 class GeminiChatService {
@@ -29,7 +30,7 @@ class GeminiChatService {
     this.model = genAI.getGenerativeModel({
       model: 'gemini-2.5-pro',
       generationConfig: {
-        temperature: 0.7,
+        temperature: 0.1,
         topK: 40,
         topP: 0.95,
         maxOutputTokens: 8192,
@@ -87,43 +88,6 @@ class GeminiChatService {
                   searchValue: {
                     type: 'string',
                     description: 'Value to search for'
-                  },
-                  limit: {
-                    type: 'number',
-                    description: 'Maximum number of results to return (default 10)'
-                  }
-                }
-              }
-            },
-            {
-              name: 'searchOstolasku',
-              description: 'Search uploaded invoice data (ostolaskut) by any field',
-              parameters: {
-                type: 'object',
-                properties: {
-                  searchField: {
-                    type: 'string',
-                    description: 'Field name to search in (Tuotetunnus, Tuotekuvaus, Tampuurinumero, "á hinta alv 0 %", "RP-tunnus (tilausnumero)", Kohde)'
-                  },
-                  searchValue: {
-                    type: 'string',
-                    description: 'Value to search for'
-                  },
-                  tuotekoodi: {
-                    type: 'string',
-                    description: 'Filter by Tuotetunnus (product code)'
-                  },
-                  asiakasnumero: {
-                    type: 'string',
-                    description: 'Filter by Tampuurinumero (customer number)'
-                  },
-                  minAmount: {
-                    type: 'number',
-                    description: 'Minimum price (á hinta alv 0 %)'
-                  },
-                  maxAmount: {
-                    type: 'number',
-                    description: 'Maximum price (á hinta alv 0 %)'
                   },
                   limit: {
                     type: 'number',
@@ -307,81 +271,6 @@ class GeminiChatService {
   }
 
 
-  private async searchOstolasku(ostolaskuData: any[], params: Record<string, any>) {
-    console.log('💰 searchOstolasku called with params:', { dataLength: ostolaskuData.length, params });
-    
-    try {
-      if (!ostolaskuData || ostolaskuData.length === 0) {
-        return {
-          success: false,
-          error: 'Ei ostolaskudataa ladattuna. Lataa ensin JSON-tiedosto.'
-        };
-      }
-
-      let records = [...ostolaskuData];
-
-      // Apply field search filter
-      if (params.searchField && params.searchValue) {
-        records = records.filter(record => {
-          const fieldValue = record[params.searchField];
-          if (fieldValue === undefined || fieldValue === null) return false;
-          
-          const valueStr = String(fieldValue).toLowerCase();
-          const searchStr = String(params.searchValue).toLowerCase();
-          return valueStr.includes(searchStr);
-        });
-      }
-
-      // Apply tuotekoodi filter
-      if (params.tuotekoodi) {
-        records = records.filter(record => 
-          record.tuotekoodi === params.tuotekoodi
-        );
-      }
-
-      // Apply asiakasnumero filter  
-      if (params.asiakasnumero) {
-        records = records.filter(record => 
-          record.asiakasnumero === params.asiakasnumero
-        );
-      }
-
-      // Apply amount filters (ahinta field)
-      if (params.minAmount !== undefined) {
-        records = records.filter(record => {
-          const amount = Number(record.ahinta);
-          return !isNaN(amount) && amount >= params.minAmount;
-        });
-      }
-
-      if (params.maxAmount !== undefined) {
-        records = records.filter(record => {
-          const amount = Number(record.ahinta);
-          return !isNaN(amount) && amount <= params.maxAmount;
-        });
-      }
-
-      const result = {
-        success: true,
-        data: records.slice(0, params.limit || 10),
-        count: records.length
-      };
-      
-      console.log('✅ searchOstolasku result:', {
-        success: result.success,
-        resultCount: result.data.length,
-        totalFound: result.count
-      });
-      
-      return result;
-    } catch (error) {
-      console.error('❌ searchOstolasku failed:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Ostolasku search failed'
-      };
-    }
-  }
 
   private async createLasku(userId: string, params: Record<string, any>) {
     console.log('💰 createLasku called with params:', { userId, params });
@@ -476,15 +365,24 @@ class GeminiChatService {
     console.log('🚀 Initializing chat session:', {
       sessionId: context.sessionId,
       userId: context.userId,
-      promptLength: context.systemPrompt.length
+      promptLength: context.systemPrompt.length,
+      hasOstolaskuData: !!context.ostolaskuData
     });
     
     try {
+      // Build the system prompt with ostolasku data if available
+      let fullSystemPrompt = context.systemPrompt;
+      
+      if (context.ostolaskuData && context.ostolaskuData.length > 0) {
+        const ostolaskuJson = JSON.stringify(context.ostolaskuData, null, 2);
+        fullSystemPrompt += `\n\n=== LADATTU OSTOLASKU DATA ===\nSeuraava ostolasku on ladattu ja analyysiä varten:\n\`\`\`json\n${ostolaskuJson}\n\`\`\`\n\nTämä data on nyt käytettävissä suoraan. Et tarvitse searchOstolasku funktiota - voit viitata suoraan tähän dataan vastauksissa.`;
+      }
+      
       const chat = this.model.startChat({
         history: [
           {
             role: 'user',
-            parts: [{ text: context.systemPrompt }]
+            parts: [{ text: fullSystemPrompt }]
           },
           {
             role: 'model',
@@ -541,9 +439,6 @@ class GeminiChatService {
               break;
             case 'searchTilaus':
               functionResult = await this.searchTilaus(userId, args);
-              break;
-            case 'searchOstolasku':
-              functionResult = await this.searchOstolasku(ostolaskuData, args);
               break;
             case 'createLasku':
               functionResult = await this.createLasku(userId, args);
