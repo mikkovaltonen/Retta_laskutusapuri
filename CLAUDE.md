@@ -160,6 +160,8 @@ The chatbot has access to the following Gemini AI functions:
   - `ahinta` (number, required) - Unit price
   - `kuvaus` (string, required) - Description
   - `tuotenimi` (string, required) - Product name
+  - `selvitys` (string, auto-generated) - Detailed billing justification and pricing logic explanation
+  - `tilattuTuote` (string, optional) - Ordered product name from order data
   - `reskontra` (string, optional) - Account type (default: MK)
   - `yksikkö` (string, optional) - Unit (default: kpl)
   - `alvkoodi` (string, optional) - VAT code

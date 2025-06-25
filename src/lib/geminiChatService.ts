@@ -275,11 +275,45 @@ class GeminiChatService {
 
 
 
+  private async fetchTilausDataForCustomer(userId: string, asiakasnumero: string): Promise<any[]> {
+    try {
+      const q = query(
+        collection(db, 'tilaus_data'),
+        where('userId', '==', userId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const tilausRecords = querySnapshot.docs.map(doc => doc.data());
+      
+      // Filter for this customer by finding matching company ID field
+      const customerTilaukset = tilausRecords.filter(record => {
+        const companyIdField = Object.keys(record).find(key => 
+          key.includes('Yhtiön tunnus') || key.includes('yhtiön tunnus') || 
+          key.includes('Yhtiötunnus') || key.includes('yhtiötunnus') ||
+          key.toLowerCase().includes('company') && key.toLowerCase().includes('id')
+        );
+        
+        if (companyIdField) {
+          return String(record[companyIdField]).trim() === String(asiakasnumero).trim();
+        }
+        return false;
+      });
+      
+      return customerTilaukset;
+    } catch (error) {
+      console.error('Failed to fetch tilaus data:', error);
+      return [];
+    }
+  }
+
   private async createLasku(userId: string, params: Record<string, any>) {
     console.log('💰 createLasku called with params:', { userId, params });
     
     try {
       const { asiakasnumero, laskurivit, laskuotsikko } = params;
+      
+      // Fetch tilaus data for this customer to match products
+      const tilausData = await this.fetchTilausDataForCustomer(userId, asiakasnumero);
       
       // Validate header fields
       if (!asiakasnumero) {
@@ -326,22 +360,101 @@ class GeminiChatService {
         }
       }
 
+      // Generate detailed explanations for each line item with product matching
+      const laskurivitWithSelvitys = await Promise.all(laskurivit.map(async (rivi, index) => {
+        // Find matching "Tilattu tuote" from tilaus data
+        let tilattuTuote = 'ei löydy';
+        
+        if (tilausData.length > 0) {
+          // Extract all available ordered products for this customer
+          const availableProducts = tilausData
+            .map(tilaus => tilaus['Tilattu tuote'] || tilaus['tilattu tuote'] || tilaus['Product'])
+            .filter(product => product && String(product).trim() !== '')
+            .map(product => String(product).trim());
+          
+          if (availableProducts.length > 0) {
+            const tuotenimi = String(rivi.tuotenimi || '').toLowerCase().trim();
+            const kuvaus = String(rivi.kuvaus || '').toLowerCase().trim();
+            
+            // Find best match by checking similarity with tuotenimi (primary) and kuvaus (secondary)
+            const bestMatch = availableProducts.find(product => {
+              const productLower = String(product).toLowerCase().trim();
+              // Check if product name contains tuotenimi or vice versa
+              return tuotenimi.includes(productLower) || 
+                     productLower.includes(tuotenimi) ||
+                     kuvaus.includes(productLower) ||
+                     productLower.includes(kuvaus);
+            });
+            
+            if (bestMatch) {
+              tilattuTuote = bestMatch;
+            }
+          }
+        }
+        
+        const selvitysPrompt = `Luo yksityiskohtainen laskutusselvitys tälle laskuriville Markdown-muodossa:
+
+**Laskurivi ${index + 1}:**
+- Tuotekoodi: ${rivi.tuotekoodi}
+- Tuotenimi: ${rivi.tuotenimi}
+- Kuvaus: ${rivi.kuvaus}
+- Määrä: ${rivi.määrä}
+- Yksikköhinta: ${rivi.ahinta}€
+- Kokonaishinta: ${Number(rivi.määrä) * Number(rivi.ahinta)}€
+- Asiakasnumero: ${asiakasnumero}
+- Tilattu tuote: ${tilattuTuote}
+
+Kirjoita kattava selvitys joka sisältää:
+1. **Laskutusperuste** - Miksi tämä rivi laskutetaan
+2. **Hinnoittelulogiikka** - Miten hinta on määritetty (hinnastosta, sopimuksesta tms.)
+3. **Määrän peruste** - Miksi tämä määrä laskutetaan
+4. **Asiakastiedot** - Kenen vastuulla laskutus on
+5. **Tilausperuste** - Mihin tilaukseen tai sopimukseen perustuu
+
+Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
+
+        try {
+          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+          const result = await model.generateContent(selvitysPrompt);
+          const selvitys = result.response.text() || 'Selvitystä ei voitu generoida.';
+          
+          return {
+            reskontra: rivi.reskontra || 'MK',
+            tuotekoodi: rivi.tuotekoodi,
+            määrä: Number(rivi.määrä),
+            ahinta: Number(rivi.ahinta),
+            kuvaus: rivi.kuvaus,
+            selvitys: selvitys,
+            tilattuTuote: tilattuTuote,
+            yksikkö: rivi.yksikkö || 'kpl',
+            tuotenimi: rivi.tuotenimi,
+            alvkoodi: rivi.alvkoodi || '',
+            Tilausnumero: rivi.Tilausnumero || `LASKU-${Date.now()}`
+          };
+        } catch (error) {
+          console.error('Failed to generate selvitys for line', index + 1, error);
+          return {
+            reskontra: rivi.reskontra || 'MK',
+            tuotekoodi: rivi.tuotekoodi,
+            määrä: Number(rivi.määrä),
+            ahinta: Number(rivi.ahinta),
+            kuvaus: rivi.kuvaus,
+            selvitys: 'Selvitystä ei voitu generoida automaattisesti.',
+            tilattuTuote: tilattuTuote,
+            yksikkö: rivi.yksikkö || 'kpl',
+            tuotenimi: rivi.tuotenimi,
+            alvkoodi: rivi.alvkoodi || '',
+            Tilausnumero: rivi.Tilausnumero || `LASKU-${Date.now()}`
+          };
+        }
+      }));
+
       // Prepare document to save (new structure with header-level customer)
       const laskuDocument = {
         userId,
         asiakasnumero, // Header level customer number
         laskuotsikko: laskuotsikko || 'Edelleenlaskutus',
-        laskurivit: laskurivit.map(rivi => ({
-          reskontra: rivi.reskontra || 'MK',
-          tuotekoodi: rivi.tuotekoodi,
-          määrä: Number(rivi.määrä),
-          ahinta: Number(rivi.ahinta),
-          kuvaus: rivi.kuvaus,
-          yksikkö: rivi.yksikkö || 'kpl',
-          tuotenimi: rivi.tuotenimi,
-          alvkoodi: rivi.alvkoodi || '',
-          Tilausnumero: rivi.Tilausnumero || `LASKU-${Date.now()}`
-        })),
+        laskurivit: laskurivitWithSelvitys,
         luontipaiva: new Date().toISOString(),
         kokonaissumma: laskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
       };

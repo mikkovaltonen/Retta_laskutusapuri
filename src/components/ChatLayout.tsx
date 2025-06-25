@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Database, MessageSquare, FileText, Download, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ChatAI } from './ChatAI';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface DatabaseRecord {
   id: string;
@@ -27,6 +29,7 @@ export const ChatLayout: React.FC = () => {
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const { user } = useAuth();
@@ -103,22 +106,88 @@ export const ChatLayout: React.FC = () => {
 
       // Load myyntilaskut data in hierarchical format
       const myyntilaskutDocuments = await storageService.getUserMyyntilaskutDocuments(user.uid);
+      
+      // Create a lookup map from tilaus data for joining
+      const tilausLookup = new Map();
+      const tilausProductLookup = new Map(); // For product matching
+      
+      tilausRecords.forEach(tilausRecord => {
+        // Try to find the company ID field - could be various names
+        const companyIdField = Object.keys(tilausRecord).find(key => 
+          key.includes('Yhtiön tunnus') || key.includes('yhtiön tunnus') || 
+          key.includes('Yhtiötunnus') || key.includes('yhtiötunnus') ||
+          key.toLowerCase().includes('company') && key.toLowerCase().includes('id')
+        );
+        
+        if (companyIdField && tilausRecord[companyIdField]) {
+          const companyId = String(tilausRecord[companyIdField]).trim();
+          
+          // Store header info
+          if (!tilausLookup.has(companyId)) {
+            tilausLookup.set(companyId, {
+              tilaustunnus: tilausRecord['Tilaustunnus'] || tilausRecord['tilaustunnus'] || tilausRecord['Order'] || '',
+              yhtiönNimi: tilausRecord['Yhtiön nimi'] || tilausRecord['yhtiön nimi'] || tilausRecord['Company'] || '',
+              tilaajanNimi: tilausRecord['Tilaajan nimi'] || tilausRecord['tilaajan nimi'] || tilausRecord['Orderer'] || ''
+            });
+          }
+          
+          // Store product info for matching
+          const tilattuTuote = tilausRecord['Tilattu tuote'] || tilausRecord['tilattu tuote'] || tilausRecord['Product'] || '';
+          if (tilattuTuote) {
+            if (!tilausProductLookup.has(companyId)) {
+              tilausProductLookup.set(companyId, []);
+            }
+            tilausProductLookup.get(companyId).push(String(tilattuTuote).trim());
+          }
+        }
+      });
+      
       const invoiceHeaders = myyntilaskutDocuments.flatMap(doc => 
-        doc.jsonData?.map((lasku, laskuIndex) => ({
-          id: `${doc.id}_${laskuIndex}`,
-          docId: doc.id,
-          firestoreDocId: lasku.id, // The real Firestore document ID
-          asiakasnumero: lasku.asiakasnumero,
-          laskuotsikko: lasku.laskuotsikko || 'Myyntilasku',
-          luontipaiva: lasku.luontipaiva,
-          kokonaissumma: lasku.kokonaissumma,
-          rivienMaara: lasku.laskurivit?.length || 0,
-          laskurivit: lasku.laskurivit?.map((rivi, riviIndex) => ({
-            id: `${doc.id}_${laskuIndex}_${riviIndex}`,
-            invoiceId: `${doc.id}_${laskuIndex}`,
-            ...rivi
-          })) || []
-        })) || []
+        doc.jsonData?.map((lasku, laskuIndex) => {
+          // Look up tilaus data using asiakasnumero (which corresponds to Tampuurinumero)
+          const tilausInfo = tilausLookup.get(String(lasku.asiakasnumero || '').trim()) || {
+            tilaustunnus: '',
+            yhtiönNimi: '',
+            tilaajanNimi: ''
+          };
+          
+          return {
+            id: `${doc.id}_${laskuIndex}`,
+            docId: doc.id,
+            firestoreDocId: lasku.id, // The real Firestore document ID
+            asiakasnumero: lasku.asiakasnumero,
+            laskuotsikko: lasku.laskuotsikko || 'Myyntilasku',
+            luontipaiva: lasku.luontipaiva,
+            kokonaissumma: lasku.kokonaissumma,
+            rivienMaara: lasku.laskurivit?.length || 0,
+            // Add tilaus information
+            tilaustunnus: tilausInfo.tilaustunnus,
+            yhtiönNimi: tilausInfo.yhtiönNimi,
+            tilaajanNimi: tilausInfo.tilaajanNimi,
+            laskurivit: lasku.laskurivit?.map((rivi, riviIndex) => {
+              // Find matching "Tilattu tuote" based on description similarity
+              const customerProducts = tilausProductLookup.get(String(lasku.asiakasnumero || '').trim()) || [];
+              let tilattuTuote = '';
+              
+              if (customerProducts.length > 0 && rivi.kuvaus) {
+                const description = String(rivi.kuvaus).toLowerCase().trim();
+                // Find best match by checking if tilaus product name is contained in description
+                const bestMatch = customerProducts.find(product => 
+                  description.includes(String(product).toLowerCase().trim()) ||
+                  String(product).toLowerCase().trim().includes(description)
+                );
+                tilattuTuote = bestMatch || '';
+              }
+              
+              return {
+                id: `${doc.id}_${laskuIndex}_${riviIndex}`,
+                invoiceId: `${doc.id}_${laskuIndex}`,
+                tilattuTuote,
+                ...rivi
+              };
+            }) || []
+          };
+        }) || []
       );
       setMyyntilaskutData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
 
@@ -308,13 +377,16 @@ export const ChatLayout: React.FC = () => {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-gray-100 sticky top-0">
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Valitse</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Asiakas</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Otsikko</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Päivämäärä</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Summa</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Rivit</th>
-                  <th className="border-b px-2 py-1 text-left font-medium text-xs">Toiminnot</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Valitse</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Asiakas</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilaustunnus</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Yhtiön nimi</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilaajan nimi</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Otsikko</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Päivämäärä</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Summa</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Rivit</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
                 </tr>
               </thead>
               <tbody>
@@ -324,7 +396,7 @@ export const ChatLayout: React.FC = () => {
                     className={`cursor-pointer hover:bg-gray-50 ${selectedInvoiceId === invoice.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
                     onClick={() => setSelectedInvoiceId(invoice.id)}
                   >
-                    <td className="border-b px-2 py-1">
+                    <td className="border-b px-1 py-1">
                       <input 
                         type="radio" 
                         checked={selectedInvoiceId === invoice.id}
@@ -332,13 +404,22 @@ export const ChatLayout: React.FC = () => {
                         className="w-3 h-3"
                       />
                     </td>
-                    <td className="border-b px-2 py-1 text-xs">
+                    <td className="border-b px-1 py-1 text-xs">
                       {invoice.asiakasnumero || '-'}
                     </td>
-                    <td className="border-b px-2 py-1 text-xs truncate max-w-[100px]" title={invoice.laskuotsikko}>
+                    <td className="border-b px-1 py-1 text-xs truncate max-w-[80px]" title={invoice.tilaustunnus}>
+                      {invoice.tilaustunnus || '-'}
+                    </td>
+                    <td className="border-b px-1 py-1 text-xs truncate max-w-[100px]" title={invoice.yhtiönNimi}>
+                      {invoice.yhtiönNimi || '-'}
+                    </td>
+                    <td className="border-b px-1 py-1 text-xs truncate max-w-[100px]" title={invoice.tilaajanNimi}>
+                      {invoice.tilaajanNimi || '-'}
+                    </td>
+                    <td className="border-b px-1 py-1 text-xs truncate max-w-[80px]" title={invoice.laskuotsikko}>
                       {invoice.laskuotsikko}
                     </td>
-                    <td className="border-b px-2 py-1 text-xs">
+                    <td className="border-b px-1 py-1 text-xs">
                       {invoice.luontipaiva ? (() => {
                         // Handle Firebase Timestamp
                         if (invoice.luontipaiva && typeof invoice.luontipaiva === 'object' && 'seconds' in invoice.luontipaiva) {
@@ -355,13 +436,13 @@ export const ChatLayout: React.FC = () => {
                         return new Date(invoice.luontipaiva).toLocaleDateString('fi-FI');
                       })() : '-'}
                     </td>
-                    <td className="border-b px-2 py-1 text-xs">
+                    <td className="border-b px-1 py-1 text-xs">
                       {invoice.kokonaissumma ? `${invoice.kokonaissumma}€` : '-'}
                     </td>
-                    <td className="border-b px-2 py-1 text-xs">
+                    <td className="border-b px-1 py-1 text-xs">
                       {invoice.rivienMaara || 0} kpl
                     </td>
-                    <td className="border-b px-2 py-1">
+                    <td className="border-b px-1 py-1">
                       <Button
                         variant="destructive"
                         size="sm"
@@ -393,12 +474,17 @@ export const ChatLayout: React.FC = () => {
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Määrä</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">á-hinta</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Kuvaus</th>
+                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilattu tuote</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedInvoice.laskurivit.map((line, index) => (
-                    <tr key={line.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                    <tr 
+                      key={line.id} 
+                      className={`cursor-pointer ${selectedLineId === line.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}
+                      onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
+                    >
                       <td className="border-b px-1 py-1 text-xs">
                         {editingCell?.rowId === line.id && editingCell?.field === 'tuotekoodi' ? (
                           <div className="flex gap-1">
@@ -504,6 +590,9 @@ export const ChatLayout: React.FC = () => {
                           </span>
                         )}
                       </td>
+                      <td className="border-b px-1 py-1 text-xs max-w-[120px] truncate" title={line.tilattuTuote}>
+                        {line.tilattuTuote || '-'}
+                      </td>
                       <td className="border-b px-1 py-1">
                         <Button
                           variant="destructive"
@@ -521,6 +610,28 @@ export const ChatLayout: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Selected Line Item Explanation */}
+        {selectedInvoice && selectedLineId && (() => {
+          const selectedLine = selectedInvoice.laskurivit?.find(line => line.id === selectedLineId);
+          if (!selectedLine) return null;
+          
+          return (
+            <div className="space-y-2 mt-4">
+              <h4 className="font-medium text-sm">Laskutusselvitys: {selectedLine.tuotenimi}</h4>
+              <div className="border rounded p-3 bg-gray-50 max-h-96 overflow-y-auto">
+                <div className="text-sm prose prose-sm max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {selectedLine.selvitys || 'Selvitystä ei ole saatavilla tälle laskuriville.'}
+                  </ReactMarkdown>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Klikkaa laskuriviä nähdäksesi sen selvityksen. Klikkaa uudelleen piilottaaksesi.
+              </p>
+            </div>
+          );
+        })()}
 
         {selectedInvoice && (!selectedInvoice.laskurivit || selectedInvoice.laskurivit.length === 0) && (
           <div className="text-center py-4 text-gray-500">
