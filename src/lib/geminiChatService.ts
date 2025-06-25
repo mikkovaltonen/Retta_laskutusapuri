@@ -523,12 +523,35 @@ class GeminiChatService {
       const functionCalls: string[] = [];
       let finalContent = '';
       
-      if (response.functionCalls() && response.functionCalls().length > 0) {
-        console.log('🔧 Function calls detected:', response.functionCalls().length);
+      // Handle iterative function calling
+      let currentResponse = response;
+      let iterationCount = 0;
+      const maxIterations = 10; // Prevent infinite loops
+      let hadFunctionCalls = false;
+      
+      while (iterationCount < maxIterations) {
+        const hasFunctionCalls = currentResponse.functionCalls() && currentResponse.functionCalls().length > 0;
+        
+        if (!hasFunctionCalls) {
+          // If no function calls in this iteration, check if we had them before
+          if (hadFunctionCalls) {
+            // We just finished processing function calls, this should be the final response
+            console.log(`✅ Final response after ${iterationCount} function call iterations`);
+            break;
+          } else {
+            // No function calls at all, use direct response
+            console.log('💭 No function calls, using direct response');
+            break;
+          }
+        }
+        
+        iterationCount++;
+        hadFunctionCalls = true;
+        console.log(`🔧 Function call iteration ${iterationCount}, detected:`, currentResponse.functionCalls().length, 'calls');
         
         const functionResponses = [];
         
-        for (const call of response.functionCalls()) {
+        for (const call of currentResponse.functionCalls()) {
           const functionName = call.name;
           const args = call.args;
           
@@ -564,16 +587,14 @@ class GeminiChatService {
           });
         }
         
-        // Send all function results back to model at once
-        console.log('📤 Sending function results back to Gemini...');
-        const finalResult = await session.sendMessage(functionResponses);
-        finalContent = finalResult.response.text();
-        console.log('✅ Final response received from Gemini');
-      } else {
-        // No function calls, use the original response
-        console.log('💭 No function calls, using direct response');
-        finalContent = response.text();
+        // Send function results and get next response
+        console.log(`📤 Sending function results back to Gemini (iteration ${iterationCount})...`);
+        currentResponse = await session.sendMessage(functionResponses);
+        console.log(`✅ Response received from iteration ${iterationCount}`);
       }
+      
+      // Always use the current response text
+      finalContent = currentResponse.text();
       
       const chatMessage = {
         id: Date.now().toString(),
