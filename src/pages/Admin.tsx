@@ -8,7 +8,8 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import DocumentAnalysis from "@/components/DocumentAnalysis";
 import { PriceListUpload } from "@/components/PriceListUpload";
 import { OrderUpload } from "@/components/OrderUpload";
-import { ERPApiTester } from "@/components/ERPApiTester";
+import { HinnastoApiTester } from "@/components/HinnastoApiTester";
+import { TilausApiTester } from "@/components/TilausApiTester";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,8 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPriceListUpload, setShowPriceListUpload] = useState(false);
   const [showOrderUpload, setShowOrderUpload] = useState(false);
-  const [showApiTester, setShowApiTester] = useState(false);
+  const [showHinnastoApiTester, setShowHinnastoApiTester] = useState(false);
+  const [showTilausApiTester, setShowTilausApiTester] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -211,36 +213,72 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
           </Card>
           )}
 
-          {/* ERP API Testing - Hidden for competitive_bidding workspace */}
+          {/* Hinnasto API Testing - Hidden for competitive_bidding workspace */}
           {currentWorkspace !== 'competitive_bidding' && (
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="bg-gray-700 text-white rounded-t-lg">
               <CardTitle className="flex items-center">
                 <Database className="mr-3 h-6 w-6" />
-                Ostolasku API Testaus
+                Hinnasto API Testaus
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <p className="text-gray-600 mb-4">
-                Testaa sisäistä ERP API:a hakutoiminnallisuudella. Hae toimittajan, summan, päivämäärän tai ostolaskun tilan perusteella.
+                Testaa hinnasto-datan hakutoiminnallisuutta. Hae tuotetunnuksen, tuotteen tai hintojen perusteella.
               </p>
-              <Dialog open={showApiTester} onOpenChange={setShowApiTester}>
+              <Dialog open={showHinnastoApiTester} onOpenChange={setShowHinnastoApiTester}>
                 <DialogTrigger asChild>
                   <Button 
                     className="w-full bg-gray-700 hover:bg-gray-600 text-white"
                   >
                     <Database className="mr-2 h-4 w-4" />
-                    Test ERP API
+                    Test Hinnasto API
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Ostolasku API Testaus Interface</DialogTitle>
+                    <DialogTitle>Hinnasto API Testaus Interface</DialogTitle>
                     <DialogDescription>
-                      Testaa ERP haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
+                      Testaa hinnasto haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
                     </DialogDescription>
                   </DialogHeader>
-                  <ERPApiTester />
+                  <HinnastoApiTester />
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+          )}
+
+          {/* Tilaus API Testing - Hidden for competitive_bidding workspace */}
+          {currentWorkspace !== 'competitive_bidding' && (
+          <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="bg-gray-700 text-white rounded-t-lg">
+              <CardTitle className="flex items-center">
+                <Database className="mr-3 h-6 w-6" />
+                Tilaus API Testaus
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-gray-600 mb-4">
+                Testaa tilaus-datan hakutoiminnallisuutta. Hae kaikkien saatavilla olevien kenttien perusteella.
+              </p>
+              <Dialog open={showTilausApiTester} onOpenChange={setShowTilausApiTester}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white"
+                  >
+                    <Database className="mr-2 h-4 w-4" />
+                    Test Tilaus API
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Tilaus API Testaus Interface</DialogTitle>
+                    <DialogDescription>
+                      Testaa tilaus haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <TilausApiTester />
                 </DialogContent>
               </Dialog>
             </CardContent>

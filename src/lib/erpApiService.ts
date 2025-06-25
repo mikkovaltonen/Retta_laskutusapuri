@@ -138,7 +138,7 @@ export class ERPApiService {
       console.log(`📄 Found ${erpDocuments.length} ERP documents for user, combining all data for search.`);
 
       // Combine JSON data from all ERP documents
-      let allJsonRecords: Record<string, unknown>[] = [];
+      const allJsonRecords: Record<string, unknown>[] = [];
 
       for (const erpDoc of erpDocuments) {
         console.log(`📊 Processing document: ${erpDoc.name}`);
