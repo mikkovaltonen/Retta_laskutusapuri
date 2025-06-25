@@ -1,9 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-
-# Gemini API 
-
-- Use only the gemini 2.5 Pro

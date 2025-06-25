@@ -98,16 +98,23 @@ class GeminiChatService {
             },
             {
               name: 'createLasku',
-              description: 'Create and save new invoice lines to the laskut collection',
+              description: 'Create and save new invoice with header and lines. Creates one invoice per unique customer.',
               parameters: {
                 type: 'object',
                 properties: {
+                  asiakasnumero: { 
+                    type: 'string', 
+                    description: 'Customer number (header level) - all lines must be for this customer' 
+                  },
+                  laskuotsikko: {
+                    type: 'string',
+                    description: 'Invoice title or description (header level)'
+                  },
                   laskurivit: {
                     type: 'array',
                     items: {
                       type: 'object',
                       properties: {
-                        asiakasnumero: { type: 'string', description: 'Customer number' },
                         reskontra: { type: 'string', description: 'Account type (e.g., MK)' },
                         tuotekoodi: { type: 'string', description: 'Product code' },
                         määrä: { type: 'number', description: 'Quantity' },
@@ -118,16 +125,12 @@ class GeminiChatService {
                         alvkoodi: { type: 'string', description: 'VAT code (optional)' },
                         Tilausnumero: { type: 'string', description: 'Order number' }
                       },
-                      required: ['asiakasnumero', 'tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi']
+                      required: ['tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi']
                     },
-                    description: 'Array of invoice lines to create'
-                  },
-                  laskuotsikko: {
-                    type: 'string',
-                    description: 'Invoice title or description (optional)'
+                    description: 'Array of invoice lines for this customer'
                   }
                 },
-                required: ['laskurivit']
+                required: ['asiakasnumero', 'laskurivit']
               }
             }
           ]
@@ -276,7 +279,15 @@ class GeminiChatService {
     console.log('💰 createLasku called with params:', { userId, params });
     
     try {
-      const { laskurivit, laskuotsikko } = params;
+      const { asiakasnumero, laskurivit, laskuotsikko } = params;
+      
+      // Validate header fields
+      if (!asiakasnumero) {
+        return {
+          success: false,
+          error: 'Asiakasnumero on pakollinen header-kenttä'
+        };
+      }
       
       if (!laskurivit || !Array.isArray(laskurivit) || laskurivit.length === 0) {
         return {
@@ -285,10 +296,10 @@ class GeminiChatService {
         };
       }
 
-      // Validate each laskurivi
+      // Validate each laskurivi (asiakasnumero no longer in line level)
       for (let i = 0; i < laskurivit.length; i++) {
         const rivi = laskurivit[i];
-        const requiredFields = ['asiakasnumero', 'tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi'];
+        const requiredFields = ['tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi'];
         
         for (const field of requiredFields) {
           if (!rivi[field]) {
@@ -315,12 +326,12 @@ class GeminiChatService {
         }
       }
 
-      // Prepare document to save
+      // Prepare document to save (new structure with header-level customer)
       const laskuDocument = {
         userId,
-        laskuotsikko: laskuotsikko || 'Uusi lasku',
+        asiakasnumero, // Header level customer number
+        laskuotsikko: laskuotsikko || 'Edelleenlaskutus',
         laskurivit: laskurivit.map(rivi => ({
-          asiakasnumero: rivi.asiakasnumero,
           reskontra: rivi.reskontra || 'MK',
           tuotekoodi: rivi.tuotekoodi,
           määrä: Number(rivi.määrä),

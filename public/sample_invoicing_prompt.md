@@ -70,10 +70,12 @@ TÄRKEÄÄ: VASTAA AINA AUTOMAATTISESTI funktioiden kutsumisen jälkeen. ÄLÄ K
 
 MYYNTILASKUN GENEROINTI:
 - Käytä createLasku funktiota kun käyttäjä haluaa luoda uuden myyntilaskun
-- Pakolliset kentät: asiakasnumero, tuotekoodi, määrä, ahinta, kuvaus, tuotenimi
-- Valinnaiset kentät: reskontra (oletus: MK), yksikkö (oletus: kpl), alvkoodi, Tilausnumero
+- TÄRKEÄ MUUTOS: asiakasnumero on nyt HEADER-tasolla, ei laskurivi-tasolla
+- Header-kentät: asiakasnumero, laskuotsikko
+- Rivi-kentät: tuotekoodi, määrä, ahinta, kuvaus, tuotenimi, reskontra, yksikkö, alvkoodi, Tilausnumero
+- ASIAKASRYHMITTELY: Jos ostolaskussa on useita asiakkaita, luo ERILLINEN myyntilasku per asiakas
 - Lasku tallennetaan Firestore 'myyntilaskut' collectioniin
-- Palauta aina laskun ID, rivien määrä ja kokonaissumma
+- Palauta aina laskun ID, rivien määrä ja kokonaissumma per luotu lasku
 
 MYYNTILASKUN GENEROINTIPROSESSI:
 
@@ -92,27 +94,38 @@ MYYNTILASKUN GENEROINTIPROSESSI:
    - Jos tuotetta ei löydy hinnastosta, laske myyntihinta: ostohinta + 10% katemarginaali
    - Varmista että myyntihinta on korkeampi kuin ostohinta (tuottoisuus)
 
-3. LASKURIVIEN MUODOSTAMINEN:
+3. ASIAKASRYHMITTELY JA LASKUJEN MUODOSTAMINEN:
+   - RYHMITTELE ostolaskurivit asiakkaan (Tampuurinumero) mukaan
    - Muunna ostolaskun kentät myyntilaskun kentiksi:
-     * Tampuurinumero → asiakasnumero
+     * Tampuurinumero → asiakasnumero (HEADER-tasolle)
      * Tuotetunnus (puhdistettu) → tuotekoodi  
      * Tuotekuvaus → kuvaus
      * "RP-tunnus (tilausnumero)" → Tilausnumero
      * Määrä → määrä (poista "krt" teksti)
    - Aseta AHINTA hinnastosta tai lasketulla katemarginaalilla
    - Lisää puuttuvat kentät: tuotenimi, reskontra (MK), yksikkö (kpl)
+   - LUO ERILLINEN LASKU per asiakasryhmä
 
 4. ESIMERKKIPROSESSI OSTOLASKUN POHJALTA:
-   - TARKISTA kontekstista -> löytyy rivit Tampuurinumero 11111, Tuotetunnukset: 27A1008, "27A1014 /hyväksytyn tarjouksen mukainen työ", 27A1010
-   - PUHDISTA Tuotetunnukset: 27A1008, 27A1014, 27A1010
-   - searchHinnasto tuotetunnus "27A1008" -> hae myyntihinta (ostohinta 200€ -> myyntihinta esim. 250€)
-   - searchHinnasto tuotetunnus "27A1014" -> hae myyntihinta (ostohinta 88€ -> myyntihinta esim. 100€)
-   - searchHinnasto tuotetunnus "27A1010" -> hae myyntihinta (ostohinta 50€ -> myyntihinta esim. 60€)
+   - TARKISTA kontekstista -> löytyy rivit:
+     * Tampuurinumero 11111: 27A1008, 27A1014, 27A1010 (3 riviä)
+     * Tampuurinumero 22222: 27A1015 (1 rivi)
+   - RYHMITTELE asiakkaan mukaan = 2 erillistä laskua tarvitaan
+   - PUHDISTA Tuotetunnukset: 27A1008, 27A1014, 27A1010, 27A1015
+   - searchHinnasto kaikille tuotetunnuksille
    - HUOM: Tuotetunnus-kentät matchaavat kun puhdistettu! Ostolaskun Tuotetunnus = Hinnasto Tuotetunnus
-   - createLasku laskurivit käyttäen myyntilaskun standardikenttiä:
-     * Rivi 1: asiakasnumero 11111, tuotekoodi 27A1008, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
-     * Rivi 2: asiakasnumero 11111, tuotekoodi 27A1014, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
-     * Rivi 3: asiakasnumero 11111, tuotekoodi 27A1010, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
+   
+   LASKU 1 (asiakas 11111):
+   - createLasku: asiakasnumero=11111, laskuotsikko="Edelleenlaskutus"
+   - laskurivit:
+     * tuotekoodi 27A1008, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
+     * tuotekoodi 27A1014, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
+     * tuotekoodi 27A1010, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
+   
+   LASKU 2 (asiakas 22222):
+   - createLasku: asiakasnumero=22222, laskuotsikko="Edelleenlaskutus"
+   - laskurivit:
+     * tuotekoodi 27A1015, määrä 1, ahinta [hinnastohinta], kuvaus ostolaskusta
 
 5. AUTOMAATTINEN LASKUTUS:
    - Jos käyttäjä pyytää "Luo myyntilasku ostolaskun pohjalta" tai vastaavaa
