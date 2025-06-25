@@ -93,9 +93,9 @@ const Index = () => {
                 <div className="h-16 w-16 rounded-2xl flex items-center justify-center" style={{backgroundColor: '#003d3b'}}>
                   <Brain className="h-8 w-8 text-white" />
                 </div>
-                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Älykkäät Raportointi</h3>
+                <h3 className="text-2xl font-light" style={{color: '#003d3b'}}>Selkeä laskutus taloyhtiöille</h3>
                 <p className="font-light leading-relaxed" style={{color: '#1e2a54'}}>
-                  Seuranta ja analytiikka laskutusprosessin tehokkuudesta ja suorituskyvystä.
+                  Kukin laskurivi sisältää AI Generoidun selvityksen laskutusperusteista ja hinnoittelusta.
                 </p>
               </CardContent>
             </Card>
