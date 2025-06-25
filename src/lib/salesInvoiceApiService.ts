@@ -87,7 +87,7 @@ export class SalesInvoiceApiService {
       console.log(`📄 Found ${invoiceDocuments.length} invoice documents for user, combining all data for search.`);
 
       // Combine JSON data from all invoice documents
-      let allJsonRecords: Record<string, unknown>[] = [];
+      const allJsonRecords: Record<string, unknown>[] = [];
 
       for (const invoiceDoc of invoiceDocuments) {
         console.log(`📊 Processing invoice document: ${invoiceDoc.name}`);

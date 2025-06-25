@@ -751,6 +751,85 @@ export class StorageService {
   }
 
   /**
+   * Get user's myyntilaskut documents
+   */
+  async getUserMyyntilaskutDocuments(userId: string): Promise<ERPDocument[]> {
+    try {
+      const recordsQ = query(
+        collection(db, 'myyntilaskut'),
+        where('userId', '==', userId)
+      );
+      
+      const recordsSnapshot = await getDocs(recordsQ);
+      const jsonData = recordsSnapshot.docs.map(recordDoc => {
+        const recordData = recordDoc.data();
+        const { userId, uploadedAt, createdAt, ...invoiceData } = recordData;
+        return {
+          id: recordDoc.id,
+          ...invoiceData
+        };
+      });
+      
+      console.log(`📋 Loaded ${jsonData.length} myyntilaskut records`);
+      
+      // Group by laskuotsikko or create single document
+      const fileGroups = new Map<string, Record<string, unknown>[]>();
+      
+      for (const doc of recordsSnapshot.docs) {
+        const data = doc.data();
+        const fileName = data.laskuotsikko || 'Myyntilaskut Data';
+        
+        if (!fileGroups.has(fileName)) {
+          fileGroups.set(fileName, []);
+        }
+        
+        const { userId, uploadedAt, createdAt, ...invoiceData } = data;
+        fileGroups.get(fileName)!.push({
+          id: doc.id,
+          ...invoiceData
+        });
+      }
+      
+      // Create ERPDocument objects for each file group
+      const documents: ERPDocument[] = [];
+      for (const [fileName, records] of fileGroups) {
+        const firstRecord = recordsSnapshot.docs.find(doc => 
+          (doc.data().laskuotsikko || 'Myyntilaskut Data') === fileName
+        );
+        const firstRecordData = firstRecord?.data();
+        
+        documents.push({
+          id: `myyntilaskut_${fileName}_${Date.now()}`,
+          name: fileName,
+          originalFormat: 'json',
+          jsonData: records,
+          sheets: ['Myyntilaskut'],
+          size: records.length * 200,
+          uploadedAt: new Date(firstRecordData?.luontipaiva || firstRecordData?.uploadedAt || new Date()),
+          userId: userId,
+          type: 'erp-integration' as const,
+          storageUrl: '',
+          downloadUrl: ''
+        });
+      }
+      
+      return documents.sort((a, b) => 
+        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      );
+    } catch (error) {
+      console.error('Failed to fetch myyntilaskut documents:', error);
+      throw new Error('Failed to fetch myyntilaskut documents');
+    }
+  }
+
+  /**
+   * Delete user's myyntilaskut documents
+   */
+  async deleteMyyntilaskutDocuments(userId: string): Promise<void> {
+    await this.deleteUserDocumentsFromCollection(userId, 'myyntilaskut');
+  }
+
+  /**
    * Download ERP document as JSON
    */
   async downloadERPDocument(document: ERPDocument): Promise<string> {

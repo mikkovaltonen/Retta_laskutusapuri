@@ -1,11 +1,11 @@
-# Reatta Laskutusapuri - AI-Powered Invoicing Assistant
+# Retta Laskutusapuri - AI-Powered Invoicing Assistant
 
-Meet the Reatta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Älykkäät laskutusratkaisut automatisoituine prosesseineen ja analytiikoineen.
+Meet the Retta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Älykkäät laskutusratkaisut automatisoituine prosesseineen ja analytiikoineen.
 
 ## Features
 
 ### 🏢 **Invoicing-Focused Architecture**
-- **Reatta Laskutus**: Intelligent billing automation and financial operations
+- **Retta Laskutus**: Intelligent billing automation and financial operations
 - **Streamlined Interface**: Single-workspace focus on invoicing excellence
 
 ### 🤖 **AI-Powered Operations**
@@ -39,6 +39,26 @@ Meet the Reatta Laskutusapuri – tekoälyapurisi laskutuksen tehostamiseen. Äl
 - **Database**: Firebase Firestore for prompt versioning and session management
 - **State Management**: React Hooks
 - **Authentication**: Firebase Auth with custom user management
+
+## AI Configuration
+
+### Gemini Model Settings
+- **Model**: gemini-2.5-pro
+- **Temperature**: 0.1 (optimized for accuracy and consistency in financial calculations)
+- **Max Output Tokens**: 8192
+- **Function Calling**: Enabled for data queries and invoice generation
+
+The low temperature (0.1) ensures:
+- Maximum accuracy in price calculations
+- Consistent and repeatable results
+- Minimal creativity/variation in financial data processing
+- Reliable function calling behavior
+
+**Why 0.1 Temperature for Invoicing:**
+- Financial calculations require precision and consistency
+- Same inputs should produce identical outputs for auditing
+- Reduces AI "hallucinations" in numerical data
+- Ensures predictable function calling patterns
 
 ## Excel Data Flow Architecture
 

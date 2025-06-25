@@ -48,8 +48,10 @@
       "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"class ERPApiService\" -A 20 src/lib/erpApiService.ts)",
       "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n -A 15 \"getUserERPDocuments\" src/lib/storageService.ts)",
       "Bash(/usr/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"getAvailableFields\\|getSampleData\" src/lib/erpApiService.ts)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
-  }
+  },
+  "enableAllProjectMcpServers": false
 }

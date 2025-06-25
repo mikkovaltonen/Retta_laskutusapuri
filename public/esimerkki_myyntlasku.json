@@ -1,0 +1,38 @@
+[
+    {
+      "asiakasnumero": "11111",
+      "reskontra": "MK",
+      "tuotekoodi": "2078",
+      "määrä": 1,
+      "ahinta": 250,
+      "kuvaus": "vuosihuoltosopimuksen mukainen huoltokäynti L",
+      "yksikkö": "kpl",
+      "tuotenimi": "Ovihuolto huolto- ja kartoituspalvelut",
+      "alvkoodi": "",
+      "Tilausnumero": "RP-3005250926195552"
+    },
+    {
+      "asiakasnumero": "11111",
+      "reskontra": "MK",
+      "tuotekoodi": "2079",
+      "määrä": 1,
+      "ahinta": 100,
+      "kuvaus": "asennustyö 1h (kohteen liiketilojen ulko-ovien huolto tuntityönä)",
+      "yksikkö": "kpl",
+      "tuotenimi": "Ovihuolto korjaus ja asennus",
+      "alvkoodi": "",
+      "Tilausnumero": "RP-3005250926195552"
+    },
+    {
+      "asiakasnumero": "11111",
+      "reskontra": "MK",
+      "tuotekoodi": "2079",
+      "määrä": 1,
+      "ahinta": 60,
+      "kuvaus": "kilometrikorvaus",
+      "yksikkö": "kpl",
+      "tuotenimi": "Ovihuolto korjaus ja asennus",
+      "alvkoodi": "",
+      "Tilausnumero": "RP-3005250926195552"
+    }
+  ]
