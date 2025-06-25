@@ -244,23 +244,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         recordCount: jsonData.length
       });
 
-      // Add confirmation message to chat
-      const confirmationMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `📄 **Ostolasku ladattu onnistuneesti!**
-
-Tiedosto: \`${file.name}\`  
-Laskurivejä: **${jsonData.length} kpl**
-
-Voit nyt kysyä minulta ostolaskun sisältöön liittyviä kysymyksiä, kuten:
-• "Näytä kaikki laskurivit"
-• "Hae tuotekoodi 2078"
-• "Mikä on asiakkaan 11111 kokonaissumma?"`,
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, confirmationMessage]);
+      // File uploaded successfully - status is shown in the upload indicator below
       
     } catch (err) {
       console.error('❌ JSON parsing failed:', err);
