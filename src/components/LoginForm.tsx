@@ -68,7 +68,7 @@ const LoginForm = () => {
       <Card className="w-full max-w-md border-indigo-200 shadow-xl">
         <CardHeader className="space-y-2 text-center bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-t-lg">
           <Link to="/" className="flex flex-col items-center mb-6">
-            <span className="text-3xl font-bold tracking-wider text-white">REATTA</span>
+            <span className="text-3xl font-bold tracking-wider text-white">RETTA</span>
             <span className="text-indigo-100 text-sm font-medium">Laskutusapuri</span>
           </Link>
           <CardTitle className="text-2xl font-bold text-white">Login</CardTitle>
