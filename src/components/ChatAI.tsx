@@ -7,9 +7,10 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet } from 'lucide-react';
+import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
@@ -31,6 +32,10 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
   const [messageFeedback, setMessageFeedback] = useState<Record<string, 'thumbs_up' | 'thumbs_down'>>({});
   const [ostolaskuData, setOstolaskuData] = useState<any[]>([]);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [uploadedWorkbook, setUploadedWorkbook] = useState<any>(null);
+  const [showSheetSelector, setShowSheetSelector] = useState(false);
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -248,16 +253,22 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
-        // Look for 'Ostolasku' sheet first, otherwise use the first sheet
-        const sheetName = workbook.SheetNames.includes('Ostolasku') 
-          ? 'Ostolasku' 
-          : workbook.SheetNames[0];
-        
-        if (!sheetName) {
+        if (workbook.SheetNames.length === 0) {
           setError('Excel-tiedostossa ei ole yhtään välilehteä');
           return;
         }
         
+        // If multiple sheets, show selector
+        if (workbook.SheetNames.length > 1) {
+          setUploadedWorkbook(workbook);
+          setAvailableSheets(workbook.SheetNames);
+          setUploadedFileName(file.name);
+          setShowSheetSelector(true);
+          return;
+        }
+        
+        // Single sheet - process directly
+        const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         jsonData = XLSX.utils.sheet_to_json(worksheet);
         
@@ -313,6 +324,57 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleSheetSelection = async (sheetName: string) => {
+    if (!uploadedWorkbook) return;
+
+    try {
+      const worksheet = uploadedWorkbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (jsonData.length === 0) {
+        setError('Valittu välilehti on tyhjä');
+        return;
+      }
+
+      setOstolaskuData(jsonData);
+      setError(null);
+      setShowSheetSelector(false);
+      
+      toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      
+      console.log('✅ Ostolasku sheet selected:', {
+        fileName: uploadedFileName,
+        sheetName,
+        recordCount: jsonData.length
+      });
+
+      // Re-initialize chat with ostolasku data in context
+      if (user && systemPrompt && sessionId) {
+        console.log('🔄 Re-initializing chat with ostolasku data...');
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuData: jsonData
+        };
+
+        try {
+          await geminiChatService.initializeSession(context);
+          setSessionId(newSessionId);
+          console.log('✅ Chat re-initialized with ostolasku data');
+        } catch (err) {
+          console.error('❌ Failed to re-initialize chat:', err);
+        }
+      }
+      
+    } catch (err) {
+      console.error('❌ Sheet processing failed:', err);
+      setError('Välilehden käsittely epäonnistui');
+    }
   };
 
   const loadExampleOstolasku = async () => {
@@ -393,6 +455,16 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Lataa ostolasku</span>
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowInfoDialog(true)}
+              title="Näytä tuettu ostolaskujen sarakerakenne"
+              className="flex items-center"
+            >
+              <Info className="w-4 h-4" />
             </Button>
             
             <Button
@@ -606,6 +678,101 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         style={{ display: 'none' }}
       />
 
+      {/* Info Dialog - Ostolaskujen sarakerakenne */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tuettu ostolaskujen sarakerakenne</DialogTitle>
+            <DialogDescription>
+              Ohje ostolaskutiedostojen rakenteesta. Voit käyttää joko JSON- tai Excel-tiedostoja.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <h4 className="font-semibold text-sm mb-2">📋 Suositellut sarakkeet:</h4>
+              <div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2">
+                <div><strong>Asiakasnumero:</strong> Asiakkaan yksilöivä numero</div>
+                <div><strong>Tuotekoodi:</strong> Tuotteen tai palvelun koodi</div>
+                <div><strong>Tuotenimi:</strong> Tuotteen tai palvelun nimi</div>
+                <div><strong>Määrä:</strong> Tilausmäärä (numero)</div>
+                <div><strong>Hinta:</strong> Yksikköhinta (numero)</div>
+                <div><strong>Kuvaus:</strong> Tuotteen tai palvelun kuvaus</div>
+                <div><strong>Tilausnumero:</strong> Alkuperäinen tilausnumero (valinnainen)</div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-sm mb-2">📁 Tuetut tiedostomuodot:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                  <span><strong>Excel (.xlsx, .xls):</strong> Voit valita välilehden jos tiedostossa on useita</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                  <span><strong>JSON:</strong> Taulukkomuotoinen JSON-array</span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-sm mb-2">💡 Vinkit:</h4>
+              <div className="bg-blue-50 p-4 rounded-lg text-sm space-y-1">
+                <div>• Varmista että sarakkeiden nimet ovat selkeitä</div>
+                <div>• Numerot (määrä, hinta) tulee olla numeromuodossa</div>
+                <div>• Tyhjät rivit ja sarakkeet ohitetaan automaattisesti</div>
+                <div>• Voit ladata esimerkkitiedoston "Lataa esimerkki" -painikkeesta</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowInfoDialog(false)}>
+              Sulje
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet Selector Dialog */}
+      <Dialog open={showSheetSelector} onOpenChange={setShowSheetSelector}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Valitse Excel välilehti</DialogTitle>
+            <DialogDescription>
+              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää ostolasku-datan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            {availableSheets.map((sheetName) => (
+              <Button
+                key={sheetName}
+                variant="outline"
+                onClick={() => handleSheetSelection(sheetName)}
+                className="justify-start h-auto p-4"
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                <div className="text-left">
+                  <div className="font-medium">{sheetName}</div>
+                  <div className="text-xs text-gray-500">Excel välilehti</div>
+                </div>
+              </Button>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setShowSheetSelector(false);
+                setUploadedWorkbook(null);
+                setAvailableSheets([]);
+                setUploadedFileName('');
+              }}
+            >
+              Peruuta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Input */}
       <div className="p-4 border-t">
