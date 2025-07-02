@@ -7,7 +7,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Upload, FileSpreadsheet, AlertCircle, Database, Download, Trash2, Eye } from 'lucide-react';
+import { Upload, FileSpreadsheet, AlertCircle, Database, Download, Trash2, Eye, Info } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import {
   Dialog,
@@ -31,6 +31,7 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
   const [documents, setDocuments] = useState<ERPDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewDoc, setPreviewDoc] = useState<ERPDocument | null>(null);
+  const [showFormatDialog, setShowFormatDialog] = useState(false);
   const { user } = useAuth();
   const { currentWorkspace } = useWorkspace();
 
@@ -153,7 +154,7 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
       
       // Fetch the sample Excel file from public directory with cache busting
       const cacheBuster = Date.now() + Math.random().toString(36).substring(7);
-      const sampleFile = 'Ostomyynti AI botti testi excel.xlsx';
+      const sampleFile = 'Ostomyynti_AI_botti_testi_excel.xlsx';
       const response = await fetch(`/${sampleFile}?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
@@ -195,13 +196,80 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
   return (
     <Card className="w-full max-w-2xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Database className="w-5 h-5" />
-          Tilaus Datan Lataus
-        </CardTitle>
-        <CardDescription>
-          Lataa Excel-tiedostosi tilaus-datalla (Tilaus välilehti)
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              Tilaus Datan Lataus
+            </CardTitle>
+            <CardDescription>
+              Lataa Excel-tiedostosi tilaus-datalla
+            </CardDescription>
+          </div>
+          <Dialog open={showFormatDialog} onOpenChange={setShowFormatDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Info className="w-4 h-4 mr-2" />
+                Tiedostomuoto
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Tilausten tiedostomuoto</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Tuetut tiedostotyypit:</h4>
+                  <Badge variant="secondary">.xlsx</Badge>
+                  <Badge variant="secondary" className="ml-2">.xls</Badge>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium mb-2">Vaaditut sarakkeet:</h4>
+                  <div className="bg-gray-50 p-3 rounded-md">
+                    <table className="text-sm w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left pb-2">Sarake</th>
+                          <th className="text-left pb-2">Kuvaus</th>
+                        </tr>
+                      </thead>
+                      <tbody className="space-y-1">
+                        <tr>
+                          <td className="font-mono py-1">Yhtön tunnus</td>
+                          <td className="text-gray-600">Asiakkaan ID</td>
+                        </tr>
+                        <tr>
+                          <td className="font-mono py-1">Yhtön nimi</td>
+                          <td className="text-gray-600">Asiakkaan nimi</td>
+                        </tr>
+                        <tr>
+                          <td className="font-mono py-1">Tilaustunnus</td>
+                          <td className="text-gray-600">Tilauksen numero</td>
+                        </tr>
+                        <tr>
+                          <td className="font-mono py-1">Tilattu tuote</td>
+                          <td className="text-gray-600">Tuotteen nimi</td>
+                        </tr>
+                        <tr>
+                          <td className="font-mono py-1">Tilaajan nimi</td>
+                          <td className="text-gray-600">Tilaajan nimi</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Excel-tiedostossa tulee olla "Tilaus" niminen välilehti
+                  </AlertDescription>
+                </Alert>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {error && (
@@ -225,19 +293,19 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
           <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-gray-400" />
           
           {uploading ? (
-            <p className="text-gray-600">Processing Excel file...</p>
+            <p className="text-gray-600">Käsitellään tiedostoa...</p>
           ) : !user ? (
-            <p className="text-gray-600">Please log in to upload files</p>
+            <p className="text-gray-600">Kirjaudu sisään ladataksesi tiedostoja</p>
           ) : isDragActive ? (
-            <p className="text-primary">Drop the file here...</p>
+            <p className="text-primary">Pudota tiedosto tähän...</p>
           ) : (
             <>
               <p className="text-gray-600 mb-2">
-                Drag & drop an Excel file here, or click to select
+                Vedä Excel-tiedosto tähän tai klikkaa valitaksesi
               </p>
-              <p className="text-sm text-gray-500">
-                Supports .xlsx and .xls files up to 25MB
-              </p>
+              <Badge variant="outline" className="text-xs">
+                Excel .xlsx/.xls • max 25MB
+              </Badge>
             </>
           )}
         </div>
@@ -248,7 +316,7 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
             disabled={uploading}
             className="w-full bg-green-600 hover:bg-green-700 text-white"
           >
-            📋 Lataa Tilaus Data
+            📋 Lataa esimerkki tilaus data
           </Button>
         </div>
 

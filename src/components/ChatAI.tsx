@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useWorkspace } from '../hooks/useWorkspace';
 import { geminiChatService, ChatMessage, ChatContext } from '../lib/geminiChatService';
 import { loadLatestPrompt, setUserFeedback, createContinuousImprovementSession } from '../lib/firestoreService';
 import { Button } from './ui/button';
@@ -8,11 +7,14 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw } from 'lucide-react';
+import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 
 interface ChatAIProps {
   className?: string;
@@ -30,8 +32,11 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
   const [messageFeedback, setMessageFeedback] = useState<Record<string, 'thumbs_up' | 'thumbs_down'>>({});
   const [ostolaskuData, setOstolaskuData] = useState<any[]>([]);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [uploadedWorkbook, setUploadedWorkbook] = useState<any>(null);
+  const [showSheetSelector, setShowSheetSelector] = useState(false);
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
   const { user } = useAuth();
-  const { currentWorkspace } = useWorkspace();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,25 +52,33 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     if (!user) return;
 
     try {
-      // Get the latest system prompt version - NO FALLBACK!
-      const latestPrompt = await loadLatestPrompt(user.uid, currentWorkspace);
+      // Get the latest system prompt version
+      const latestPrompt = await loadLatestPrompt(user.uid, 'invoicer');
       if (!latestPrompt) {
-        throw new Error(`No system prompt found for workspace '${currentWorkspace}'. Please configure system prompt in Admin panel first.`);
+        // No prompt configured - show error
+        setError('Järjestelmäprompti puuttuu. Pyydä ylläpitäjää määrittämään järjestelmäprompti Admin-sivulta.');
+        setSystemPrompt('');
+      } else {
+        setSystemPrompt(latestPrompt);
       }
-      setSystemPrompt(latestPrompt);
     } catch (err) {
       console.error('Failed to load system prompt:', err);
-      setError('Failed to load system configuration');
+      setError('Järjestelmän alustuksessa tapahtui virhe. Yritä päivittää sivu.');
     }
   };
 
   const initializeChat = async () => {
-    if (!user || !systemPrompt || isInitialized) {
+    if (!user || isInitialized) {
       console.log('🔄 Skipping chat initialization:', { 
         hasUser: !!user, 
-        hasPrompt: !!systemPrompt, 
         isInitialized 
       });
+      return;
+    }
+
+    // Don't initialize if no system prompt
+    if (!systemPrompt) {
+      console.log('❌ No system prompt configured - cannot initialize chat');
       return;
     }
 
@@ -101,10 +114,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       console.log('✅ Continuous improvement session created');
 
       // Add welcome message
+      const welcomeContent = '👋 Hei! Olen Retta-laskutusavustajasi.\n\nVoit ladata ostolaskun (JSON/Excel) ja pyytää "Luo myyntilasku ostolaskun pohjalta".\n\nMiten voin auttaa?';
+        
       const welcomeMessage: ChatMessage = {
         id: 'welcome',
         role: 'assistant',
-        content: '👋 Hei! Olen Retta-laskutusavustajasi kuukausittaiseen kulujen edelleenlaskutukseen.\n\nLataa ostolasku niin voin generoida sinulle myyntilaskun.',
+        content: welcomeContent,
         timestamp: new Date()
       };
 
@@ -130,15 +145,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     }
   }, [systemPrompt, user, isInitialized]);
 
-  // Reload prompt when workspace changes
-  useEffect(() => {
-    if (user && currentWorkspace) {
-      setIsInitialized(false);
-      setMessages([]);
-      setSystemPrompt('');
-      loadSystemPrompt();
-    }
-  }, [currentWorkspace]);
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || !sessionId || !user || loading) return;
@@ -221,27 +227,126 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     if (!file) return;
 
     // Validate file type
-    if (!file.name.endsWith('.json')) {
-      setError('Vain JSON-tiedostot ovat sallittuja');
+    const isJson = file.name.endsWith('.json');
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    
+    if (!isJson && !isExcel) {
+      setError('Vain JSON- ja Excel-tiedostot ovat sallittuja');
       return;
     }
 
     try {
-      const text = await file.text();
-      const jsonData = JSON.parse(text);
+      let jsonData: any[];
       
-      // Validate it's an array
-      if (!Array.isArray(jsonData)) {
-        setError('JSON-tiedoston tulee olla taulukko (array)');
-        return;
+      if (isJson) {
+        // Handle JSON file
+        const text = await file.text();
+        jsonData = JSON.parse(text);
+        
+        // Validate it's an array
+        if (!Array.isArray(jsonData)) {
+          setError('JSON-tiedoston tulee olla taulukko (array)');
+          return;
+        }
+      } else {
+        // Handle Excel file
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        
+        if (workbook.SheetNames.length === 0) {
+          setError('Excel-tiedostossa ei ole yhtään välilehteä');
+          return;
+        }
+        
+        // If multiple sheets, show selector
+        if (workbook.SheetNames.length > 1) {
+          setUploadedWorkbook(workbook);
+          setAvailableSheets(workbook.SheetNames);
+          setUploadedFileName(file.name);
+          setShowSheetSelector(true);
+          return;
+        }
+        
+        // Single sheet - process directly
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        if (jsonData.length === 0) {
+          setError('Excel-tiedosto on tyhjä');
+          return;
+        }
+        
+        toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
       }
 
       setOstolaskuData(jsonData);
       setUploadedFileName(file.name);
       setError(null);
       
-      console.log('✅ Ostolasku JSON uploaded:', {
+      console.log('✅ Ostolasku uploaded:', {
         fileName: file.name,
+        recordCount: jsonData.length,
+        fileType: isJson ? 'JSON' : 'Excel'
+      });
+
+      // Re-initialize chat with ostolasku data in context
+      if (user && systemPrompt && sessionId) {
+        console.log('🔄 Re-initializing chat with ostolasku data...');
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuData: jsonData
+        };
+
+        try {
+          await geminiChatService.initializeSession(context);
+          setSessionId(newSessionId);
+          console.log('✅ Chat re-initialized with ostolasku data');
+        } catch (err) {
+          console.error('❌ Failed to re-initialize chat:', err);
+        }
+      }
+      
+    } catch (err) {
+      console.error('❌ File parsing failed:', err);
+      setError('Virheellinen tiedosto. Tarkista tiedoston muoto.');
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleSheetSelection = async (sheetName: string) => {
+    if (!uploadedWorkbook) return;
+
+    try {
+      const worksheet = uploadedWorkbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (jsonData.length === 0) {
+        setError('Valittu välilehti on tyhjä');
+        return;
+      }
+
+      setOstolaskuData(jsonData);
+      setError(null);
+      setShowSheetSelector(false);
+      
+      toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      
+      console.log('✅ Ostolasku sheet selected:', {
+        fileName: uploadedFileName,
+        sheetName,
         recordCount: jsonData.length
       });
 
@@ -267,18 +372,67 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       }
       
     } catch (err) {
-      console.error('❌ JSON parsing failed:', err);
-      setError('Virheellinen JSON-tiedosto. Tarkista tiedoston muoto.');
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      console.error('❌ Sheet processing failed:', err);
+      setError('Välilehden käsittely epäonnistui');
     }
   };
 
-  const triggerFileUpload = () => {
-    fileInputRef.current?.click();
+  const loadExampleOstolasku = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch the example Excel file
+      const response = await fetch('/Ostomyynti_AI_botti_testi_excel.xlsx');
+      if (!response.ok) {
+        throw new Error('Esimerkkitiedoston lataus epäonnistui');
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      
+      // Look for 'Ostolasku' sheet
+      const sheetName = workbook.SheetNames.includes('Ostolasku') 
+        ? 'Ostolasku' 
+        : workbook.SheetNames[0];
+      
+      if (!sheetName) {
+        throw new Error('Ostolasku-välilehteä ei löytynyt');
+      }
+      
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      
+      if (jsonData.length === 0) {
+        throw new Error('Esimerkkitiedosto on tyhjä');
+      }
+      
+      setOstolaskuData(jsonData);
+      setUploadedFileName('esimerkki_ostolasku.xlsx');
+      
+      toast.success(`Esimerkkiostolasku ladattu: ${jsonData.length} riviä`);
+      
+      // Re-initialize chat with ostolasku data
+      if (user && systemPrompt && sessionId) {
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuData: jsonData
+        };
+
+        await geminiChatService.initializeSession(context);
+        setSessionId(newSessionId);
+      }
+      
+    } catch (err) {
+      console.error('❌ Failed to load example:', err);
+      setError(err instanceof Error ? err.message : 'Esimerkin lataus epäonnistui');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -296,11 +450,33 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
               size="sm"
               onClick={triggerFileUpload}
               disabled={loading}
-              title="Lataa edelleen laskutettava ostolasku"
+              title="Lataa edelleen laskutettava ostolasku (JSON tai Excel)"
               className="flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Lataa ostolasku</span>
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowInfoDialog(true)}
+              title="Näytä tuettu ostolaskujen sarakerakenne"
+              className="flex items-center"
+            >
+              <Info className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadExampleOstolasku}
+              disabled={loading}
+              title="Lataa esimerkki ostolasku"
+              className="flex items-center gap-2"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span className="hidden sm:inline">Lataa esimerkki</span>
             </Button>
             
             {uploadedFileName && (
@@ -329,8 +505,19 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       {/* Error Display */}
       {error && (
         <div className="p-4">
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
+          <Alert variant={error.includes('puuttuu') ? 'default' : 'destructive'}>
+            <AlertDescription>
+              {error}
+              {error.includes('puuttuu') && (
+                <div className="mt-2">
+                  <p className="text-sm">Voit:</p>
+                  <ul className="list-disc list-inside text-sm mt-1">
+                    <li>Pyytää ylläpitäjää määrittämään systeemin ohjeistuksen</li>
+                    <li>Jos olet ylläpitäjä, siirry <a href="/workspace/invoicer/admin" className="underline font-medium">Admin-sivulle</a> määrittääksesi ohjeistuksen</li>
+                  </ul>
+                </div>
+              )}
+            </AlertDescription>
           </Alert>
         </div>
       )}
@@ -486,11 +673,106 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".json"
+        accept=".json,.xlsx,.xls"
         onChange={handleFileUpload}
         style={{ display: 'none' }}
       />
 
+      {/* Info Dialog - Ostolaskujen sarakerakenne */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tuettu ostolaskujen sarakerakenne</DialogTitle>
+            <DialogDescription>
+              Ohje ostolaskutiedostojen rakenteesta. Voit käyttää joko JSON- tai Excel-tiedostoja.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <h4 className="font-semibold text-sm mb-2">📋 Suositellut sarakkeet:</h4>
+              <div className="bg-gray-50 p-4 rounded-lg text-sm space-y-2">
+                <div><strong>Asiakasnumero:</strong> Asiakkaan yksilöivä numero</div>
+                <div><strong>Tuotekoodi:</strong> Tuotteen tai palvelun koodi</div>
+                <div><strong>Tuotenimi:</strong> Tuotteen tai palvelun nimi</div>
+                <div><strong>Määrä:</strong> Tilausmäärä (numero)</div>
+                <div><strong>Hinta:</strong> Yksikköhinta (numero)</div>
+                <div><strong>Kuvaus:</strong> Tuotteen tai palvelun kuvaus</div>
+                <div><strong>Tilausnumero:</strong> Alkuperäinen tilausnumero (valinnainen)</div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-sm mb-2">📁 Tuetut tiedostomuodot:</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                  <span><strong>Excel (.xlsx, .xls):</strong> Voit valita välilehden jos tiedostossa on useita</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                  <span><strong>JSON:</strong> Taulukkomuotoinen JSON-array</span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-sm mb-2">💡 Vinkit:</h4>
+              <div className="bg-blue-50 p-4 rounded-lg text-sm space-y-1">
+                <div>• Varmista että sarakkeiden nimet ovat selkeitä</div>
+                <div>• Numerot (määrä, hinta) tulee olla numeromuodossa</div>
+                <div>• Tyhjät rivit ja sarakkeet ohitetaan automaattisesti</div>
+                <div>• Voit ladata esimerkkitiedoston "Lataa esimerkki" -painikkeesta</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowInfoDialog(false)}>
+              Sulje
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sheet Selector Dialog */}
+      <Dialog open={showSheetSelector} onOpenChange={setShowSheetSelector}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Valitse Excel välilehti</DialogTitle>
+            <DialogDescription>
+              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää ostolasku-datan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            {availableSheets.map((sheetName) => (
+              <Button
+                key={sheetName}
+                variant="outline"
+                onClick={() => handleSheetSelection(sheetName)}
+                className="justify-start h-auto p-4"
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                <div className="text-left">
+                  <div className="font-medium">{sheetName}</div>
+                  <div className="text-xs text-gray-500">Excel välilehti</div>
+                </div>
+              </Button>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setShowSheetSelector(false);
+                setUploadedWorkbook(null);
+                setAvailableSheets([]);
+                setUploadedFileName('');
+              }}
+            >
+              Peruuta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Input */}
       <div className="p-4 border-t">

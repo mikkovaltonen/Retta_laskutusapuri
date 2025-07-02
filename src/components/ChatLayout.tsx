@@ -242,6 +242,31 @@ export const ChatLayout: React.FC = () => {
     return Math.max(minColumns, Math.min(maxColumns, 10)); // Cap at 10 columns for performance
   };
 
+  const formatCellValue = (value: unknown, header: string) => {
+    if (value === null || value === undefined) return '-';
+    
+    // Check if this is a date field by header name - be more inclusive
+    const dateFields = ['tilauspäivä', 'tilauspvm', 'luontipaiva', 'päivämäärä', 'date', 'pvm'];
+    const isDateField = dateFields.some(field => 
+      header.toLowerCase().includes(field.toLowerCase())
+    );
+    
+    // Handle Excel date conversion for date fields
+    if (isDateField && typeof value === 'number' && value > 1000) {
+      try {
+        // Excel date serial number to JavaScript Date
+        const excelEpoch = new Date(1900, 0, 1);
+        const date = new Date(excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000);
+        return date.toLocaleDateString('fi-FI');
+      } catch {
+        return String(value);
+      }
+    }
+    
+    
+    return String(value);
+  };
+
   const saveCell = async (rowId: string, field: string, value: string) => {
     if (!user) return;
     
@@ -701,11 +726,14 @@ export const ChatLayout: React.FC = () => {
             <tbody>
               {data.slice(0, 10).map((record, index) => (
                 <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  {displayHeaders.map(header => (
-                    <td key={header} className="border border-gray-300 px-1 py-1 text-xs truncate max-w-[120px]" title={String(record[header] || '-')}>
-                      {String(record[header] || '-')}
-                    </td>
-                  ))}
+                  {displayHeaders.map(header => {
+                    const formattedValue = formatCellValue(record[header], header);
+                    return (
+                      <td key={header} className="border border-gray-300 px-1 py-1 text-xs truncate max-w-[120px]" title={formattedValue}>
+                        {formattedValue}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

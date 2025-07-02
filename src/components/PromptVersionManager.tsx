@@ -16,7 +16,6 @@ import {
   getPromptVersion
 } from "@/lib/firestoreService";
 import { useAuth } from "@/hooks/useAuth";
-import { useWorkspace } from "@/hooks/useWorkspace";
 
 interface PromptVersionManagerProps {
   onPromptChange?: (prompt: string) => void;
@@ -28,7 +27,6 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   currentPrompt = '' 
 }) => {
   const { user } = useAuth();
-  const { currentWorkspace } = useWorkspace();
   const [prompt, setPrompt] = useState(currentPrompt);
   const [evaluation, setEvaluation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -39,21 +37,16 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   // Sample prompt - loaded from file or fallback
   const [samplePrompt, setSamplePrompt] = useState<string>('');
 
-  // Load sample prompt from file based on workspace
+  // Load sample prompt from file
   useEffect(() => {
     const loadSamplePrompt = async () => {
       try {
-        const fileName = currentWorkspace === 'purchaser' 
-          ? '/sample_procurement_prompt.md' 
-          : currentWorkspace === 'invoicer'
-          ? '/sample_invoicing_prompt.md'
-          : '/sample_competitive_bidding_prompt.md';
-        const response = await fetch(fileName);
+        const response = await fetch('/sample_invoicing_prompt.md');
         if (response.ok) {
           const content = await response.text();
-          setSamplePrompt(content.trim()); // Use exactly what's in the file
+          setSamplePrompt(content.trim());
         } else {
-          console.error(`Failed to load sample prompt: HTTP ${response.status} for ${fileName}`);
+          console.error(`Failed to load sample prompt: HTTP ${response.status}`);
         }
       } catch (error) {
         console.error('Failed to load sample prompt:', error);
@@ -61,7 +54,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     };
 
     loadSamplePrompt();
-  }, [currentWorkspace]);
+  }, []);
 
   // Load initial data
   useEffect(() => {
@@ -83,7 +76,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     setIsLoading(true);
     try {
       // Load latest prompt for this user
-      const latestPrompt = await loadLatestPrompt(user.uid, currentWorkspace);
+      const latestPrompt = await loadLatestPrompt(user.uid, 'invoicer');
       if (latestPrompt) {
         setPrompt(latestPrompt);
       } else {
@@ -105,7 +98,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
     if (!user?.uid) return;
 
     try {
-      const history = await getPromptHistory(user.uid, currentWorkspace);
+      const history = await getPromptHistory(user.uid, 'invoicer');
       setVersions(history);
     } catch (error) {
       console.error('Error loading version history:', error);
@@ -131,7 +124,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
         evaluation,
         undefined, // Use default AI model from environment
         user.email || undefined,
-        currentWorkspace
+        'invoicer'
       );
       
       toast.success(`Saved as version ${versionNumber}`);
@@ -168,11 +161,10 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
   const handleLoadSamplePrompt = () => {
     if (samplePrompt.trim()) {
       setPrompt(samplePrompt);
-      toast.success(`Sample ${currentWorkspace} prompt loaded! You can now edit and save it.`);
+      toast.success('Sample invoicing prompt loaded! You can now edit and save it.');
     } else {
-      const fileName = currentWorkspace === 'purchaser' ? '/public/sample_procurement_prompt.md' : '/public/sample_invoicing_prompt.md';
-      toast.error(`Sample prompt file is empty or missing. Please add content to ${fileName}`);
-      console.error(`Sample prompt file ${fileName} is empty or missing`);
+      toast.error('Sample prompt file is empty or missing. Please add content to /public/sample_invoicing_prompt.md');
+      console.error('Sample prompt file /public/sample_invoicing_prompt.md is empty or missing');
     }
   };
 
@@ -199,12 +191,12 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="prompt">System Prompt ({currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Assistant)</Label>
+                <Label htmlFor="prompt">System Prompt (Invoicing Assistant)</Label>
                 <Textarea
                   id="prompt"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={`Enter your system prompt for the ${currentWorkspace === 'purchaser' ? 'procurement' : 'invoicing'} AI assistant...`}
+                  placeholder="Enter your system prompt for the invoicing AI assistant..."
                   className="min-h-[200px] font-mono text-sm"
                 />
               </div>
@@ -224,7 +216,7 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
               {!prompt.trim() && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
                   <p className="text-sm text-blue-800">
-                    <strong>Get started:</strong> Load a sample {currentWorkspace === 'purchaser' ? 'procurement' : 'invoicing'} prompt or create your own from scratch.
+                    <strong>Get started:</strong> Load a sample invoicing prompt or create your own from scratch.
                   </p>
                   <div className="flex gap-2">
                     <Button 
@@ -232,9 +224,29 @@ const PromptVersionManager: React.FC<PromptVersionManagerProps> = ({
                       variant="outline"
                       className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-100"
                     >
-                      Load Sample {currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Prompt
+                      Load Sample Invoicing Prompt
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Reset button for existing users */}
+              {prompt.trim() && samplePrompt.trim() && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                  <p className="text-sm text-amber-800">
+                    <strong>Note:</strong> You can reset to the latest sample invoicing prompt if you want to start fresh.
+                  </p>
+                  <Button 
+                    onClick={() => {
+                      setPrompt(samplePrompt);
+                      setEvaluation('Resetted to latest sample prompt');
+                      toast.success('Resetted to latest sample invoicing prompt! Remember to save as a new version.');
+                    }} 
+                    variant="outline"
+                    className="w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+                  >
+                    Reset to Latest Sample Prompt
+                  </Button>
                 </div>
               )}
 
