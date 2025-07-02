@@ -3,17 +3,12 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, orderBy, setDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 
-// Workspace types
-export type WorkspaceType = 'purchaser' | 'invoicer' | 'competitive_bidding';
+// Workspace types - simplified to only invoicer
+export type WorkspaceType = 'invoicer';
 
 // Helper function to get workspace-specific collection names
-// competitive_bidding shares knowledge with purchaser, but has separate prompts and other collections
 const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
-  // Only share knowledge collection between competitive_bidding and purchaser
-  if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
-    return 'purchaser_knowledge';
-  }
-  return `${workspace}_${baseCollection}`;
+  return `invoicer_${baseCollection}`;
 };
 
 export interface KnowledgeDocument {
@@ -61,7 +56,7 @@ export class StorageService {
     file: File, 
     userId: string,
     originalFormat: string = 'md',
-    workspace: WorkspaceType = 'purchaser'
+    workspace: WorkspaceType = 'invoicer'
   ): Promise<KnowledgeDocument> {
     try {
       // Read file content
@@ -410,11 +405,11 @@ export class StorageService {
   async uploadERPDocument(
     file: File, 
     userId: string,
-    workspace: WorkspaceType = 'purchaser'
+    workspace: WorkspaceType = 'invoicer'
   ): Promise<ERPDocument> {
     try {
       // Delete existing ERP documents for this user and workspace
-      const collectionName = workspace === 'invoicer' ? 'invoicer_erpDocuments' : 'purchaser_erpDocuments';
+      const collectionName = 'invoicer_erpDocuments';
       await this.deleteUserDocumentsFromCollection(userId, collectionName);
       
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -511,7 +506,7 @@ export class StorageService {
    */
   async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ERPDocument[]> {
     try {
-      const collectionName = workspace === 'invoicer' ? 'invoicer_erpDocuments' : 'purchaser_erpDocuments';
+      const collectionName = 'invoicer_erpDocuments';
       
       // Get all records from workspace-specific collection for this user
       const recordsQ = query(

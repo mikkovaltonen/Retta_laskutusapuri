@@ -2,17 +2,12 @@ import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs,
 import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 
-// Workspace types
-export type WorkspaceType = 'purchaser' | 'invoicer' | 'competitive_bidding';
+// Workspace types - simplified to only invoicer
+export type WorkspaceType = 'invoicer';
 
 // Helper function to get workspace-specific collection names
-// competitive_bidding shares knowledge with purchaser, but has separate prompts and other collections
 const getWorkspaceCollectionName = (baseCollection: string, workspace: WorkspaceType): string => {
-  // Only share knowledge collection between competitive_bidding and purchaser
-  if (baseCollection === 'knowledge' && workspace === 'competitive_bidding') {
-    return 'purchaser_knowledge';
-  }
-  return `${workspace}_${baseCollection}`;
+  return `invoicer_${baseCollection}`;
 };
 
 export interface SystemPromptVersion {
