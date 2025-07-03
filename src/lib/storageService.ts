@@ -825,19 +825,34 @@ export class StorageService {
   }
 
   /**
-   * Download ERP document as JSON
+   * Download ERP document as Excel
    */
-  async downloadERPDocument(document: ERPDocument): Promise<string> {
+  async downloadERPDocument(document: ERPDocument): Promise<ArrayBuffer> {
     try {
-      // Return JSON data as formatted string
-      if (document.jsonData && document.jsonData.length > 0) {
-        return JSON.stringify(document.jsonData, null, 2);
+      if (!document.jsonData || document.jsonData.length === 0) {
+        throw new Error('No data available to download');
       }
+
+      // Create a new workbook
+      const workbook = XLSX.utils.book_new();
       
-      throw new Error('No JSON data available');
+      // Convert JSON data to worksheet
+      const worksheet = XLSX.utils.json_to_sheet(document.jsonData);
+      
+      // Add worksheet to workbook
+      const sheetName = document.sheets?.[0] || 'Sheet1';
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      
+      // Write workbook to buffer
+      const buffer = XLSX.write(workbook, { 
+        bookType: 'xlsx', 
+        type: 'array' 
+      });
+      
+      return buffer;
     } catch (error) {
       console.error('Download failed:', error);
-      throw new Error('Failed to download ERP document');
+      throw new Error('Failed to download ERP document as Excel');
     }
   }
 }

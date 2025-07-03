@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ChatAI } from './ChatAI';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import * as XLSX from 'xlsx';
 
 interface DatabaseRecord {
   id: string;
@@ -210,22 +211,81 @@ export const ChatLayout: React.FC = () => {
     // The tables will automatically recalculate visible columns
   }, [leftPanelWidth]);
 
-  const downloadAsCSV = (data: DatabaseRecord[], filename: string) => {
+  const downloadAsExcel = (data: DatabaseRecord[], filename: string) => {
     if (data.length === 0) return;
     
-    const headers = Object.keys(data[0]).filter(key => !['id'].includes(key));
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row => 
-        headers.map(header => `"${String(row[header] || '').replace(/"/g, '""')}"`).join(',')
-      )
-    ].join('\\n');
+    // Check if this is invoice data with line items
+    const isInvoiceData = filename === 'myyntilaskut' && data.some(item => item.laskurivit);
     
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let exportData: DatabaseRecord[] = [];
+    
+    if (isInvoiceData) {
+      // Flatten invoice data: one row per invoice line
+      data.forEach(invoice => {
+        const headerData = { ...invoice };
+        delete headerData.laskurivit; // Remove the nested array
+        
+        if (Array.isArray(invoice.laskurivit)) {
+          // Create a row for each invoice line
+          (invoice.laskurivit as DatabaseRecord[]).forEach(line => {
+            exportData.push({
+              // Invoice header fields
+              asiakasnumero: headerData.asiakasnumero,
+              tilaustunnus: headerData.tilaustunnus,
+              yhtiönNimi: headerData.yhtiönNimi,
+              tilaajanNimi: headerData.tilaajanNimi,
+              laskuotsikko: headerData.laskuotsikko,
+              luontipaiva: headerData.luontipaiva,
+              rivienMaara: headerData.rivienMaara,
+              docId: headerData.docId,
+              // Invoice line fields
+              tuotekoodi: line.tuotekoodi,
+              tuotenimi: line.tuotenimi,
+              määrä: line.määrä,
+              yksikkö: line.yksikkö,
+              ahinta: line.ahinta,
+              rivihinta: line.rivihinta || (Number(line.määrä) * Number(line.ahinta)),
+              kuvaus: line.kuvaus,
+              selvitys: line.selvitys,
+              alvkoodi: line.alvkoodi,
+              reskontra: line.reskontra,
+              tilattuTuote: line.tilattuTuote
+            });
+          });
+        } else {
+          // If no line items, just add the header
+          exportData.push(headerData);
+        }
+      });
+    } else {
+      // For non-invoice data, use as-is
+      exportData = data;
+    }
+    
+    // Create a new workbook
+    const workbook = XLSX.utils.book_new();
+    
+    // Convert data to worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Add worksheet to workbook
+    const sheetName = isInvoiceData ? 'Myyntilaskut' : filename;
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    
+    // Write workbook to buffer
+    const buffer = XLSX.write(workbook, { 
+      bookType: 'xlsx', 
+      type: 'array' 
+    });
+    
+    // Create blob and download
+    const blob = new Blob([buffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}.csv`);
+    link.setAttribute('download', `${filename}.xlsx`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -391,10 +451,10 @@ export const ChatLayout: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => downloadAsCSV(myyntilaskutData, 'myyntilaskut')}
+              onClick={() => downloadAsExcel(myyntilaskutData, 'myyntilaskut')}
             >
               <Download className="w-4 h-4 mr-2" />
-              CSV
+              Excel
             </Button>
           </div>
           
@@ -705,10 +765,10 @@ export const ChatLayout: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => downloadAsCSV(data, title.toLowerCase())}
+            onClick={() => downloadAsExcel(data, title.toLowerCase())}
           >
             <Download className="w-4 h-4 mr-2" />
-            CSV
+            Excel
           </Button>
         </div>
         

@@ -526,7 +526,13 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
   }
 
   async sendMessage(sessionId: string, message: string, userId: string, ostolaskuData: any[] = []): Promise<ChatMessage> {
-    console.log('💬 sendMessage called:', { sessionId, message, userId });
+    console.log('💬 sendMessage called:', { 
+      sessionId, 
+      message: message.substring(0, 100) + '...', 
+      userId,
+      hasOstolaskuData: ostolaskuData.length > 0,
+      ostolaskuRowCount: ostolaskuData.length
+    });
     
     const session = this.activeSessions.get(sessionId);
     if (!session) {
@@ -535,8 +541,22 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
     }
 
     try {
+      // Note: Ostolasku data was already provided during session initialization
+      // We only need to inform the AI about the current availability status
+      let contextNote = '';
+      
+      if (ostolaskuData && ostolaskuData.length > 0) {
+        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä ostolasku data ${ostolaskuData.length} rivillä session-kontekstissa]`;
+        console.log(`ℹ️ Ostolasku data available: ${ostolaskuData.length} rows`);
+      } else {
+        contextNote = '\n\n[MUISTUTUS: Ei ostolaskudataa saatavilla tässä sessiossa]';
+        console.log('ℹ️ No ostolasku data available');
+      }
+      
+      const fullMessage = message + contextNote;
+      
       console.log('🔄 Sending message to Gemini...');
-      const result = await session.sendMessage(message);
+      const result = await session.sendMessage(fullMessage);
       const response = result.response;
       
       console.log('📦 Initial response received, checking for function calls...');

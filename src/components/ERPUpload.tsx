@@ -193,7 +193,7 @@ export const ERPUpload: React.FC<ERPUploadProps> = ({
             <li>• Column headers and data are extracted automatically</li>
             <li>• Data becomes available for AI analysis and queries</li>
             <li>• Files are stored securely in your personal workspace</li>
-            <li>• You can download processed data as CSV format</li>
+            <li>• You can download processed data as Excel format</li>
           </ul>
         </div>
 

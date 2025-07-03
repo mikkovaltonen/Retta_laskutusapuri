@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import PromptEditor from "../components/PromptEditor";
+import AdminIssueReport from "../components/AdminIssueReport";
 
 interface AdminProps {
   hideNavigation?: boolean;
@@ -33,6 +34,7 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
   const [showOrderUpload, setShowOrderUpload] = useState(false);
   const [showHinnastoApiTester, setShowHinnastoApiTester] = useState(false);
   const [showTilausApiTester, setShowTilausApiTester] = useState(false);
+  const [showAdminIssueReport, setShowAdminIssueReport] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -120,14 +122,16 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
                     Open Prompt Manager
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[700px]">
+                <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>System Prompt Version Manager</DialogTitle>
                     <DialogDescription>
                       Create, edit, and evaluate different versions of the AI system prompt. This is a key evaluation feature for testing different AI configurations.
                     </DialogDescription>
                   </DialogHeader>
-                  <PromptEditor />
+                  <div className="max-h-[calc(90vh-120px)] overflow-y-auto">
+                    <PromptEditor />
+                  </div>
                 </DialogContent>
               </Dialog>
             </CardContent>
@@ -299,12 +303,33 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               </p>
               <Link to="/issues">
                 <Button 
-                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white mb-2"
                 >
                   <AlertTriangle className="mr-2 h-4 w-4" />
-                  View Issues
+                  View My Issues
                 </Button>
               </Link>
+              <Dialog open={showAdminIssueReport} onOpenChange={setShowAdminIssueReport}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Admin: All User Issues
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Admin Issue Report - All Users</DialogTitle>
+                    <DialogDescription>
+                      View and manage all users' negative feedback issues. Track resolution status across all users.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="max-h-[calc(90vh-120px)] overflow-y-auto">
+                    <AdminIssueReport />
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 
