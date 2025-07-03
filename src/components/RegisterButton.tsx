@@ -67,7 +67,7 @@ export const RegisterButton = () => {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button className="text-white px-10 py-4 rounded-full text-lg font-light shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105" style={{backgroundColor: '#003d3b'}} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e2a54'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#003d3b'}>
-          Create Account
+          Luo tili
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
@@ -124,7 +124,7 @@ export const RegisterButton = () => {
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#003d3b'}
             disabled={isLoading}
           >
-            {isLoading ? "Creating Account..." : "Create Account"}
+            {isLoading ? "Luodaan tiliä..." : "Luo tili"}
           </Button>
         </form>
       </DialogContent>

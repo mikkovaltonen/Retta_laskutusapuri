@@ -91,14 +91,16 @@ export const ERPManager: React.FC = () => {
 
   const handleDownload = async (doc: ERPDocument) => {
     try {
-      const content = await storageService.downloadERPDocument(doc);
+      const buffer = await storageService.downloadERPDocument(doc);
       
-      // Create blob and download as CSV
-      const blob = new Blob([content], { type: 'text/csv' });
+      // Create blob and download as Excel
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = doc.name.replace(/\.(xlsx|xls)$/, '.csv');
+      // Keep original Excel extension or add .xlsx if missing
+      const fileName = doc.name.match(/\.(xlsx|xls)$/) ? doc.name : `${doc.name}.xlsx`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -278,7 +280,7 @@ export const ERPManager: React.FC = () => {
                         <DialogHeader>
                           <DialogTitle>Data Preview: {doc.name}</DialogTitle>
                           <DialogDescription>
-                            Preview of the processed Excel/CSV data
+                            Preview of the processed Excel data
                           </DialogDescription>
                         </DialogHeader>
                         {renderPreviewTable(doc)}
@@ -291,7 +293,7 @@ export const ERPManager: React.FC = () => {
                       onClick={() => handleDownload(doc)}
                     >
                       <Download className="w-4 h-4 mr-1" />
-                      CSV
+                      Excel
                     </Button>
                     <Button
                       variant="outline"

@@ -11,6 +11,7 @@ import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, Rot
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
@@ -36,9 +37,35 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
   const [showSheetSelector, setShowSheetSelector] = useState(false);
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [showNegativeFeedbackDialog, setShowNegativeFeedbackDialog] = useState(false);
+  const [selectedMessageForFeedback, setSelectedMessageForFeedback] = useState<string>('');
+  const [feedbackComment, setFeedbackComment] = useState<string>('');
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Enhanced error logging utility
+  const logError = (context: string, error: unknown, additionalInfo?: Record<string, any>) => {
+    const errorDetails = {
+      context,
+      timestamp: new Date().toISOString(),
+      userId: user?.uid,
+      sessionId,
+      error: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'Unknown'
+      },
+      ...additionalInfo
+    };
+    
+    console.error(`❌ [${context}]`, errorDetails);
+    
+    // Optional: Send to monitoring service in production
+    // if (process.env.NODE_ENV === 'production') {
+    //   // Send to analytics/monitoring service
+    // }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -62,7 +89,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         setSystemPrompt(latestPrompt);
       }
     } catch (err) {
-      console.error('Failed to load system prompt:', err);
+      logError('SystemPromptLoad', err, { workspace: 'invoicer' });
       setError('Järjestelmän alustuksessa tapahtui virhe. Yritä päivittää sivu.');
     }
   };
@@ -113,8 +140,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       setCurrentSessionKey(sessionKey);
       console.log('✅ Continuous improvement session created');
 
-      // Add welcome message
-      const welcomeContent = '👋 Hei! Olen Retta-laskutusavustajasi.\n\nVoit ladata ostolaskun (JSON/Excel) ja pyytää "Luo myyntilasku ostolaskun pohjalta".\n\nMiten voin auttaa?';
+      // Add welcome message with ostolasku status
+      const ostolaskuStatus = ostolaskuData.length > 0 
+        ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n• Voit nyt pyytää: "Luo myyntilasku ostolaskun pohjalta"`
+        : '\n\n❌ **Ei ostolaskudataa**: Lataa ensin ostolasku (JSON/Excel) painikkeesta yllä';
+        
+      const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuStatus}\n\nMiten voin auttaa?`;
         
       const welcomeMessage: ChatMessage = {
         id: 'welcome',
@@ -126,7 +157,10 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       setMessages([welcomeMessage]);
       console.log('✅ Chat initialization complete');
     } catch (err) {
-      console.error('❌ Failed to initialize chat:', err);
+      logError('ChatInitialization', err, { 
+        hasSystemPrompt: !!systemPrompt,
+        sessionId: sessionId 
+      });
       setError(err instanceof Error ? err.message : 'Failed to initialize chat');
     } finally {
       setLoading(false);
@@ -168,26 +202,14 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       console.log('✅ Received response from geminiChatService:', response);
       setMessages(prev => [...prev, response]);
     } catch (err) {
-      console.error('❌ Error in sendMessage:', err);
+      logError('SendMessage', err, { 
+        messageLength: inputMessage.length,
+        hasOstolaskuData: ostolaskuData.length > 0,
+        sessionId 
+      });
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleFeedback = async (messageId: string, feedback: 'thumbs_up' | 'thumbs_down') => {
-    if (!currentSessionKey || !user) return;
-
-    try {
-      // Update local state
-      setMessageFeedback(prev => ({ ...prev, [messageId]: feedback }));
-      
-      // Save feedback to Firestore
-      await setUserFeedback(currentSessionKey, feedback);
-      
-      console.log(`Feedback ${feedback} saved for message ${messageId}`);
-    } catch (error) {
-      console.error('Failed to save feedback:', error);
     }
   };
 
@@ -213,6 +235,120 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     }
     
     console.log('🔄 Chat reset: All data cleared and reinitialized');
+  };
+
+  const handleFeedback = async (messageId: string, feedback: 'thumbs_up' | 'thumbs_down') => {
+    if (!currentSessionKey) {
+      console.warn('No session key available for feedback');
+      return;
+    }
+
+    // For negative feedback, open dialog to collect detailed feedback
+    if (feedback === 'thumbs_down') {
+      setSelectedMessageForFeedback(messageId);
+      setShowNegativeFeedbackDialog(true);
+      return;
+    }
+
+    // For positive feedback, save immediately
+    try {
+      // Update local state immediately for UI feedback
+      setMessageFeedback(prev => ({
+        ...prev,
+        [messageId]: feedback
+      }));
+
+      // Save feedback to database
+      await setUserFeedback(currentSessionKey, feedback, undefined, 'invoicer');
+      
+      console.log(`✅ Feedback saved: ${feedback} for message ${messageId}`);
+    } catch (error) {
+      logError('FeedbackSave', error, { 
+        messageId, 
+        feedback, 
+        sessionKey: currentSessionKey 
+      });
+      
+      // Revert local state on error
+      setMessageFeedback(prev => {
+        const newState = { ...prev };
+        delete newState[messageId];
+        return newState;
+      });
+      
+      setError('Palautteen tallentaminen epäonnistui');
+    }
+  };
+
+  const handleNegativeFeedbackSubmit = async () => {
+    if (!selectedMessageForFeedback || !currentSessionKey) {
+      return;
+    }
+
+    try {
+      // Update local state immediately for UI feedback
+      setMessageFeedback(prev => ({
+        ...prev,
+        [selectedMessageForFeedback]: 'thumbs_down'
+      }));
+
+      // Collect comprehensive session data
+      const comprehensiveData = {
+        messageId: selectedMessageForFeedback,
+        userComment: feedbackComment,
+        sessionId: sessionId,
+        currentSessionKey: currentSessionKey,
+        systemPrompt: systemPrompt,
+        conversationHistory: messages,
+        ostolaskuData: ostolaskuData,
+        uploadedFileName: uploadedFileName,
+        timestamp: new Date().toISOString(),
+        userId: user?.uid,
+        userEmail: user?.email,
+        // Technical context
+        sessionContext: {
+          isInitialized,
+          hasOstolaskuData: ostolaskuData.length > 0,
+          messageCount: messages.length,
+          lastMessageTimestamp: messages[messages.length - 1]?.timestamp
+        }
+      };
+
+      // Save detailed negative feedback to invoicer_continuous_improvement collection
+      await setUserFeedback(
+        currentSessionKey, 
+        'thumbs_down', 
+        JSON.stringify(comprehensiveData), 
+        'invoicer'
+      );
+
+      console.log('✅ Comprehensive negative feedback saved:', {
+        messageId: selectedMessageForFeedback,
+        commentLength: feedbackComment.length,
+        dataSize: JSON.stringify(comprehensiveData).length
+      });
+
+      // Close dialog and reset state
+      setShowNegativeFeedbackDialog(false);
+      setSelectedMessageForFeedback('');
+      setFeedbackComment('');
+
+    } catch (error) {
+      logError('NegativeFeedbackSave', error, { 
+        messageId: selectedMessageForFeedback,
+        commentLength: feedbackComment.length,
+        sessionKey: currentSessionKey 
+      });
+      
+      // Revert local state on error
+      setMessageFeedback(prev => {
+        const newState = { ...prev };
+        delete newState[selectedMessageForFeedback];
+        return newState;
+      });
+      
+      setError('Palautteen tallentaminen epäonnistui');
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -769,6 +905,126 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
               }}
             >
               Peruuta
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Negative Feedback Dialog */}
+      <Dialog open={showNegativeFeedbackDialog} onOpenChange={setShowNegativeFeedbackDialog}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Kerro mikä meni pieleen</DialogTitle>
+            <DialogDescription>
+              Negatiivinen palaute on meille erittäin arvokasta. Kerro tarkemmin mikä vastauksessa ei ollut tyydyttävää, jotta voimme parantaa AI:ta.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <Tabs defaultValue="feedback" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="feedback">Palaute</TabsTrigger>
+              <TabsTrigger value="prompt">AI Prompti</TabsTrigger>
+              <TabsTrigger value="conversation">Keskustelu</TabsTrigger>
+              <TabsTrigger value="data">Ostolaskudata</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="feedback" className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Mikä oli ongelmana? *
+                </label>
+                <textarea
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="Esim: Vastaus oli epätarkka, tuotehinnat olivat vääriä, AI ei ymmärtänyt kysymystäni..."
+                  className="w-full min-h-[100px] p-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Kaikki alla olevat välilehdet tallennetaan analyysiä varten</strong>
+                </p>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="prompt" className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-2">Käytetty AI-järjestelmäprompti:</h4>
+                <div className="bg-gray-50 p-3 rounded border max-h-[300px] overflow-y-auto">
+                  <pre className="text-xs whitespace-pre-wrap">{systemPrompt || 'Ei promptia ladattu'}</pre>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="conversation" className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-2">Keskusteluhistoria ({messages.length} viestiä):</h4>
+                <div className="bg-gray-50 p-3 rounded border max-h-[300px] overflow-y-auto space-y-2">
+                  {messages.map((msg, index) => (
+                    <div key={index} className="border-b pb-2 last:border-b-0">
+                      <div className="text-xs font-medium text-gray-600">
+                        {msg.role === 'user' ? '👤 Käyttäjä' : '🤖 AI'} - {new Date(msg.timestamp).toLocaleTimeString()}
+                      </div>
+                      <div className="text-xs mt-1 text-gray-800">
+                        {msg.content.substring(0, 200)}{msg.content.length > 200 ? '...' : ''}
+                      </div>
+                      {msg.functionCalls && msg.functionCalls.length > 0 && (
+                        <div className="text-xs text-blue-600 mt-1">
+                          🔧 Funktiokutsut: {msg.functionCalls.map(fc => fc.name).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="data" className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-2">
+                  Ostolaskudata ({ostolaskuData.length > 0 ? `${ostolaskuData.length} riviä` : 'Ei dataa'}):
+                </h4>
+                {ostolaskuData.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-600">
+                      📁 Tiedosto: {uploadedFileName || 'Tuntematon'}
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded border max-h-[300px] overflow-y-auto">
+                      <pre className="text-xs">
+                        {JSON.stringify(ostolaskuData.slice(0, 3), null, 2)}
+                        {ostolaskuData.length > 3 && `\n... ja ${ostolaskuData.length - 3} riviä lisää`}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 p-3 rounded border">
+                    <p className="text-sm text-yellow-700">❌ Ei ostolaskudataa ladattu</p>
+                    <p className="text-xs text-yellow-600 mt-1">Tämä saattaa olla syy ongelmaan - AI ei pysty käsittelemään ostolaskuja ilman dataa.</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+          
+          <div className="flex gap-2 justify-end mt-6">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNegativeFeedbackDialog(false);
+                setSelectedMessageForFeedback('');
+                setFeedbackComment('');
+              }}
+            >
+              Peruuta
+            </Button>
+            <Button
+              onClick={handleNegativeFeedbackSubmit}
+              disabled={!feedbackComment.trim()}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Lähetä palaute
             </Button>
           </div>
         </DialogContent>
