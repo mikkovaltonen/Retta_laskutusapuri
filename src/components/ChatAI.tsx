@@ -94,6 +94,49 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     }
   };
 
+  const updateWelcomeMessage = () => {
+    if (!user) return;
+    
+    console.log('🔄 Updating welcome message with ostolasku status', {
+      ostolaskuDataLength: ostolaskuData.length,
+      uploadedFileName,
+      currentMessagesCount: messages.length
+    });
+    
+    // Create updated welcome message with current ostolasku status
+    const ostolaskuStatus = ostolaskuData.length > 0 
+      ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa myyntilaskun luomista kun tiedot on tarkastettu.*`
+      : '\n\n❌ **Ei ostolaskudataa**: Lataa ensin ostolasku (JSON/Excel) painikkeesta yllä';
+      
+    const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuStatus}\n\nMiten voin auttaa?`;
+      
+    const welcomeMessage: ChatMessage = {
+      id: 'welcome',
+      role: 'assistant',
+      content: welcomeContent,
+      timestamp: new Date()
+    };
+
+    // Update only the welcome message, keep other messages
+    setMessages(prev => {
+      const updatedMessages = [...prev];
+      const welcomeIndex = updatedMessages.findIndex(msg => msg.id === 'welcome');
+      
+      if (welcomeIndex !== -1) {
+        // Update existing welcome message
+        updatedMessages[welcomeIndex] = welcomeMessage;
+      } else {
+        // Add welcome message at the beginning if it doesn't exist
+        updatedMessages.unshift(welcomeMessage);
+      }
+      
+      return updatedMessages;
+    });
+    console.log('✅ Welcome message updated', {
+      messageContentPreview: welcomeMessage.content.substring(0, 100) + '...'
+    });
+  };
+
   const initializeChat = async () => {
     if (!user || isInitialized) {
       console.log('🔄 Skipping chat initialization:', { 
@@ -142,7 +185,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
 
       // Add welcome message with ostolasku status
       const ostolaskuStatus = ostolaskuData.length > 0 
-        ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n• Voit nyt pyytää: "Luo myyntilasku ostolaskun pohjalta"`
+        ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa myyntilaskun luomista kun tiedot on tarkastettu.*`
         : '\n\n❌ **Ei ostolaskudataa**: Lataa ensin ostolasku (JSON/Excel) painikkeesta yllä';
         
       const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuStatus}\n\nMiten voin auttaa?`;
@@ -426,9 +469,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         fileType: isJson ? 'JSON' : 'Excel'
       });
 
-      // Re-initialize chat with ostolasku data in context
-      if (user && systemPrompt && sessionId) {
+      // Add a success message and re-initialize session with ostolasku data
+      if (user && systemPrompt) {
         console.log('🔄 Re-initializing chat with ostolasku data...');
+        
+        // Add a success message about loaded ostolasku
+        const successMessage: ChatMessage = {
+          id: `ostolasku-loaded-${Date.now()}`,
+          role: 'assistant',
+          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Re-initialize session with ostolasku data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
         const context: ChatContext = {
@@ -486,9 +541,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         recordCount: jsonData.length
       });
 
-      // Re-initialize chat with ostolasku data in context
-      if (user && systemPrompt && sessionId) {
+      // Add a success message and re-initialize session with ostolasku data
+      if (user && systemPrompt) {
         console.log('🔄 Re-initializing chat with ostolasku data...');
+        
+        // Add a success message about loaded ostolasku
+        const successMessage: ChatMessage = {
+          id: `ostolasku-loaded-${Date.now()}`,
+          role: 'assistant',
+          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Re-initialize session with ostolasku data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
         const context: ChatContext = {
@@ -548,8 +615,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       
       toast.success(`Esimerkkiostolasku ladattu: ${jsonData.length} riviä`);
       
-      // Re-initialize chat with ostolasku data
-      if (user && systemPrompt && sessionId) {
+      // Add a success message and re-initialize session with ostolasku data
+      if (user && systemPrompt) {
+        console.log('🔄 Re-initializing chat with example ostolasku data...');
+        
+        // Add a success message about loaded ostolasku
+        const successMessage: ChatMessage = {
+          id: `ostolasku-loaded-${Date.now()}`,
+          role: 'assistant',
+          content: `✅ **Esimerkkiostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "esimerkki_ostolasku.xlsx"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        // Re-initialize session with ostolasku data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
         const context: ChatContext = {
@@ -561,6 +641,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
 
         await geminiChatService.initializeSession(context);
         setSessionId(newSessionId);
+        console.log('✅ Example ostolasku loaded and chat re-initialized');
       }
       
     } catch (err) {
