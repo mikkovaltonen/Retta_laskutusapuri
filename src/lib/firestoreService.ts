@@ -83,20 +83,20 @@ const generateTechnicalKey = (userEmail: string, version: number): string => {
   return `${username}_v${version}`;
 };
 
-// Save a new version of system prompt
+// Save a new version of system prompt (shared across all users)
 export const savePromptVersion = async (
   userId: string, 
   promptText: string, 
   evaluation: string = '',
   aiModel: string = 'gemini-2.5-flash-preview-04-17',
   userEmail?: string,
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<number> => {
   try {
     if (!db) {
       console.warn('Firebase not initialized, using localStorage fallback');
-      const nextVersion = getNextLocalVersion(userId);
-      const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `user_${userId.substring(0, 8)}_v${nextVersion}`;
+      const nextVersion = getNextLocalVersion('shared');
+      const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `shared_v${nextVersion}`;
       const promptVersion: SystemPromptVersion = {
         version: nextVersion,
         systemPrompt: promptText,
@@ -106,14 +106,14 @@ export const savePromptVersion = async (
         userId: userId,
         technicalKey: technicalKey
       };
-      saveToLocalStorage(userId, promptVersion);
-      console.log(`[LocalStorage] Saved prompt version ${nextVersion} with key ${technicalKey}`);
+      saveToLocalStorage('shared', promptVersion);
+      console.log(`[LocalStorage] Saved shared prompt version ${nextVersion} with key ${technicalKey}`);
       return nextVersion;
     }
 
-    // Try Firebase first
-    const nextVersion = await getNextVersionNumber(userId, workspace);
-    const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `user_${userId.substring(0, 8)}_v${nextVersion}`;
+    // Try Firebase first - get next version from shared prompts
+    const nextVersion = await getNextVersionNumber('shared', workspace);
+    const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `shared_v${nextVersion}`;
     
     const promptVersion: Omit<SystemPromptVersion, 'id'> = {
       version: nextVersion,
@@ -151,15 +151,15 @@ export const savePromptVersion = async (
   }
 };
 
-// Get the next version number for a user
-const getNextVersionNumber = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<number> => {
+// Get the next version number (shared across all users)
+const getNextVersionNumber = async (sharedKey: string, workspace: WorkspaceType = 'invoicer'): Promise<number> => {
   if (!db) {
     return 1;
   }
 
+  // Query all prompts in the collection (no user filter)
   const q = query(
-    collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
-    where('userId', '==', userId)
+    collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace))
   );
   
   const querySnapshot = await getDocs(q);
@@ -174,28 +174,28 @@ const getNextVersionNumber = async (userId: string, workspace: WorkspaceType = '
   return latestVersion + 1;
 };
 
-// Load the latest version of system prompt for a user
-export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<string | null> => {
+// Load the latest version of system prompt (shared across all users)
+export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType = 'invoicer'): Promise<string | null> => {
   try {
-    console.log('🔍 Loading latest prompt for user:', userId.substring(0, 8) + '...', 'workspace:', workspace);
+    console.log('🔍 Loading latest shared prompt, workspace:', workspace);
     
     if (!db) {
       console.warn('Firebase not initialized, using localStorage fallback');
-      const versions = getFromLocalStorage(userId);
+      const versions = getFromLocalStorage('shared');
       if (versions.length === 0) return null;
       const latest = versions.sort((a, b) => b.version - a.version)[0];
       return latest.systemPrompt || null;
     }
 
+    // Query all prompts (no user filter)
     const q = query(
-      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
-      where('userId', '==', userId)
+      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace))
     );
     
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      console.log('📝 No user-specific prompts found for user:', userId.substring(0, 8) + '...');
+      console.log('📝 No shared prompts found');
       return null;
     }
     
@@ -211,10 +211,10 @@ export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType 
     
     const latestPrompt = latestDoc.systemPrompt || null;
     
-    console.log('✅ Latest prompt loaded for user:', {
-      userId: userId.substring(0, 8) + '...',
+    console.log('✅ Latest shared prompt loaded:', {
       version: latestDoc.version,
-      promptLength: latestPrompt?.length || 0
+      promptLength: latestPrompt?.length || 0,
+      savedBy: latestDoc.userId?.substring(0, 8) + '...'
     });
     
     return latestPrompt;
@@ -227,19 +227,19 @@ export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType 
   }
 };
 
-// Get all versions for a user (for history browsing)
-export const getPromptHistory = async (userId: string, workspace: WorkspaceType = 'purchaser'): Promise<SystemPromptVersion[]> => {
+// Get all versions (shared history for all users)
+export const getPromptHistory = async (userId: string, workspace: WorkspaceType = 'invoicer'): Promise<SystemPromptVersion[]> => {
   try {
-    console.log('📚 Loading prompt history for user:', userId.substring(0, 8) + '...', 'workspace:', workspace);
+    console.log('📚 Loading shared prompt history, workspace:', workspace);
     
     if (!db) {
       console.warn('Firebase not initialized, using localStorage fallback');
-      return getFromLocalStorage(userId).sort((a, b) => b.version - a.version);
+      return getFromLocalStorage('shared').sort((a, b) => b.version - a.version);
     }
 
+    // Query all prompts (no user filter)
     const q = query(
-      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace)),
-      where('userId', '==', userId)
+      collection(db, getWorkspaceCollectionName('systemPromptVersions', workspace))
     );
     
     const querySnapshot = await getDocs(q);
@@ -253,8 +253,7 @@ export const getPromptHistory = async (userId: string, workspace: WorkspaceType 
     // Sort by version on client side to avoid index requirement
     const sortedHistory = history.sort((a, b) => b.version - a.version);
     
-    console.log('✅ Prompt history loaded for user:', {
-      userId: userId.substring(0, 8) + '...',
+    console.log('✅ Shared prompt history loaded:', {
       versionCount: sortedHistory.length,
       latestVersion: sortedHistory[0]?.version || 'none'
     });
@@ -335,7 +334,7 @@ export const createContinuousImprovementSession = async (
   promptKey: string,
   chatSessionKey: string,
   userId: string,
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<string> => {
   try {
     if (!db) {
@@ -370,7 +369,7 @@ export const createContinuousImprovementSession = async (
 export const addTechnicalLog = async (
   sessionId: string,
   logEntry: Omit<TechnicalLog, 'timestamp'>,
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<void> => {
   try {
     if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
@@ -408,7 +407,7 @@ export const setUserFeedback = async (
   sessionId: string,
   feedback: 'thumbs_up' | 'thumbs_down',
   comment?: string,
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<void> => {
   try {
     if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
@@ -441,7 +440,7 @@ export const setUserFeedback = async (
 export const getContinuousImprovementSessions = async (
   userId: string,
   promptKey?: string,
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<ContinuousImprovementSession[]> => {
   try {
     if (!db) {
@@ -477,7 +476,7 @@ export const getContinuousImprovementSessions = async (
 // Get negative feedback sessions (for issue reporting)
 export const getNegativeFeedbackSessions = async (
   userId?: string, // If not provided, get all users' feedback
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<ContinuousImprovementSession[]> => {
   try {
     if (!db) {
@@ -514,7 +513,7 @@ export const getNegativeFeedbackSessions = async (
 export const updateIssueStatus = async (
   sessionId: string,
   status: 'fixed' | 'not_fixed',
-  workspace: WorkspaceType = 'purchaser'
+  workspace: WorkspaceType = 'invoicer'
 ): Promise<void> => {
   try {
     if (!db) {

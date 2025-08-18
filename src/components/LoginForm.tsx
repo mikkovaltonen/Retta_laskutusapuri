@@ -13,8 +13,8 @@ const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register, user, loading } = useAuth();
-  const [isRegistering, setIsRegistering] = useState(false);
+  const { login, user, loading } = useAuth();
+  // Registration disabled - users must contact admin
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -38,17 +38,9 @@ const LoginForm = () => {
     setIsLoading(true);
 
     try {
-      let success;
-      if (isRegistering) {
-        success = await register(email, password);
-        if (!success) {
-          setError('Registration failed. Email may already be in use.');
-        }
-      } else {
-        success = await login(email, password);
-        if (!success) {
-          setError('Invalid credentials');
-        }
+      const success = await login(email, password);
+      if (!success) {
+        setError('Invalid credentials');
       }
       
       if (success) {
@@ -110,19 +102,18 @@ const LoginForm = () => {
               className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white h-11 shadow-lg hover:shadow-xl transition-all"
               disabled={isLoading}
             >
-              {isLoading ? 'Processing...' : (isRegistering ? 'Register' : 'Login')}
+              {isLoading ? 'Processing...' : 'Login'}
             </Button>
             <div className="text-center">
-              <button 
-                type="button"
-                onClick={() => {
-                  setIsRegistering(!isRegistering);
-                  setError('');
-                }}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
-              >
-                {isRegistering ? 'Already have an account? Login' : 'Need an account? Register'}
-              </button>
+              <p className="text-sm text-gray-600">
+                Need an account? Send email to administrator{' '}
+                <a 
+                  href="mailto:mikko@zealsourcing.fi"
+                  className="text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  Mikko Valtonen (mikko@zealsourcing.fi)
+                </a>
+              </p>
             </div>
             <div className="text-center mt-4">
               <Link 

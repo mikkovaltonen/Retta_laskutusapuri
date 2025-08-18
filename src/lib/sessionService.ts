@@ -30,7 +30,7 @@ export class SessionService {
   /**
    * Get the latest system prompt for a user
    */
-  async getLatestSystemPrompt(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<SystemPromptVersion | null> {
+  async getLatestSystemPrompt(userId: string, workspace: WorkspaceType = 'invoicer'): Promise<SystemPromptVersion | null> {
     try {
       // Helper function to get workspace-specific collection names
       // Only knowledge is shared between competitive_bidding and purchaser
@@ -113,7 +113,7 @@ Please use this internal knowledge to provide accurate, company-specific guidanc
   /**
    * Initialize a new chat session with full context
    */
-  async initializeChatSession(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ChatSession> {
+  async initializeChatSession(userId: string, workspace: WorkspaceType = 'invoicer'): Promise<ChatSession> {
     try {
       // Get latest system prompt
       const latestPrompt = await this.getLatestSystemPrompt(userId, workspace);

@@ -53,10 +53,9 @@ export const TilausApiTester: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      // Build Firestore query
+      // Build Firestore query - Query ALL tilaus records (shared data)
       const q = query(
         collection(db, 'tilaus_data'),
-        where('userId', '==', user.uid),
         limit(100) // Prevent large queries
       );
 
@@ -109,9 +108,9 @@ export const TilausApiTester: React.FC = () => {
     if (!user) return;
 
     try {
+      // Query ALL tilaus records (shared data)
       const q = query(
         collection(db, 'tilaus_data'),
-        where('userId', '==', user.uid),
         limit(1)
       );
       

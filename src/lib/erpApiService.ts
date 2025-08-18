@@ -87,7 +87,7 @@ export class ERPApiService {
   /**
    * Search ERP data with multiple criteria
    */
-  async searchRecords(userId: string, criteria: SearchCriteria, workspace: WorkspaceType = 'purchaser'): Promise<SearchResult> {
+  async searchRecords(userId: string, criteria: SearchCriteria, workspace: WorkspaceType = 'invoicer'): Promise<SearchResult> {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substring(2, 8);
     
@@ -493,7 +493,7 @@ export class ERPApiService {
   /**
    * Get available fields/columns from ERP data
    */
-  async getAvailableFields(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<string[]> {
+  async getAvailableFields(userId: string, workspace: WorkspaceType = 'invoicer'): Promise<string[]> {
     const requestId = Math.random().toString(36).substring(2, 8);
     
     console.log('📥 ERP API REQUEST [' + requestId + ']:', {
@@ -545,7 +545,7 @@ export class ERPApiService {
   /**
    * Get sample data for testing
    */
-  async getSampleData(userId: string, maxRows: number = 5, workspace: WorkspaceType = 'purchaser'): Promise<ERPRecord[]> {
+  async getSampleData(userId: string, maxRows: number = 5, workspace: WorkspaceType = 'invoicer'): Promise<ERPRecord[]> {
     const requestId = Math.random().toString(36).substring(2, 8);
     
     console.log('📥 ERP API REQUEST [' + requestId + ']:', {
@@ -605,7 +605,7 @@ export class ERPApiService {
       unitPrice: number;
       notes?: string;
     }>;
-  }, workspace: WorkspaceType = 'purchaser'): Promise<CreatePurchaseOrderResult> {
+  }, workspace: WorkspaceType = 'invoicer'): Promise<CreatePurchaseOrderResult> {
     const startTime = Date.now();
     const requestId = Math.random().toString(36).substring(2, 8);
     

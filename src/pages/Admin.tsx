@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate, Link } from "react-router-dom";
-import { LogOut, Settings, FileText, Database, ArrowLeft, Bot, AlertTriangle } from "lucide-react";
+import { LogOut, Settings, FileText, Database, ArrowLeft, Bot, AlertTriangle, UserPlus, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import DocumentAnalysis from "@/components/DocumentAnalysis";
@@ -10,6 +10,7 @@ import { PriceListUpload } from "@/components/PriceListUpload";
 import { OrderUpload } from "@/components/OrderUpload";
 import { HinnastoApiTester } from "@/components/HinnastoApiTester";
 import { TilausApiTester } from "@/components/TilausApiTester";
+import { UserCreation } from "@/components/UserCreation";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import PromptEditor from "../components/PromptEditor";
 import AdminIssueReport from "../components/AdminIssueReport";
+import PasswordReset from "../components/PasswordReset";
 
 interface AdminProps {
   hideNavigation?: boolean;
@@ -35,6 +37,8 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
   const [showHinnastoApiTester, setShowHinnastoApiTester] = useState(false);
   const [showTilausApiTester, setShowTilausApiTester] = useState(false);
   const [showAdminIssueReport, setShowAdminIssueReport] = useState(false);
+  const [showUserCreation, setShowUserCreation] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -138,6 +142,84 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
           </Card>
         </div>
 
+
+        {/* User Management */}
+        <div className="mb-8">
+          <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="bg-blue-700 text-white rounded-t-lg p-6">
+              <CardTitle className="flex items-center text-xl">
+                <UserPlus className="mr-3 h-7 w-7" />
+                Käyttäjähallinta
+              </CardTitle>
+              <p className="text-blue-100 mt-2">
+                Luo uusia käyttäjiä järjestelmään
+              </p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-gray-600 mb-4">
+                Vain nykyiset käyttäjät voivat luoda uusia käyttäjiä. Kaikki käyttäjät jakavat samat hinnastot, tilaukset ja AI-promptit.
+              </p>
+              <Dialog open={showUserCreation} onOpenChange={setShowUserCreation}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full bg-blue-700 hover:bg-blue-600 text-white"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Luo Uusi Käyttäjä
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Luo Uusi Käyttäjä</DialogTitle>
+                    <DialogDescription>
+                      Luo uusi käyttäjätili Retta Laskutusapuriin. Käyttäjä saa pääsyn kaikkiin jaettuihin tietoihin.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <UserCreation />
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Password Management */}
+        <div className="mb-8">
+          <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="bg-purple-700 text-white rounded-t-lg p-6">
+              <CardTitle className="flex items-center text-xl">
+                <Lock className="mr-3 h-7 w-7" />
+                Salasanan hallinta
+              </CardTitle>
+              <p className="text-purple-100 mt-2">
+                Vaihda oman tilisi salasana
+              </p>
+            </CardHeader>
+            <CardContent className="p-6">
+              <p className="text-gray-600 mb-4">
+                Voit vaihtaa oman tilisi salasanan turvallisuussyistä tai jos olet unohtanut sen.
+              </p>
+              <Dialog open={showPasswordReset} onOpenChange={setShowPasswordReset}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="w-full bg-purple-700 hover:bg-purple-600 text-white"
+                  >
+                    <Lock className="mr-2 h-4 w-4" />
+                    Vaihda salasana
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px]">
+                  <DialogHeader>
+                    <DialogTitle>Vaihda salasana</DialogTitle>
+                    <DialogDescription>
+                      Vaihda tilisi salasana. Tarvitset nykyisen salasanasi vahvistaaksesi muutoksen.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <PasswordReset />
+                </DialogContent>
+              </Dialog>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Secondary Tools */}
         <div className="grid md:grid-cols-3 gap-6">

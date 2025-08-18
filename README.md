@@ -195,8 +195,7 @@ Propertius uses a **hybrid architecture** for AI function calling:
 - **API Integration Logic**
 
 #### **🔥 What's in Firebase:**
-- **System Prompts** (workspace-specific: `purchaser_systemPromptVersions`, `invoicer_systemPromptVersions`)
-- **Knowledge Documents** (workspace-specific: `purchaser_knowledge`, `invoicer_knowledge`)
+- **System Prompts** (workspace-specific: `invoicer_systemPromptVersions`)
 - **Chat History** and continuous improvement data
 
 #### **💡 Why This Design:**

@@ -87,11 +87,12 @@ export class StorageService {
     }
   }
 
-  async getUserDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<KnowledgeDocument[]> {
+  async getUserDocuments(userId: string, workspace: WorkspaceType = 'invoicer'): Promise<KnowledgeDocument[]> {
     try {
+      // Get ALL knowledge documents (no user filter - shared across all users)
+      // userId parameter kept for compatibility but not used for filtering
       const q = query(
-        collection(db, getWorkspaceCollectionName('knowledge', workspace)),
-        where('userId', '==', userId)
+        collection(db, getWorkspaceCollectionName('knowledge', workspace))
       );
       
       const querySnapshot = await getDocs(q);
@@ -110,7 +111,7 @@ export class StorageService {
     }
   }
 
-  async deleteDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
+  async deleteDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'invoicer'): Promise<void> {
     try {
       // Delete from storage if using storage
       if (storagePath) {
@@ -150,6 +151,27 @@ export class StorageService {
   }
 
   /**
+   * Delete all existing documents from specific collection (shared data)
+   */
+  async deleteAllDocumentsFromCollection(collectionName: string): Promise<void> {
+    try {
+      // Delete ALL documents in the collection (no user filter)
+      const recordsQ = query(
+        collection(db, collectionName)
+      );
+      
+      const recordsSnapshot = await getDocs(recordsQ);
+      const deleteRecordsPromises = recordsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deleteRecordsPromises);
+      
+      console.log(`🗑️ Deleted ${recordsSnapshot.docs.length} existing documents from shared ${collectionName}`);
+    } catch (error) {
+      console.error(`Failed to delete existing documents from ${collectionName}:`, error);
+      // Don't throw - just log and continue
+    }
+  }
+
+  /**
    * Delete user's existing documents from specific collection
    */
   async deleteUserDocumentsFromCollection(userId: string, collectionName: string): Promise<void> {
@@ -178,8 +200,8 @@ export class StorageService {
     userId: string
   ): Promise<ERPDocument> {
     try {
-      // Delete existing hinnasto documents for this user
-      await this.deleteUserDocumentsFromCollection(userId, 'hinnasto');
+      // Delete ALL existing hinnasto documents (shared data)
+      await this.deleteAllDocumentsFromCollection('hinnasto');
       
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       
@@ -254,7 +276,7 @@ export class StorageService {
         const documentId = `hinnasto_${Date.now()}_${index + 1}`;
         
         const recordData = {
-          userId,
+          uploadedBy: userId, // Track who uploaded but data is shared
           uploadedAt: new Date(),
           createdAt: new Date(),
           originalFileName: file.name,
@@ -295,8 +317,8 @@ export class StorageService {
     userId: string
   ): Promise<ERPDocument> {
     try {
-      // Delete existing tilaus documents for this user
-      await this.deleteUserDocumentsFromCollection(userId, 'tilaus_data');
+      // Delete ALL existing tilaus documents (shared data)
+      await this.deleteAllDocumentsFromCollection('tilaus_data');
       
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
       
@@ -366,7 +388,7 @@ export class StorageService {
         const documentId = `tilaus_${Date.now()}_${index + 1}`;
         
         const recordData = {
-          userId,
+          uploadedBy: userId, // Track who uploaded but data is shared
           uploadedAt: new Date(),
           createdAt: new Date(),
           originalFileName: file.name,
@@ -504,7 +526,7 @@ export class StorageService {
   /**
    * Get user's ERP documents from workspace-specific collection
    */
-  async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'purchaser'): Promise<ERPDocument[]> {
+  async getUserERPDocuments(userId: string, workspace: WorkspaceType = 'invoicer'): Promise<ERPDocument[]> {
     try {
       const collectionName = 'invoicer_erpDocuments';
       
@@ -573,7 +595,7 @@ export class StorageService {
   /**
    * Delete ERP document and its records
    */
-  async deleteERPDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'purchaser'): Promise<void> {
+  async deleteERPDocument(documentId: string, storagePath?: string, workspace: WorkspaceType = 'invoicer'): Promise<void> {
     try {
       // Delete from storage if using storage
       if (storagePath) {
@@ -604,13 +626,13 @@ export class StorageService {
   }
 
   /**
-   * Get user's hinnasto documents
+   * Get hinnasto documents (shared across all users)
    */
   async getUserHinnastoDocuments(userId: string): Promise<ERPDocument[]> {
     try {
+      // Get ALL hinnasto records (no user filter)
       const recordsQ = query(
-        collection(db, 'hinnasto'),
-        where('userId', '==', userId)
+        collection(db, 'hinnasto')
       );
       
       const recordsSnapshot = await getDocs(recordsQ);
@@ -633,7 +655,7 @@ export class StorageService {
           fileGroups.set(fileName, []);
         }
         
-        const { userId, uploadedAt, createdAt, originalFileName, rowIndex, ...excelColumns } = data;
+        const { uploadedBy, userId, uploadedAt, createdAt, originalFileName, rowIndex, ...excelColumns } = data;
         fileGroups.get(fileName)!.push(excelColumns);
       }
       
@@ -668,13 +690,13 @@ export class StorageService {
   }
 
   /**
-   * Get user's tilaus documents
+   * Get tilaus documents (shared across all users)
    */
   async getUserTilausDocuments(userId: string): Promise<ERPDocument[]> {
     try {
+      // Get ALL tilaus records (no user filter)
       const recordsQ = query(
-        collection(db, 'tilaus_data'),
-        where('userId', '==', userId)
+        collection(db, 'tilaus_data')
       );
       
       const recordsSnapshot = await getDocs(recordsQ);
@@ -697,7 +719,7 @@ export class StorageService {
           fileGroups.set(fileName, []);
         }
         
-        const { userId, uploadedAt, createdAt, originalFileName, rowIndex, ...excelColumns } = data;
+        const { uploadedBy, userId, uploadedAt, createdAt, originalFileName, rowIndex, ...excelColumns } = data;
         fileGroups.get(fileName)!.push(excelColumns);
       }
       
@@ -732,17 +754,17 @@ export class StorageService {
   }
 
   /**
-   * Delete user's hinnasto documents
+   * Delete all hinnasto documents (shared data)
    */
   async deleteHinnastoDocuments(userId: string): Promise<void> {
-    await this.deleteUserDocumentsFromCollection(userId, 'hinnasto');
+    await this.deleteAllDocumentsFromCollection('hinnasto');
   }
 
   /**
-   * Delete user's tilaus documents
+   * Delete all tilaus documents (shared data)
    */
   async deleteTilausDocuments(userId: string): Promise<void> {
-    await this.deleteUserDocumentsFromCollection(userId, 'tilaus_data');
+    await this.deleteAllDocumentsFromCollection('tilaus_data');
   }
 
   /**

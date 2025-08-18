@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, FileText, Brain, Upload } from "lucide-react";
 import { Link } from "react-router-dom";
-import { RegisterButton } from "@/components/RegisterButton";
 
 const Index = () => {
   return (
@@ -21,7 +20,6 @@ const Index = () => {
           >
             <Link to="/login">Kirjaudu</Link>
           </Button>
-          <RegisterButton />
         </div>
       </nav>
 
@@ -36,14 +34,13 @@ const Index = () => {
           Älykkäiseen laskutukseen keskittyvä apuri, jolla säästät aikaa ja parannat laskutusprosessin laatua ja tehokkuutta
         </p>
         <div className="flex justify-center gap-6 flex-wrap">
-          <RegisterButton />
           <Button
             variant="outline"
             className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
             style={{borderColor: '#003d3b', color: '#003d3b'}}
             asChild
           >
-            <Link to="/login">Kirjaudu</Link>
+            <Link to="/login">Kirjaudu sisään</Link>
           </Button>
         </div>
 
@@ -130,14 +127,13 @@ const Index = () => {
             Aloita <span style={{color: '#1e2a54'}}>Laskutusapurin Käyttö</span>
           </h2>
           <div className="flex justify-center gap-6 flex-wrap">
-            <RegisterButton />
             <Button
               variant="outline"
               className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
               style={{borderColor: '#003d3b', color: '#003d3b'}}
               asChild
             >
-              <Link to="/login">Onko sinulla jo tili? Kirjaudu</Link>
+              <Link to="/login">Kirjaudu sisään</Link>
             </Button>
             <Button
               variant="outline"
@@ -258,7 +254,19 @@ const Index = () => {
           </div>
           <div className="mt-16 pt-8 text-center" style={{borderTop: '1px solid #1e2a54'}}>
             <p className="font-light" style={{color: '#80ffb7'}}>© 2024 Retta. Kaikki oikeudet pidätetään.</p>
-            <p className="font-light mt-2" style={{color: '#bedaff'}}>AI-assistentti kehittynyt Mikko Valtosen toimesta Rettalle</p>
+            <p className="font-light mt-2" style={{color: '#bedaff'}}>
+              Kehitetty{' '}
+              <a 
+                href="https://fi.linkedin.com/in/mikkojohannesvaltonen" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline hover:opacity-80 transition-opacity"
+                style={{color: '#bedaff'}}
+              >
+                Mikko Valtosen
+              </a>{' '}
+              toimesta
+            </p>
           </div>
         </div>
       </footer>
