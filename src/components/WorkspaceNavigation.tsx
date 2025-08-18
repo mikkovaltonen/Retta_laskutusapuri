@@ -114,10 +114,6 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate('/issues')}>
-                  Report Issue
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout

@@ -143,13 +143,13 @@ class GeminiChatService {
   private async searchHinnasto(userId: string, params: Record<string, any>) {
     console.log('🔍 searchHinnasto called with params:', { userId, params });
     try {
+      // Query ALL hinnasto records (shared data)
       const q = query(
         collection(db, 'hinnasto'),
-        where('userId', '==', userId),
-        limit(params.limit || 10)
+        limit(params.limit || 100) // Increased limit for shared data
       );
 
-      console.log('📊 Querying hinnasto collection for userId:', userId);
+      console.log('📊 Querying shared hinnasto collection');
       const querySnapshot = await getDocs(q);
       console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
       
@@ -224,13 +224,13 @@ class GeminiChatService {
   private async searchTilaus(userId: string, params: Record<string, any>) {
     console.log('🔍 searchTilaus called with params:', { userId, params });
     try {
+      // Query ALL tilaus_data records (shared data)
       const q = query(
         collection(db, 'tilaus_data'),
-        where('userId', '==', userId),
-        limit(params.limit || 10)
+        limit(params.limit || 100) // Increased limit for shared data
       );
 
-      console.log('📊 Querying tilaus_data collection for userId:', userId);
+      console.log('📊 Querying shared tilaus_data collection');
       const querySnapshot = await getDocs(q);
       console.log('📊 Found', querySnapshot.docs.length, 'documents in tilaus_data collection');
       
@@ -277,9 +277,9 @@ class GeminiChatService {
 
   private async fetchTilausDataForCustomer(userId: string, asiakasnumero: string): Promise<any[]> {
     try {
+      // Query ALL tilaus_data records (shared data)
       const q = query(
-        collection(db, 'tilaus_data'),
-        where('userId', '==', userId)
+        collection(db, 'tilaus_data')
       );
       
       const querySnapshot = await getDocs(q);

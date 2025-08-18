@@ -22,7 +22,7 @@ export const ERPApiTester: React.FC = () => {
   const { user } = useAuth();
   const { currentWorkspace, workspaceConfig } = useWorkspace();
 
-  const isPurchaseWorkspace = currentWorkspace === 'purchaser';
+  const isPurchaseWorkspace = false; // Always use invoicer workspace
   const searchCriteria = isPurchaseWorkspace ? purchaseSearchCriteria : invoiceSearchCriteria;
 
   const handleInputChange = (field: string, value: string) => {

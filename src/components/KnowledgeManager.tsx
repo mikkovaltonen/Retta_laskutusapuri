@@ -79,13 +79,8 @@ export const KnowledgeManager: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // List of sample knowledge documents to load based on workspace
-      const sampleFiles = currentWorkspace === 'purchaser' ? [
-        { path: '/DMA_levels_markdown.md', name: 'DMA Authorization Levels' },
-        { path: '/DMA_matrix_combined.md', name: 'DMA Matrix Combined' },
-        { path: '/Operative purchasing process.md', name: 'Operative Purchasing Process' },
-        { path: '/S2P Policy.md', name: 'Source-to-Pay Policy' }
-      ] : [
+      // List of sample knowledge documents to load for invoicing workspace
+      const sampleFiles = [
         { path: '/invoicing_internal_knowledge_example.md', name: 'invoicing_internal_knowledge_example' }
       ];
       
@@ -181,7 +176,7 @@ export const KnowledgeManager: React.FC = () => {
               disabled={loading}
               className="text-green-600 border-green-200 hover:bg-green-50"
             >
-              📚 Load Sample {currentWorkspace === 'purchaser' ? 'Procurement' : 'Invoicing'} Knowledge
+              📚 Load Sample Invoicing Knowledge
             </Button>
           </div>
         </CardHeader>
@@ -212,6 +207,12 @@ export const KnowledgeManager: React.FC = () => {
                         <span>{formatFileSize(doc.size)}</span>
                         <span>•</span>
                         <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
+                        {doc.userId && (
+                          <>
+                            <span>•</span>
+                            <span>Ladannut: {doc.userId}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -62,10 +62,9 @@ export const HinnastoApiTester: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      // Build Firestore query
+      // Build Firestore query - Query ALL hinnasto records (shared data)
       let q = query(
-        collection(db, 'hinnasto'),
-        where('userId', '==', user.uid)
+        collection(db, 'hinnasto')
       );
 
       // Add search filters
@@ -137,9 +136,9 @@ export const HinnastoApiTester: React.FC = () => {
     if (!user) return;
 
     try {
+      // Query ALL hinnasto records (shared data)
       const q = query(
         collection(db, 'hinnasto'),
-        where('userId', '==', user.uid),
         limit(1)
       );
       

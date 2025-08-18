@@ -16,8 +16,8 @@ const AppRoutes = () => {
       <Route path="/login" element={<LoginForm />} />
       
       {/* Legacy routes - redirect to new workspace structure */}
-      <Route path="/workbench" element={<Navigate to="/workspace/purchaser" replace />} />
-      <Route path="/admin" element={<Navigate to="/workspace/purchaser/admin" replace />} />
+      <Route path="/workbench" element={<Navigate to="/workspace/invoicer" replace />} />
+      <Route path="/admin" element={<Navigate to="/workspace/invoicer/admin" replace />} />
       
       {/* New workspace routes */}
       <Route 
@@ -28,7 +28,7 @@ const AppRoutes = () => {
               <Routes>
                 <Route path="/" element={<WorkspaceChat />} />
                 <Route path="/admin" element={<WorkspaceAdmin />} />
-                <Route path="*" element={<Navigate to="/workspace/purchaser" replace />} />
+                <Route path="*" element={<Navigate to="/workspace/invoicer" replace />} />
               </Routes>
             </WorkspaceProvider>
           </ProtectedRoute>

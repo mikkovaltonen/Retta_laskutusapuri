@@ -183,10 +183,7 @@ export const ERPManager: React.FC = () => {
             {workspaceConfig[currentWorkspace].erpTitle}
           </CardTitle>
           <CardDescription>
-            {currentWorkspace === 'purchaser' 
-              ? 'Your uploaded Excel file simulates purchase order data from your ERP system'
-              : 'Your uploaded Excel file simulates sales invoice data from your ERP system'
-            }
+            Your uploaded Excel file simulates sales invoice data from your ERP system
           </CardDescription>
         </CardHeader>
         <CardContent>
