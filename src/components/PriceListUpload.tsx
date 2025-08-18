@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from './ui/dialog';
 import { toast } from 'sonner';
+import { utils, write } from 'xlsx';
 
 interface PriceListUploadProps {
   onUploadComplete?: (document: ERPDocument) => void;
@@ -152,31 +153,30 @@ export const PriceListUpload: React.FC<PriceListUploadProps> = ({
       setUploading(true);
       setError(null);
       
-      // Fetch the sample Excel file from public directory with cache busting
+      // Fetch the sample JSON file from public directory with cache busting
       const cacheBuster = Date.now() + Math.random().toString(36).substring(7);
-      const sampleFile = 'Ostomyynti_AI_botti_testi_excel.xlsx';
+      const sampleFile = 'hinnasto_sample.json';
       const response = await fetch(`/${sampleFile}?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
       }
       
-      const arrayBuffer = await response.arrayBuffer();
+      const jsonData = await response.json();
       
-      // Create a File-like object from the fetched data - keep original filename
-      const fileName = `hinnasto_${sampleFile}`;
+      // Convert JSON data to Excel format for upload
+      const worksheet = utils.json_to_sheet(jsonData);
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, worksheet, 'Hinnasto');
       
-      const fileObject = {
-        name: fileName,
-        size: arrayBuffer.byteLength,
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        lastModified: Date.now(),
-        arrayBuffer: async () => arrayBuffer,
-        // Required for File interface compatibility
-        webkitRelativePath: '',
-        text: async () => '', // Not used for Excel files
-        stream: () => new Blob([arrayBuffer]).stream(),
-        slice: (start?: number, end?: number) => new Blob([arrayBuffer]).slice(start, end)
-      } as File;
+      // Convert to array buffer
+      const excelBuffer = write(workbook, { bookType: 'xlsx', type: 'array' });
+      
+      // Create a File-like object from the Excel data
+      const fileName = 'hinnasto_sample_data.xlsx';
+      
+      const fileObject = new File([excelBuffer], fileName, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
       
       // Upload using the hinnasto upload function
       const uploadedDoc = await storageService.uploadHinnastoDocument(fileObject, user.uid);
