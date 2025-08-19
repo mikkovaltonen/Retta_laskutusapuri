@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, GenerativeModel, ChatSession } from '@google/genera
 import { collection, query, where, getDocs, limit, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { storageService } from './storageService';
+import { addTechnicalLog } from './firestoreService';
 
 // Initialize Gemini 2.5 Pro
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
@@ -40,60 +41,38 @@ class GeminiChatService {
           functionDeclarations: [
             {
               name: 'searchHinnasto',
-              description: 'Search price list data (hinnasto) by product code, product name, or price range',
+              description: 'Search price list data by product number only. Returns product details including ProductName, SalePrice, and BuyPrice.',
               parameters: {
                 type: 'object',
                 properties: {
-                  tuotetunnus: {
+                  productNumber: {
                     type: 'string',
-                    description: 'Product code to search for'
-                  },
-                  tuote: {
-                    type: 'string',
-                    description: 'Product name or partial name to search for'
-                  },
-                  minMyyntihinta: {
-                    type: 'number',
-                    description: 'Minimum sales price'
-                  },
-                  maxMyyntihinta: {
-                    type: 'number',
-                    description: 'Maximum sales price'
-                  },
-                  minOstohinta: {
-                    type: 'number',
-                    description: 'Minimum purchase price'
-                  },
-                  maxOstohinta: {
-                    type: 'number',
-                    description: 'Maximum purchase price'
+                    description: 'Product number (ProductNumber field) to search for (partial match supported)'
                   },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
-                }
+                },
+                required: ['productNumber']
               }
             },
             {
               name: 'searchTilaus',
-              description: 'Search order data (tilaus_data) by any field',
+              description: 'Search or list order data (tilaus_data). Can search by order number or list all.',
               parameters: {
                 type: 'object',
                 properties: {
-                  searchField: {
+                  orderNumber: {
                     type: 'string',
-                    description: 'Field name to search in'
-                  },
-                  searchValue: {
-                    type: 'string',
-                    description: 'Value to search for'
+                    description: 'Optional: Order number (RP-tunnus/tilausnumero) to search for (partial match). Leave empty to list all.'
                   },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
-                }
+                },
+                required: []
               }
             },
             {
@@ -140,13 +119,23 @@ class GeminiChatService {
   }
 
   // Function implementations for Gemini to call
-  private async searchHinnasto(userId: string, params: Record<string, any>) {
+  private async searchHinnasto(userId: string, params: Record<string, any>, sessionId?: string) {
     console.log('🔍 searchHinnasto called with params:', { userId, params });
+    
+    // Log to continuous improvement
+    if (sessionId) {
+      await addTechnicalLog(sessionId, {
+        event: 'function_call_triggered',
+        functionName: 'searchHinnasto',
+        functionInputs: params
+      });
+    }
+    
     try {
-      // Query ALL hinnasto records (shared data)
+      // Query ALL hinnasto records without limit to match UI behavior
       const q = query(
-        collection(db, 'hinnasto'),
-        limit(params.limit || 100) // Increased limit for shared data
+        collection(db, 'hinnasto')
+        // No limit - get all records like the UI does
       );
 
       console.log('📊 Querying shared hinnasto collection');
@@ -158,45 +147,38 @@ class GeminiChatService {
         ...doc.data()
       }));
 
-      // Apply filters
-      if (params.tuotetunnus) {
-        records = records.filter(record => 
-          record.Tuotetunnus?.toString().toLowerCase().includes(params.tuotetunnus.toLowerCase())
-        );
-      }
-
-      if (params.tuote) {
-        records = records.filter(record => 
-          record.Tuote?.toString().toLowerCase().includes(params.tuote.toLowerCase())
-        );
-      }
-
-      if (params.minMyyntihinta !== undefined) {
+      // Apply filter - check multiple field names like the UI does
+      if (params.productNumber) {
+        console.log('🔎 Filtering by productNumber:', params.productNumber);
+        const beforeFilter = records.length;
         records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price >= params.minMyyntihinta;
+          // Check various possible field names for product number (same as UI)
+          const productNumber = 
+            record['ProductNumber'] || 
+            record['Tuotetunnus'] || 
+            record['tuotetunnus'] || 
+            record['Product Number'] ||
+            record['product_number'] ||
+            '';
+          return String(productNumber).toLowerCase().includes(params.productNumber.toLowerCase());
         });
-      }
-
-      if (params.maxMyyntihinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price <= params.maxMyyntihinta;
-        });
-      }
-
-      if (params.minOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price >= params.minOstohinta;
-        });
-      }
-
-      if (params.maxOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price <= params.maxOstohinta;
-        });
+        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+        if (records.length > 0) {
+          console.log('🔍 Sample matching records:', 
+            records.slice(0, 3).map(r => ({
+              ProductNumber: r['ProductNumber'],
+              Tuotetunnus: r['Tuotetunnus'],
+              ProductName: r['ProductName'] || r['Tuote']
+            })));
+        }
+      } else {
+        // productNumber is now required, so this shouldn't happen
+        console.warn('⚠️ searchHinnasto called without productNumber - returning empty result');
+        return {
+          success: true,
+          data: [],
+          count: 0
+        };
       }
 
       const result = {
@@ -211,9 +193,34 @@ class GeminiChatService {
         totalFound: result.count
       });
       
+      // Log result to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_result',
+          functionName: 'searchHinnasto',
+          result: {
+            success: result.success,
+            recordCount: result.data.length,
+            totalFound: result.count
+          },
+          timestamp: new Date()
+        });
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ searchHinnasto failed:', error);
+      
+      // Log error to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_error',
+          functionName: 'searchHinnasto',
+          error: error instanceof Error ? error.message : 'Search failed',
+          timestamp: new Date()
+        });
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Search failed'
@@ -221,8 +228,19 @@ class GeminiChatService {
     }
   }
 
-  private async searchTilaus(userId: string, params: Record<string, any>) {
+  private async searchTilaus(userId: string, params: Record<string, any>, sessionId?: string) {
     console.log('🔍 searchTilaus called with params:', { userId, params });
+    
+    // Log to continuous improvement
+    if (sessionId) {
+      await addTechnicalLog(sessionId, {
+        eventType: 'function_call',
+        functionName: 'searchTilaus',
+        parameters: params,
+        timestamp: new Date()
+      });
+    }
+    
     try {
       // Query ALL tilaus_data records (shared data)
       const q = query(
@@ -239,16 +257,23 @@ class GeminiChatService {
         ...doc.data()
       }));
 
-      // Apply search filter
-      if (params.searchField && params.searchValue) {
+      // Apply filter - only search by OrderNumber field (same as UI)
+      if (params.orderNumber) {
+        console.log('🔎 Filtering by orderNumber:', params.orderNumber);
+        const beforeFilter = records.length;
         records = records.filter(record => {
-          const fieldValue = record[params.searchField];
-          if (fieldValue === undefined || fieldValue === null) return false;
-          
-          const valueStr = String(fieldValue).toLowerCase();
-          const searchStr = String(params.searchValue).toLowerCase();
-          return valueStr.includes(searchStr);
+          // Check various possible field names for order number (same as UI)
+          const orderNumber = 
+            record['OrderNumber'] || 
+            record['RP-tunnus'] || 
+            record['RP-tunnus (tilausnumero)'] || 
+            record['Tilausnumero'] || 
+            record['tilausnumero'] ||
+            record['Tilaustunnus'] ||
+            '';
+          return String(orderNumber).toLowerCase().includes(params.orderNumber.toLowerCase());
         });
+        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
       }
 
       const result = {
@@ -263,9 +288,34 @@ class GeminiChatService {
         totalFound: result.count
       });
       
+      // Log result to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_result',
+          functionName: 'searchTilaus',
+          result: {
+            success: result.success,
+            recordCount: result.data.length,
+            totalFound: result.count
+          },
+          timestamp: new Date()
+        });
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ searchTilaus failed:', error);
+      
+      // Log error to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_error',
+          functionName: 'searchTilaus',
+          error: error instanceof Error ? error.message : 'Search failed',
+          timestamp: new Date()
+        });
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Search failed'
@@ -580,10 +630,10 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           let functionResult;
           switch (functionName) {
             case 'searchHinnasto':
-              functionResult = await this.searchHinnasto(userId, args);
+              functionResult = await this.searchHinnasto(userId, args, sessionId);
               break;
             case 'searchTilaus':
-              functionResult = await this.searchTilaus(userId, args);
+              functionResult = await this.searchTilaus(userId, args, sessionId);
               break;
             case 'createLasku':
               functionResult = await this.createLasku(userId, args);
