@@ -6,8 +6,9 @@ import { db } from '../lib/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Database, MessageSquare, FileText, Download, RefreshCw } from 'lucide-react';
+import { Database, MessageSquare, FileText, Download, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ChatAI } from './ChatAI';
 import ReactMarkdown from 'react-markdown';
@@ -24,16 +25,43 @@ export const ChatLayout: React.FC = () => {
   const [hinnastoData, setHinnastoData] = useState<DatabaseRecord[]>([]);
   const [tilausData, setTilausData] = useState<DatabaseRecord[]>([]);
   const [myyntilaskutData, setMyyntilaskutData] = useState<DatabaseRecord[]>([]);
+  const [ostolaskuData, setOstolaskuData] = useState<DatabaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntilaskut'>('hinnasto');
+  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku'>('hinnasto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const [productNumberFilter, setProductNumberFilter] = useState<string>('');
+  const [orderCodeFilter, setOrderCodeFilter] = useState<string>('');
+  const [ostolaskuTampuuriFilter, setOstolaskuTampuuriFilter] = useState<string>('');
+  const [ostolaskuProductFilter, setOstolaskuProductFilter] = useState<string>('');
+  const [columnOffset, setColumnOffset] = useState<Record<string, number>>({});
   const { user } = useAuth();
+
+  // Filter handlers with useCallback to prevent re-renders
+  const handleOstolaskuTampuuriFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔍 Tampuuri filter onChange triggered:', {
+      newValue: e.target.value,
+      oldValue: ostolaskuTampuuriFilter,
+      activeElement: document.activeElement?.tagName,
+      activeElementId: (document.activeElement as HTMLElement)?.id
+    });
+    setOstolaskuTampuuriFilter(e.target.value);
+  }, [ostolaskuTampuuriFilter]);
+
+  const handleOstolaskuProductFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('🔍 Product filter onChange triggered:', {
+      newValue: e.target.value,
+      oldValue: ostolaskuProductFilter,
+      activeElement: document.activeElement?.tagName,
+      activeElementId: (document.activeElement as HTMLElement)?.id
+    });
+    setOstolaskuProductFilter(e.target.value);
+  }, [ostolaskuProductFilter]);
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true);
@@ -93,7 +121,7 @@ export const ChatLayout: React.FC = () => {
           ...record
         })) || []
       );
-      setHinnastoData(hinnastoRecords.slice(0, 20)); // Show first 20 records
+      setHinnastoData(hinnastoRecords); // Store all records, will filter in display
 
       // Load tilaus data
       const tilausDocuments = await storageService.getUserTilausDocuments(user.uid);
@@ -103,7 +131,7 @@ export const ChatLayout: React.FC = () => {
           ...record
         })) || []
       );
-      setTilausData(tilausRecords.slice(0, 20)); // Show first 20 records
+      setTilausData(tilausRecords); // Store all records, will filter in display
 
       // Load myyntilaskut data in hierarchical format
       const myyntilaskutDocuments = await storageService.getUserMyyntilaskutDocuments(user.uid);
@@ -191,6 +219,10 @@ export const ChatLayout: React.FC = () => {
         }) || []
       );
       setMyyntilaskutData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
+
+      // Ostolaskut are session-specific, loaded directly in ChatAI component
+      // Initial empty state - will be updated via callback from ChatAI
+      setOstolaskuData([]);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -323,6 +355,34 @@ export const ChatLayout: React.FC = () => {
       }
     }
     
+    // Handle OrderMargin field - show as percentage
+    if (header === 'OrderMargin' || header === 'OrderMargin%' || header.toLowerCase().includes('margin')) {
+      if (typeof value === 'number') {
+        // If value is between 0 and 1, assume it's a decimal percentage
+        if (value >= 0 && value <= 1) {
+          return `${Math.round(value * 100)}%`;
+        }
+        // Otherwise assume it's already a percentage value
+        return `${Math.round(value)}%`;
+      }
+    }
+    
+    // Handle numeric values - remove decimals for display
+    if (typeof value === 'number') {
+      // Check if field name suggests it's a price or amount
+      const priceFields = ['price', 'hinta', 'amount', 'summa', 'total', 'cost', 'kustannus'];
+      const isPriceField = priceFields.some(field => 
+        header.toLowerCase().includes(field.toLowerCase())
+      );
+      
+      if (isPriceField) {
+        // Round to whole euros for prices
+        return `${Math.round(value)}€`;
+      }
+      
+      // For other numbers, just round to integer
+      return String(Math.round(value));
+    }
     
     return String(value);
   };
@@ -558,8 +618,8 @@ export const ChatLayout: React.FC = () => {
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Tuotekoodi</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Määrä</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">á-hinta</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Kuvaus</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilattu tuote</th>
+                    <th className="border-b px-2 py-1 text-left font-medium text-xs min-w-[150px]">Kuvaus</th>
+                    <th className="border-b px-2 py-1 text-left font-medium text-xs min-w-[150px]">Tilattu tuote</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
                   </tr>
                 </thead>
@@ -649,14 +709,14 @@ export const ChatLayout: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="border-b px-1 py-1 text-xs max-w-[120px] truncate" title={line.kuvaus}>
+                      <td className="border-b px-2 py-1 text-xs min-w-[150px] max-w-[250px]">
                         {editingCell?.rowId === line.id && editingCell?.field === 'kuvaus' ? (
                           <div className="flex gap-1">
                             <input
                               type="text"
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              className="w-24 px-1 text-xs border rounded"
+                              className="w-full px-1 text-xs border rounded"
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') handleCellSave();
                                 if (e.key === 'Escape') handleCellCancel();
@@ -667,16 +727,32 @@ export const ChatLayout: React.FC = () => {
                             <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-5 w-5 p-0 text-xs">✕</Button>
                           </div>
                         ) : (
-                          <span 
-                            className="cursor-pointer hover:bg-gray-200 px-1 rounded"
-                            onClick={() => handleCellEdit(line.id, 'kuvaus', String(line.kuvaus || ''))}
-                          >
-                            {line.kuvaus || '-'}
-                          </span>
+                          <div className="group relative">
+                            <span 
+                              className="cursor-pointer hover:bg-gray-200 px-1 rounded block break-words whitespace-normal"
+                              onClick={() => handleCellEdit(line.id, 'kuvaus', String(line.kuvaus || ''))}
+                            >
+                              {line.kuvaus || '-'}
+                            </span>
+                            {line.kuvaus && line.kuvaus.length > 50 && (
+                              <div className="absolute z-10 hidden group-hover:block bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 max-w-md">
+                                <span className="text-xs">{line.kuvaus}</span>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
-                      <td className="border-b px-1 py-1 text-xs max-w-[120px] truncate" title={line.tilattuTuote}>
-                        {line.tilattuTuote || '-'}
+                      <td className="border-b px-2 py-1 text-xs min-w-[150px] max-w-[250px]">
+                        <div className="group relative">
+                          <span className="block break-words whitespace-normal">
+                            {line.tilattuTuote || '-'}
+                          </span>
+                          {line.tilattuTuote && line.tilattuTuote.length > 50 && (
+                            <div className="absolute z-10 hidden group-hover:block bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 max-w-md">
+                              <span className="text-xs">{line.tilattuTuote}</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="border-b px-1 py-1">
                         <Button
@@ -733,64 +809,441 @@ export const ChatLayout: React.FC = () => {
     );
   };
 
-  const renderDataTable = (data: DatabaseRecord[], title: string) => {
-    if (data.length === 0) {
+  const renderDataTable = useCallback((data: DatabaseRecord[], title: string) => {
+    console.log(`🔄 renderDataTable called for ${title}:`, {
+      dataLength: data.length,
+      title,
+      ostolaskuTampuuriFilter,
+      ostolaskuProductFilter,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Apply filters based on tab
+    let filteredData = data;
+    
+    // Apply product name filter for Hinnasto
+    if (title === 'Hinnasto' && productNumberFilter) {
+      filteredData = data.filter(record => {
+        // Check ProductName field with advanced text matching
+        const productName = String(record['ProductName'] || '').trim();
+        
+        // Normalize for comparison (case-insensitive, remove extra spaces)
+        const searchTerms = productNumberFilter.toLowerCase().replace(/\s+/g, ' ').trim().split(' ');
+        const normalizedItemName = productName.toLowerCase().replace(/\s+/g, ' ');
+        
+        // Check if all search terms are found in the product name
+        // This allows searching for "kunto pts" to find "Kuntotutkimus ja PTS"
+        const allTermsMatch = searchTerms.every(term => normalizedItemName.includes(term));
+        
+        // Also check for exact substring match
+        const exactMatch = normalizedItemName.includes(productNumberFilter.toLowerCase().replace(/\s+/g, ' ').trim());
+        
+        return allTermsMatch || exactMatch;
+      });
+    }
+    
+    // Apply filters for Tilaus
+    if (title === 'Tilaus') {
+      // Apply Code (tampuurinumero) filter
+      if (orderCodeFilter) {
+        filteredData = filteredData.filter(record => {
+          // Check Code field (tampuurinumero)
+          const code = record['Code'] || record['Tampuurinumero'] || '';
+          return String(code).toLowerCase().includes(orderCodeFilter.toLowerCase());
+        });
+      }
+    }
+    
+    // Apply filters for Ostolasku
+    if (title === 'Ostolasku') {
+      console.log('🔍 Ostolasku filtering:', {
+        originalDataLength: data.length,
+        tampuuriFilter: ostolaskuTampuuriFilter,
+        productFilter: ostolaskuProductFilter,
+        firstRecordKeys: data[0] ? Object.keys(data[0]) : 'no data',
+        firstRecordValues: data[0] ? data[0] : 'no data',
+        sampleRecord: data[0] ? JSON.stringify(data[0], null, 2) : 'no data'
+      });
+      
+      // Apply tampuurinumero filter - search in "tampuuri" field
+      if (ostolaskuTampuuriFilter) {
+        const beforeFilter = filteredData.length;
+        filteredData = filteredData.filter((record, index) => {
+          // Get the tampuuri field value
+          const tampuuri = record['tampuuri'] || '';
+          
+          const matches = String(tampuuri).toLowerCase().includes(ostolaskuTampuuriFilter.toLowerCase());
+          
+          if (index === 0) {
+            console.log('🔎 First record tampuuri check:', {
+              tampuuri,
+              filter: ostolaskuTampuuriFilter,
+              matches,
+              recordFields: Object.keys(record)
+            });
+          }
+          
+          return matches;
+        });
+        console.log(`📊 Tampuuri filter result: ${beforeFilter} -> ${filteredData.length} records`);
+      }
+      
+      // Apply product description filter - search in "Tuote" field
+      if (ostolaskuProductFilter) {
+        const beforeFilter = filteredData.length;
+        filteredData = filteredData.filter((record, index) => {
+          // Get the Tuote field value
+          const tuote = record['Tuote'] || '';
+          
+          const matches = String(tuote).toLowerCase().includes(ostolaskuProductFilter.toLowerCase());
+          
+          if (index === 0) {
+            console.log('🔎 First record tuote check:', {
+              tuote,
+              filter: ostolaskuProductFilter,
+              matches
+            });
+          }
+          
+          return matches;
+        });
+        console.log(`📊 Tuote filter result: ${beforeFilter} -> ${filteredData.length} records`);
+      }
+    }
+    
+    if (filteredData.length === 0) {
       const emptyMessage = title === 'Myyntilaskut' 
         ? 'Luo myyntilasku pyytämällä myyntilaskun AI genrointia chatbotilta'
+        : title === 'Ostolasku'
+        ? (ostolaskuTampuuriFilter || ostolaskuProductFilter)
+          ? ostolaskuTampuuriFilter && ostolaskuProductFilter
+            ? `Ei tuloksia tampuurinumerolle "${ostolaskuTampuuriFilter}" ja tuotekuvaukselle "${ostolaskuProductFilter}"`
+            : ostolaskuTampuuriFilter
+            ? `Ei tuloksia tampuurinumerolle "${ostolaskuTampuuriFilter}"`
+            : `Ei tuloksia tuotekuvaukselle "${ostolaskuProductFilter}"`
+          : 'Lataa ostolasku käyttämällä "Lataa ostolasku" -painiketta Chat AI -näkymässä'
+        : productNumberFilter && title === 'Hinnasto'
+        ? `Ei tuloksia tuotetunnukselle "${productNumberFilter}"`
+        : orderCodeFilter && title === 'Tilaus'
+        ? `Ei tuloksia tampuurinumerolle "${orderCodeFilter}"`
         : 'Lataa data Admin-sivun kautta';
       
       return (
-        <div className="text-center py-8 text-gray-500">
-          <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-          <p>Ei {title.toLowerCase()}-dataa saatavilla</p>
-          <p className="text-sm">{emptyMessage}</p>
+        <div className="space-y-4">
+          {title === 'Hinnasto' && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Suodata tuotteen nimellä..."
+                value={productNumberFilter}
+                onChange={(e) => setProductNumberFilter(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {productNumberFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setProductNumberFilter('')}
+                >
+                  Tyhjennä
+                </Button>
+              )}
+            </div>
+          )}
+          {title === 'Tilaus' && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Suodata tampuurinumerolla (Code)..."
+                value={orderCodeFilter}
+                onChange={(e) => setOrderCodeFilter(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {orderCodeFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOrderCodeFilter('')}
+                >
+                  Tyhjennä
+                </Button>
+              )}
+            </div>
+          )}
+          {title === 'Ostolasku' && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Suodata tampuurinumerolla (Code)..."
+                  value={ostolaskuTampuuriFilter}
+                  onChange={(e) => setOstolaskuTampuuriFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {ostolaskuTampuuriFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOstolaskuTampuuriFilter('')}
+                  >
+                    Tyhjennä
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Suodata tuotekuvauksella..."
+                  value={ostolaskuProductFilter}
+                  onChange={(e) => setOstolaskuProductFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {ostolaskuProductFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOstolaskuProductFilter('')}
+                  >
+                    Tyhjennä
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="text-center py-8 text-gray-500">
+            <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p>Ei {title.toLowerCase()}-dataa saatavilla</p>
+            <p className="text-sm">{emptyMessage}</p>
+          </div>
         </div>
       );
     }
 
-    const headers = Object.keys(data[0]).filter(key => !['id'].includes(key));
+    const headers = Object.keys(filteredData[0]).filter(key => !['id'].includes(key));
     const maxVisibleColumns = calculateVisibleColumns(leftPanelWidth);
-    const displayHeaders = headers.slice(0, maxVisibleColumns);
+    const currentOffset = columnOffset[title] || 0;
+    const displayHeaders = headers.slice(currentOffset, currentOffset + maxVisibleColumns);
+    const displayData = filteredData.slice(0, 20); // Show first 20 filtered records
+    
+    // Check if navigation arrows should be shown
+    const canGoLeft = currentOffset > 0;
+    const canGoRight = currentOffset + maxVisibleColumns < headers.length;
+    
+    const handleColumnNavigation = (direction: 'left' | 'right') => {
+      const newOffset = direction === 'left' 
+        ? Math.max(0, currentOffset - 1)
+        : Math.min(headers.length - maxVisibleColumns, currentOffset + 1);
+      
+      setColumnOffset(prev => ({
+        ...prev,
+        [title]: newOffset
+      }));
+    };
 
     return (
       <div className="space-y-4">
+        {title === 'Hinnasto' && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Suodata tuotteen nimellä..."
+              value={productNumberFilter}
+              onChange={(e) => setProductNumberFilter(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {productNumberFilter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProductNumberFilter('')}
+              >
+                Tyhjennä
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {title === 'Tilaus' && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Suodata tampuurinumerolla (Code)..."
+              value={orderCodeFilter}
+              onChange={(e) => setOrderCodeFilter(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {orderCodeFilter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setOrderCodeFilter('')}
+              >
+                Tyhjennä
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {title === 'Ostolasku' && (
+          <div className="space-y-2">
+            {data.length > 0 && (
+              <Alert className="bg-green-50 border-green-200">
+                <AlertDescription className="text-sm text-green-700">
+                  ✅ Sessiokohtaista ostolaskudataa ladattu: {data.length} riviä
+                </AlertDescription>
+              </Alert>
+            )}
+            <div className="flex gap-2">
+              <Input
+                id="ostolasku-tampuuri-filter"
+                key="ostolasku-tampuuri-filter"
+                type="text"
+                placeholder="Suodata tampuurinumerolla..."
+                value={ostolaskuTampuuriFilter}
+                onChange={handleOstolaskuTampuuriFilterChange}
+                className="flex-1"
+              />
+              {ostolaskuTampuuriFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOstolaskuTampuuriFilter('')}
+                >
+                  Tyhjennä
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                id="ostolasku-product-filter"
+                key="ostolasku-product-filter"
+                type="text"
+                placeholder="Suodata tuotteella..."
+                value={ostolaskuProductFilter}
+                onChange={handleOstolaskuProductFilterChange}
+                className="flex-1"
+              />
+              {ostolaskuProductFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setOstolaskuProductFilter('')}
+                >
+                  Tyhjennä
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+        
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">{data.length} riviä</Badge>
+            <Badge variant="secondary">
+              {(productNumberFilter && title === 'Hinnasto') || (orderCodeFilter && title === 'Tilaus') || ((ostolaskuTampuuriFilter || ostolaskuProductFilter) && title === 'Ostolasku')
+                ? `${filteredData.length} / ${data.length} riviä` 
+                : `${filteredData.length} riviä`}
+            </Badge>
             <Badge variant="outline">{displayHeaders.length}/{headers.length} saraketta</Badge>
             {headers.length > displayHeaders.length && (
               <Badge variant="secondary">+{headers.length - displayHeaders.length} piilotettu</Badge>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => downloadAsExcel(data, title.toLowerCase())}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Excel
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Column navigation arrows */}
+            {headers.length > maxVisibleColumns && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleColumnNavigation('left')}
+                  disabled={!canGoLeft}
+                  className="h-8 w-8 p-0"
+                  title="Näytä edelliset sarakkeet"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs text-gray-500 px-1">
+                  Sarakkeet {currentOffset + 1}-{Math.min(currentOffset + maxVisibleColumns, headers.length)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleColumnNavigation('right')}
+                  disabled={!canGoRight}
+                  className="h-8 w-8 p-0"
+                  title="Näytä seuraavat sarakkeet"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadAsExcel(filteredData, title.toLowerCase())}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Excel
+            </Button>
+          </div>
         </div>
         
         <div className="overflow-x-auto max-h-96">
           <table className="w-full text-sm border-collapse border border-gray-300">
             <thead>
               <tr className="bg-gray-100">
-                {displayHeaders.map(header => (
-                  <th key={header} className="border border-gray-300 px-1 py-1 text-left font-medium text-xs truncate max-w-[120px]" title={header}>
-                    {header}
-                  </th>
-                ))}
+                {displayHeaders.map(header => {
+                  // Make ProductName and Tuote columns wider to show full text
+                  const isProductColumn = header === 'ProductName' || header === 'Tuote' || 
+                                         header === 'Tuotekuvaus' || header === 'tuote' || 
+                                         header === 'Product Name' || header === 'product_name';
+                  
+                  const columnClass = isProductColumn 
+                    ? "border border-gray-300 px-2 py-1 text-left font-medium text-xs min-w-[200px]"
+                    : "border border-gray-300 px-1 py-1 text-left font-medium text-xs max-w-[120px] truncate";
+                  
+                  return (
+                    <th key={header} className={columnClass} title={header}>
+                      {header}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
-              {data.slice(0, 10).map((record, index) => (
-                <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+              {displayData.map((record, index) => (
+                <tr key={record.id || `row-${index}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   {displayHeaders.map(header => {
                     const formattedValue = formatCellValue(record[header], header);
+                    
+                    // Make ProductName and Tuote columns show full text with wrapping
+                    const isProductColumn = header === 'ProductName' || header === 'Tuote' || 
+                                           header === 'Tuotekuvaus' || header === 'tuote' || 
+                                           header === 'Product Name' || header === 'product_name';
+                    
+                    const cellClass = isProductColumn
+                      ? "border border-gray-300 px-2 py-1 text-xs min-w-[200px] break-words whitespace-normal"
+                      : "border border-gray-300 px-1 py-1 text-xs max-w-[120px] truncate";
+                    
                     return (
-                      <td key={header} className="border border-gray-300 px-1 py-1 text-xs truncate max-w-[120px]" title={formattedValue}>
-                        {formattedValue}
+                      <td 
+                        key={header} 
+                        className={cellClass} 
+                        title={formattedValue}
+                        style={isProductColumn ? { maxWidth: '300px' } : {}}
+                      >
+                        {isProductColumn ? (
+                          <div className="group relative">
+                            <span className="block">{formattedValue}</span>
+                            {formattedValue.length > 50 && (
+                              <div className="absolute z-10 hidden group-hover:block bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 max-w-md">
+                                <span className="text-xs">{formattedValue}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          formattedValue
+                        )}
                       </td>
                     );
                   })}
@@ -798,15 +1251,15 @@ export const ChatLayout: React.FC = () => {
               ))}
             </tbody>
           </table>
-          {data.length > 10 && (
+          {filteredData.length > 20 && (
             <p className="text-xs text-gray-500 mt-2 text-center">
-              ... ja {data.length - 10} riviä lisää
+              ... ja {filteredData.length - 20} riviä lisää
             </p>
           )}
         </div>
       </div>
     );
-  };
+  }, [ostolaskuTampuuriFilter, ostolaskuProductFilter, productNumberFilter, orderCodeFilter, editingCell, columnOffset, leftPanelWidth]);
 
   return (
     <div id="chat-layout-container" className="h-full flex gap-2">
@@ -843,10 +1296,11 @@ export const ChatLayout: React.FC = () => {
               </Alert>
             )}
             
-            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntilaskut')}>
-              <TabsList className="grid w-full grid-cols-3">
+            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku')}>
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="hinnasto">Hinnasto</TabsTrigger>
                 <TabsTrigger value="tilaus">Tilaukset</TabsTrigger>
+                <TabsTrigger value="ostolasku">Ostolaskut</TabsTrigger>
                 <TabsTrigger value="myyntilaskut">Myyntilaskut</TabsTrigger>
               </TabsList>
               
@@ -856,6 +1310,10 @@ export const ChatLayout: React.FC = () => {
               
               <TabsContent value="tilaus" className="mt-4">
                 {renderDataTable(tilausData, 'Tilaus')}
+              </TabsContent>
+              
+              <TabsContent value="ostolasku" className="mt-4">
+                {renderDataTable(ostolaskuData, 'Ostolasku')}
               </TabsContent>
               
               <TabsContent value="myyntilaskut" className="mt-4">
@@ -888,7 +1346,10 @@ export const ChatLayout: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0 flex-1 min-h-0">
-          <ChatAI className="h-full" />
+          <ChatAI 
+            className="h-full" 
+            onOstolaskuDataChange={(data) => setOstolaskuData(data)}
+          />
         </CardContent>
       </Card>
     </div>
