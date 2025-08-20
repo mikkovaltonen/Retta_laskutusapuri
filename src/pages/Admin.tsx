@@ -8,8 +8,6 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import DocumentAnalysis from "@/components/DocumentAnalysis";
 import { PriceListUpload } from "@/components/PriceListUpload";
 import { OrderUpload } from "@/components/OrderUpload";
-import { HinnastoApiTester } from "@/components/HinnastoApiTester";
-import { TilausApiTester } from "@/components/TilausApiTester";
 import { UserCreation } from "@/components/UserCreation";
 import {
   Dialog,
@@ -34,8 +32,6 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPriceListUpload, setShowPriceListUpload] = useState(false);
   const [showOrderUpload, setShowOrderUpload] = useState(false);
-  const [showHinnastoApiTester, setShowHinnastoApiTester] = useState(false);
-  const [showTilausApiTester, setShowTilausApiTester] = useState(false);
   const [showAdminIssueReport, setShowAdminIssueReport] = useState(false);
   const [showUserCreation, setShowUserCreation] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
@@ -299,77 +295,6 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
           </Card>
           )}
 
-          {/* Hinnasto API Testing - Hidden for competitive_bidding workspace */}
-          {currentWorkspace !== 'competitive_bidding' && (
-          <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="bg-gray-700 text-white rounded-t-lg">
-              <CardTitle className="flex items-center">
-                <Database className="mr-3 h-6 w-6" />
-                Hinnasto API Testaus
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-gray-600 mb-4">
-                Testaa hinnasto-datan hakutoiminnallisuutta. Hae tuotetunnuksen, tuotteen tai hintojen perusteella.
-              </p>
-              <Dialog open={showHinnastoApiTester} onOpenChange={setShowHinnastoApiTester}>
-                <DialogTrigger asChild>
-                  <Button 
-                    className="w-full bg-gray-700 hover:bg-gray-600 text-white"
-                  >
-                    <Database className="mr-2 h-4 w-4" />
-                    Test Hinnasto API
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Hinnasto API Testaus Interface</DialogTitle>
-                    <DialogDescription>
-                      Testaa hinnasto haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <HinnastoApiTester />
-                </DialogContent>
-              </Dialog>
-            </CardContent>
-          </Card>
-          )}
-
-          {/* Tilaus API Testing - Hidden for competitive_bidding workspace */}
-          {currentWorkspace !== 'competitive_bidding' && (
-          <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="bg-gray-700 text-white rounded-t-lg">
-              <CardTitle className="flex items-center">
-                <Database className="mr-3 h-6 w-6" />
-                Tilaus API Testaus
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <p className="text-gray-600 mb-4">
-                Testaa tilaus-datan hakutoiminnallisuutta. Hae kaikkien saatavilla olevien kenttien perusteella.
-              </p>
-              <Dialog open={showTilausApiTester} onOpenChange={setShowTilausApiTester}>
-                <DialogTrigger asChild>
-                  <Button 
-                    className="w-full bg-gray-700 hover:bg-gray-600 text-white"
-                  >
-                    <Database className="mr-2 h-4 w-4" />
-                    Test Tilaus API
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[1000px] max-h-[80vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Tilaus API Testaus Interface</DialogTitle>
-                    <DialogDescription>
-                      Testaa tilaus haku-API:a eri hakukriteereillä ja varmista toiminnallisuus.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <TilausApiTester />
-                </DialogContent>
-              </Dialog>
-            </CardContent>
-          </Card>
-          )}
 
           {/* Issue Report */}
           <Card className="border-gray-300 shadow-lg hover:shadow-xl transition-shadow">
@@ -383,21 +308,13 @@ const Admin = ({ hideNavigation = false }: AdminProps) => {
               <p className="text-gray-600 mb-4">
                 View and manage negative feedback issues from user interactions. Track resolution status.
               </p>
-              <Link to="/issues">
-                <Button 
-                  className="w-full bg-red-600 hover:bg-red-700 text-white mb-2"
-                >
-                  <AlertTriangle className="mr-2 h-4 w-4" />
-                  View My Issues
-                </Button>
-              </Link>
               <Dialog open={showAdminIssueReport} onOpenChange={setShowAdminIssueReport}>
                 <DialogTrigger asChild>
                   <Button 
                     className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                   >
                     <AlertTriangle className="mr-2 h-4 w-4" />
-                    Admin: All User Issues
+                    View Issue Report
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[1200px] max-h-[90vh] overflow-y-auto">
