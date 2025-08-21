@@ -37,31 +37,23 @@ export const ChatLayout: React.FC = () => {
   const [editValue, setEditValue] = useState<string>('');
   const [productNumberFilter, setProductNumberFilter] = useState<string>('');
   const [orderCodeFilter, setOrderCodeFilter] = useState<string>('');
+  const [orderRPFilter, setOrderRPFilter] = useState<string>('');
   const [ostolaskuTampuuriFilter, setOstolaskuTampuuriFilter] = useState<string>('');
+  const [ostolaskuRPFilter, setOstolaskuRPFilter] = useState<string>('');
   const [ostolaskuProductFilter, setOstolaskuProductFilter] = useState<string>('');
   const [columnOffset, setColumnOffset] = useState<Record<string, number>>({});
+  const [isLeftPanelVisible, setIsLeftPanelVisible] = useState(true);
+  const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
   const { user } = useAuth();
 
   // Filter handlers with useCallback to prevent re-renders
   const handleOstolaskuTampuuriFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('🔍 Tampuuri filter onChange triggered:', {
-      newValue: e.target.value,
-      oldValue: ostolaskuTampuuriFilter,
-      activeElement: document.activeElement?.tagName,
-      activeElementId: (document.activeElement as HTMLElement)?.id
-    });
     setOstolaskuTampuuriFilter(e.target.value);
-  }, [ostolaskuTampuuriFilter]);
+  }, []);
 
   const handleOstolaskuProductFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log('🔍 Product filter onChange triggered:', {
-      newValue: e.target.value,
-      oldValue: ostolaskuProductFilter,
-      activeElement: document.activeElement?.tagName,
-      activeElementId: (document.activeElement as HTMLElement)?.id
-    });
     setOstolaskuProductFilter(e.target.value);
-  }, [ostolaskuProductFilter]);
+  }, []);
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true);
@@ -105,6 +97,25 @@ export const ChatLayout: React.FC = () => {
       document.body.style.userSelect = '';
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // Add keyboard shortcuts for panel toggling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + B toggles left panel (like VS Code sidebar)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        setIsLeftPanelVisible(prev => !prev);
+      }
+      // Ctrl/Cmd + J toggles right panel (similar to VS Code panel)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+        e.preventDefault();
+        setIsRightPanelVisible(prev => !prev);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const loadDatabaseData = async () => {
     if (!user) return;
@@ -369,13 +380,22 @@ export const ChatLayout: React.FC = () => {
     
     // Handle numeric values - remove decimals for display
     if (typeof value === 'number') {
+      // Skip currency formatting for kustannuspaikka (cost center) fields
+      if (header.toLowerCase().includes('kustannuspaikka')) {
+        return String(value);
+      }
+      
       // Check if field name suggests it's a price or amount
-      const priceFields = ['price', 'hinta', 'amount', 'summa', 'total', 'cost', 'kustannus'];
+      const priceFields = ['price', 'hinta', 'amount', 'summa', 'total', 'cost'];
       const isPriceField = priceFields.some(field => 
         header.toLowerCase().includes(field.toLowerCase())
       );
       
-      if (isPriceField) {
+      // Also check for specific price patterns
+      const hasPricePattern = header.toLowerCase().includes('alv') && 
+                              (header.toLowerCase().includes('hinta') || header.toLowerCase().includes('€'));
+      
+      if (isPriceField || hasPricePattern) {
         // Round to whole euros for prices
         return `${Math.round(value)}€`;
       }
@@ -810,13 +830,6 @@ export const ChatLayout: React.FC = () => {
   };
 
   const renderDataTable = useCallback((data: DatabaseRecord[], title: string) => {
-    console.log(`🔄 renderDataTable called for ${title}:`, {
-      dataLength: data.length,
-      title,
-      ostolaskuTampuuriFilter,
-      ostolaskuProductFilter,
-      timestamp: new Date().toISOString()
-    });
     
     // Apply filters based on tab
     let filteredData = data;
@@ -852,40 +865,58 @@ export const ChatLayout: React.FC = () => {
           return String(code).toLowerCase().includes(orderCodeFilter.toLowerCase());
         });
       }
+      
+      // Apply RP-numero filter
+      if (orderRPFilter) {
+        filteredData = filteredData.filter(record => {
+          const rpNumero = record['OrderNumber'] || 
+                           record['RP-numero'] ||
+                           record['RP-tunnus'] ||
+                           '';
+          return String(rpNumero).toLowerCase().includes(orderRPFilter.toLowerCase());
+        });
+      }
     }
     
     // Apply filters for Ostolasku
     if (title === 'Ostolasku') {
-      console.log('🔍 Ostolasku filtering:', {
-        originalDataLength: data.length,
-        tampuuriFilter: ostolaskuTampuuriFilter,
-        productFilter: ostolaskuProductFilter,
-        firstRecordKeys: data[0] ? Object.keys(data[0]) : 'no data',
-        firstRecordValues: data[0] ? data[0] : 'no data',
-        sampleRecord: data[0] ? JSON.stringify(data[0], null, 2) : 'no data'
-      });
       
-      // Apply tampuurinumero filter - search in "tampuuri" field
+      // Apply tampuurinumero filter - search in multiple possible field names
       if (ostolaskuTampuuriFilter) {
         const beforeFilter = filteredData.length;
         filteredData = filteredData.filter((record, index) => {
-          // Get the tampuuri field value
-          const tampuuri = record['tampuuri'] || '';
+          // Check multiple possible field names for tampuuri
+          const tampuuri = record['tampuuri'] || 
+                          record['Tampuuri'] || 
+                          record['TAMPUURI'] ||
+                          record['tampuurinumero'] ||
+                          record['Tampuurinumero'] ||
+                          record['Code'] ||
+                          record['code'] ||
+                          record['Kohteen tampuuri ID'] ||
+                          '';
           
           const matches = String(tampuuri).toLowerCase().includes(ostolaskuTampuuriFilter.toLowerCase());
           
-          if (index === 0) {
-            console.log('🔎 First record tampuuri check:', {
-              tampuuri,
-              filter: ostolaskuTampuuriFilter,
-              matches,
-              recordFields: Object.keys(record)
-            });
+          // Debug log for first few records
+          if (index < 3 && ostolaskuTampuuriFilter) {
+            console.log(`Ostolasku filter: searching for "${ostolaskuTampuuriFilter}" in tampuuri="${tampuuri}", matches=${matches}`);
           }
           
           return matches;
         });
-        console.log(`📊 Tampuuri filter result: ${beforeFilter} -> ${filteredData.length} records`);
+      }
+      
+      // Apply RP-numero filter for Ostolasku
+      if (ostolaskuRPFilter) {
+        filteredData = filteredData.filter(record => {
+          const rpNumero = record['RP-numero'] || 
+                           record['RP-tunnus'] ||
+                           record['RPnumero'] ||
+                           record['OrderNumber'] ||
+                           '';
+          return String(rpNumero).toLowerCase().includes(ostolaskuRPFilter.toLowerCase());
+        });
       }
       
       // Apply product description filter - search in "Tuote" field
@@ -897,17 +928,9 @@ export const ChatLayout: React.FC = () => {
           
           const matches = String(tuote).toLowerCase().includes(ostolaskuProductFilter.toLowerCase());
           
-          if (index === 0) {
-            console.log('🔎 First record tuote check:', {
-              tuote,
-              filter: ostolaskuProductFilter,
-              matches
-            });
-          }
           
           return matches;
         });
-        console.log(`📊 Tuote filter result: ${beforeFilter} -> ${filteredData.length} records`);
       }
     }
     
@@ -951,23 +974,43 @@ export const ChatLayout: React.FC = () => {
             </div>
           )}
           {title === 'Tilaus' && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Suodata tampuurinumerolla (Code)..."
-                value={orderCodeFilter}
-                onChange={(e) => setOrderCodeFilter(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {orderCodeFilter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOrderCodeFilter('')}
-                >
-                  Tyhjennä
-                </Button>
-              )}
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Suodata tampuurinumerolla (Code)..."
+                  value={orderCodeFilter}
+                  onChange={(e) => setOrderCodeFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {orderCodeFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOrderCodeFilter('')}
+                  >
+                    Tyhjennä
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Suodata RP-numerolla..."
+                  value={orderRPFilter}
+                  onChange={(e) => setOrderRPFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {orderRPFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOrderRPFilter('')}
+                  >
+                    Tyhjennä
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {title === 'Ostolasku' && (
@@ -985,6 +1028,24 @@ export const ChatLayout: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setOstolaskuTampuuriFilter('')}
+                  >
+                    Tyhjennä
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Suodata RP-numerolla..."
+                  value={ostolaskuRPFilter}
+                  onChange={(e) => setOstolaskuRPFilter(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {ostolaskuRPFilter && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOstolaskuRPFilter('')}
                   >
                     Tyhjennä
                   </Button>
@@ -1259,18 +1320,74 @@ export const ChatLayout: React.FC = () => {
         </div>
       </div>
     );
-  }, [ostolaskuTampuuriFilter, ostolaskuProductFilter, productNumberFilter, orderCodeFilter, editingCell, columnOffset, leftPanelWidth]);
+  }, [ostolaskuTampuuriFilter, ostolaskuRPFilter, ostolaskuProductFilter, productNumberFilter, orderCodeFilter, orderRPFilter, editingCell, columnOffset]);
 
   return (
-    <div id="chat-layout-container" className="h-full flex gap-2">
+    <div id="chat-layout-container" className="h-full flex gap-2 relative">
+      {/* Toggle Buttons - VS Code Style */}
+      <div className="absolute top-2 left-2 z-20 flex gap-1">
+        <button
+          onClick={() => setIsLeftPanelVisible(!isLeftPanelVisible)}
+          className={`p-1 rounded border hover:bg-gray-100 transition-all ${
+            !isLeftPanelVisible ? 'bg-gray-200 border-gray-400' : 'bg-white border-gray-300'
+          }`}
+          title={isLeftPanelVisible ? 'Piilota ERP Data (Ctrl+B)' : 'Näytä ERP Data (Ctrl+B)'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {isLeftPanelVisible ? (
+              // Left panel visible - show hide icon
+              <>
+                <rect x="1" y="2" width="5" height="12" fill="#374151" />
+                <rect x="7" y="2" width="8" height="12" fill="none" stroke="#374151" strokeWidth="1" />
+              </>
+            ) : (
+              // Left panel hidden - show reveal icon
+              <>
+                <rect x="1" y="2" width="5" height="12" fill="none" stroke="#374151" strokeWidth="1" />
+                <rect x="7" y="2" width="8" height="12" fill="#374151" />
+              </>
+            )}
+          </svg>
+        </button>
+      </div>
+      
+      <div className="absolute top-2 right-2 z-20 flex gap-1">
+        <button
+          onClick={() => setIsRightPanelVisible(!isRightPanelVisible)}
+          className={`p-1 rounded border hover:bg-gray-100 transition-all ${
+            !isRightPanelVisible ? 'bg-gray-200 border-gray-400' : 'bg-white border-gray-300'
+          }`}
+          title={isRightPanelVisible ? 'Piilota Chat (Ctrl+J)' : 'Näytä Chat (Ctrl+J)'}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {isRightPanelVisible ? (
+              // Right panel visible - show hide icon
+              <>
+                <rect x="1" y="2" width="8" height="12" fill="none" stroke="#374151" strokeWidth="1" />
+                <rect x="10" y="2" width="5" height="12" fill="#374151" />
+              </>
+            ) : (
+              // Right panel hidden - show reveal icon
+              <>
+                <rect x="1" y="2" width="8" height="12" fill="#374151" />
+                <rect x="10" y="2" width="5" height="12" fill="none" stroke="#374151" strokeWidth="1" />
+              </>
+            )}
+          </svg>
+        </button>
+      </div>
+
       {/* Left Column - Database Data */}
       <div 
-        className="flex flex-col gap-4 transition-all duration-200"
-        style={{ width: `${leftPanelWidth}%` }}
+        className="flex flex-col gap-4 transition-all duration-200 h-full overflow-hidden"
+        style={{ 
+          display: isLeftPanelVisible ? 'flex' : 'none',
+          width: isRightPanelVisible ? `${leftPanelWidth}%` : '100%'
+        }}
       >
         {/* Database Data */}
-        <Card className="flex-1 min-h-0">
-          <CardHeader className="pb-3">
+        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <CardHeader className="pb-3 flex-shrink-0 sticky top-0 bg-white z-10 border-b">
             <div className="flex justify-between items-center">
               <CardTitle className="flex items-center gap-2">
                 <Database className="w-5 h-5" />
@@ -1289,34 +1406,34 @@ export const ChatLayout: React.FC = () => {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="pt-0 flex-1 min-h-0">
+          <CardContent className="pt-0 flex-1 overflow-auto">
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
             
-            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku')}>
-              <TabsList className="grid w-full grid-cols-4">
+            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku')} className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-4 flex-shrink-0 sticky top-0 bg-white z-10">
                 <TabsTrigger value="hinnasto">Hinnasto</TabsTrigger>
                 <TabsTrigger value="tilaus">Tilaukset</TabsTrigger>
                 <TabsTrigger value="ostolasku">Ostolaskut</TabsTrigger>
                 <TabsTrigger value="myyntilaskut">Myyntilaskut</TabsTrigger>
               </TabsList>
               
-              <TabsContent value="hinnasto" className="mt-4">
+              <TabsContent value="hinnasto" className="mt-4 flex-1 overflow-auto">
                 {renderDataTable(hinnastoData, 'Hinnasto')}
               </TabsContent>
               
-              <TabsContent value="tilaus" className="mt-4">
+              <TabsContent value="tilaus" className="mt-4 flex-1 overflow-auto">
                 {renderDataTable(tilausData, 'Tilaus')}
               </TabsContent>
               
-              <TabsContent value="ostolasku" className="mt-4">
+              <TabsContent value="ostolasku" className="mt-4 flex-1 overflow-auto">
                 {renderDataTable(ostolaskuData, 'Ostolasku')}
               </TabsContent>
               
-              <TabsContent value="myyntilaskut" className="mt-4">
+              <TabsContent value="myyntilaskut" className="mt-4 flex-1 overflow-auto">
                 {renderInvoiceEditor()}
               </TabsContent>
             </Tabs>
@@ -1324,19 +1441,26 @@ export const ChatLayout: React.FC = () => {
         </Card>
       </div>
 
-      {/* Resizable Divider */}
-      <div 
-        className="w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors duration-200 flex-shrink-0 rounded-full"
-        onMouseDown={handleMouseDown}
-        title="Vedä muuttaaksesi paneelien kokoa"
-      />
+      {/* Resizable Divider - only show when both panels are visible */}
+      {isLeftPanelVisible && isRightPanelVisible && (
+        <div 
+          className="w-2 bg-gray-200 hover:bg-blue-400 cursor-col-resize transition-colors duration-200 flex-shrink-0 rounded-full"
+          onMouseDown={handleMouseDown}
+          title="Vedä muuttaaksesi paneelien kokoa"
+        />
+      )}
 
       {/* Right Column - Chatbot */}
       <Card 
-        className="flex flex-col min-h-0 transition-all duration-200"
-        style={{ width: `${100 - leftPanelWidth}%` }}
-      >
-        <CardHeader className="pb-3">
+          className="flex flex-col h-full overflow-hidden transition-all duration-300"
+        style={{ 
+          display: isRightPanelVisible ? 'flex' : 'none',
+          width: isLeftPanelVisible ? `${100 - leftPanelWidth}%` : 'calc(100% - 8px)',
+          marginLeft: !isLeftPanelVisible ? '4px' : '0',
+          marginRight: !isLeftPanelVisible ? '4px' : '0'
+        }}
+        >
+        <CardHeader className="pb-3 flex-shrink-0 sticky top-0 bg-white z-10 border-b">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
             Myyntilaskujen AI generoija
@@ -1345,7 +1469,7 @@ export const ChatLayout: React.FC = () => {
             Anna AI:lle tehtäviä laskujen ja lasku selvitysten generoimiseksi.
           </CardDescription>
         </CardHeader>
-        <CardContent className="pt-0 flex-1 min-h-0">
+        <CardContent className="pt-0 flex-1 overflow-hidden p-0">
           <ChatAI 
             className="h-full" 
             onOstolaskuDataChange={(data) => setOstolaskuData(data)}

@@ -16,12 +16,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { VerificationTableRenderer } from './VerificationTableRenderer';
 
 interface ChatAIProps {
   className?: string;
+  onOstolaskuDataChange?: (data: any[]) => void;
 }
 
-export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
+export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -222,6 +224,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     }
   }, [systemPrompt, user, isInitialized]);
 
+  // Removed useEffect to prevent double loading
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || !sessionId || !user || loading) return;
@@ -271,6 +274,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     // Clear ostolasku data
     setOstolaskuData([]);
     setUploadedFileName('');
+    
+    // Clear Excel upload states
+    setUploadedWorkbook(null);
+    setAvailableSheets([]);
+    setShowSheetSelector(false);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    // Notify parent component about cleared data
+    if (onOstolaskuDataChange) {
+      onOstolaskuDataChange([]);
+    }
     
     // Reinitialize fresh chat
     if (user && systemPrompt) {
@@ -335,6 +353,17 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         [selectedMessageForFeedback]: 'thumbs_down'
       }));
 
+      // Extract function calls from messages
+      const functionCalls = messages
+        .filter(m => m.metadata?.functionCall)
+        .map(m => ({
+          functionName: m.metadata.functionCall.name,
+          inputs: m.metadata.functionCall.inputs || {},
+          outputs: m.metadata.functionCall.outputs || {},
+          timestamp: m.timestamp,
+          aiRequestId: m.metadata.aiRequestId
+        }));
+
       // Collect comprehensive session data
       const comprehensiveData = {
         messageId: selectedMessageForFeedback,
@@ -342,19 +371,20 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         sessionId: sessionId,
         currentSessionKey: currentSessionKey,
         systemPrompt: systemPrompt,
-        conversationHistory: messages,
-        ostolaskuData: ostolaskuData,
+        messages: messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp
+        })),
+        functionCalls: functionCalls,
+        ostolaskuDataSample: ostolaskuData.slice(0, 5), // Only first 5 rows as sample
         uploadedFileName: uploadedFileName,
         timestamp: new Date().toISOString(),
         userId: user?.uid,
         userEmail: user?.email,
-        // Technical context
-        sessionContext: {
-          isInitialized,
-          hasOstolaskuData: ostolaskuData.length > 0,
-          messageCount: messages.length,
-          lastMessageTimestamp: messages[messages.length - 1]?.timestamp
-        }
+        messageCount: messages.length,
+        functionCallCount: functionCalls.length
       };
 
       // Save detailed negative feedback to invoicer_continuous_improvement collection
@@ -530,6 +560,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
       }
 
       setOstolaskuData(jsonData);
+      
+      // Notify parent component about data change
+      if (onOstolaskuDataChange) {
+        onOstolaskuDataChange(jsonData);
+      }
+      
       setError(null);
       setShowSheetSelector(false);
       
@@ -540,6 +576,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         sheetName,
         recordCount: jsonData.length
       });
+      
+      // Log verification table fields for debugging
+      if (jsonData.length > 0) {
+        const firstRow = jsonData[0];
+        console.log('📊 Tarkastustaulukon kentät ensimmäisessä rivissä:', {
+          tampuuri: firstRow['tampuuri'] || firstRow['Tampuurinumero'] || 'EI LÖYDY',
+          rpNumero: firstRow['RP-numero'] || firstRow['OrderNumber'] || 'EI LÖYDY',
+          kohde: firstRow['Kohde'] || firstRow['Kohteen nimi'] || 'EI LÖYDY',
+          tuote: firstRow['Tuote'] || firstRow['Tuotekuvaus'] || 'EI LÖYDY',
+          ostohinta: firstRow['á hinta alv 0 %'] || firstRow['Laskutus Rettalle / vuosi'] || 'EI LÖYDY',
+          asiakashinta: firstRow['Retta asiakashinta vuosittain'] || 'EI LÖYDY',
+          kohteenTampuuriID: firstRow['Kohteen tampuuri ID'] || 'EI LÖYDY',
+          availableFields: Object.keys(firstRow)
+        });
+      }
 
       // Add a success message and re-initialize session with ostolasku data
       if (user && systemPrompt) {
@@ -549,7 +600,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
         const successMessage: ChatMessage = {
           id: `ostolasku-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'ostolasku.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
           timestamp: new Date()
         };
         
@@ -580,77 +631,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
     }
   };
 
-  const loadExampleOstolasku = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Fetch the example Excel file
-      const response = await fetch('/Ostomyynti_AI_botti_testi_excel.xlsx');
-      if (!response.ok) {
-        throw new Error('Esimerkkitiedoston lataus epäonnistui');
-      }
-      
-      const arrayBuffer = await response.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      
-      // Look for 'Ostolasku' sheet
-      const sheetName = workbook.SheetNames.includes('Ostolasku') 
-        ? 'Ostolasku' 
-        : workbook.SheetNames[0];
-      
-      if (!sheetName) {
-        throw new Error('Ostolasku-välilehteä ei löytynyt');
-      }
-      
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      
-      if (jsonData.length === 0) {
-        throw new Error('Esimerkkitiedosto on tyhjä');
-      }
-      
-      setOstolaskuData(jsonData);
-      setUploadedFileName('esimerkki_ostolasku.xlsx');
-      
-      toast.success(`Esimerkkiostolasku ladattu: ${jsonData.length} riviä`);
-      
-      // Add a success message and re-initialize session with ostolasku data
-      if (user && systemPrompt) {
-        console.log('🔄 Re-initializing chat with example ostolasku data...');
-        
-        // Add a success message about loaded ostolasku
-        const successMessage: ChatMessage = {
-          id: `ostolasku-loaded-${Date.now()}`,
-          role: 'assistant',
-          content: `✅ **Esimerkkiostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "esimerkki_ostolasku.xlsx"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
-          timestamp: new Date()
-        };
-        
-        setMessages(prev => [...prev, successMessage]);
-        
-        // Re-initialize session with ostolasku data
-        const newSessionId = `session_${user.uid}_${Date.now()}`;
-        
-        const context: ChatContext = {
-          userId: user.uid,
-          systemPrompt,
-          sessionId: newSessionId,
-          ostolaskuData: jsonData
-        };
-
-        await geminiChatService.initializeSession(context);
-        setSessionId(newSessionId);
-        console.log('✅ Example ostolasku loaded and chat re-initialized');
-      }
-      
-    } catch (err) {
-      console.error('❌ Failed to load example:', err);
-      setError(err instanceof Error ? err.message : 'Esimerkin lataus epäonnistui');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className={`flex flex-col h-full ${className}`}>
@@ -682,18 +662,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
               className="flex items-center"
             >
               <Info className="w-4 h-4" />
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadExampleOstolasku}
-              disabled={loading}
-              title="Lataa esimerkki ostolasku"
-              className="flex items-center gap-2"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span className="hidden sm:inline">Lataa esimerkki</span>
             </Button>
             
             {uploadedFileName && (
@@ -741,13 +709,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
+        <div className="space-y-4 w-full">
           {messages.map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex gap-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`flex gap-3 ${message.role === 'user' ? 'max-w-[80%] flex-row-reverse' : 'w-full'}`}>
                 {/* Avatar */}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   message.role === 'user' 
@@ -758,30 +726,72 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
                 </div>
                 
                 {/* Message Content */}
-                <div className={`rounded-lg p-3 ${
+                <div className={`rounded-lg p-3 min-w-0 ${
                   message.role === 'user'
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-900'
-                }`}>
-                  <div className="text-sm prose prose-sm max-w-none">
+                }`} style={{ maxWidth: message.role === 'assistant' ? 'calc(100vw - 4rem)' : '80%' }}>
+                  <div className="text-sm">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
+                        // Check if this is a verification table and use custom renderer
+                        p: ({ children }) => {
+                          // Check if the content contains a verification table
+                          const content = String(children);
+                          if (content.includes('| Tampuuri') && content.includes('| RP-numero') && content.includes('| Täsmääkö hinnat')) {
+                            return <VerificationTableRenderer content={content} />;
+                          }
+                          return <p>{children}</p>;
+                        },
                         // Customize table styling with better visibility
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto my-4">
-                            <table className="w-full border-collapse border border-gray-300 shadow-lg rounded-lg overflow-hidden">
-                              {children}
-                            </table>
-                          </div>
-                        ),
+                        table: ({ children, node }) => {
+                          // Check if this is a verification table by looking at the content
+                          const tableContent = node?.children?.map((child: any) => {
+                            if (child.type === 'element' && child.tagName === 'thead') {
+                              const headers = child.children?.[0]?.children?.map((th: any) => 
+                                th.children?.[0]?.value || ''
+                              ).join(' ');
+                              if (headers?.includes('Tampuuri') && headers?.includes('RP-numero') && headers?.includes('Täsmääkö hinnat')) {
+                                // This is a verification table, let the custom renderer handle it
+                                return null;
+                              }
+                            }
+                            return child;
+                          });
+                          
+                          // Check if we should use custom renderer
+                          const fullContent = message.content;
+                          if (fullContent.includes('| Tampuuri') && fullContent.includes('| RP-numero') && fullContent.includes('| Täsmääkö hinnat')) {
+                            return <VerificationTableRenderer content={fullContent} />;
+                          }
+                          
+                          // Default table rendering with both scrolling
+                          return (
+                            <div className="my-4" style={{ marginLeft: '-12px', marginRight: '-12px' }}>
+                              <div 
+                                className="overflow-auto scrollbar-visible shadow-md rounded-lg border border-gray-200" 
+                                style={{ 
+                                  maxWidth: 'calc(100vw - 3rem)',
+                                  maxHeight: '400px',
+                                  overflowX: 'auto',
+                                  overflowY: 'auto'
+                                }}
+                              >
+                                <table className="border-collapse w-full">
+                                  {children}
+                                </table>
+                              </div>
+                            </div>
+                          );
+                        },
                         thead: ({ children }) => (
                           <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                             {children}
                           </thead>
                         ),
                         th: ({ children }) => (
-                          <th className="border-r border-blue-400 px-4 py-3 text-left font-semibold text-sm uppercase tracking-wide">
+                          <th className="border-r border-blue-400 px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap">
                             {children}
                           </th>
                         ),
@@ -791,7 +801,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
                           const isNumber = /^\d+([.,]\d+)?$/.test(content);
                           
                           return (
-                            <td className={`border-r border-b border-gray-200 px-4 py-3 text-sm ${
+                            <td className={`border-r border-b border-gray-200 px-3 py-2 text-xs whitespace-nowrap ${
                               isNumber ? 'text-right font-medium' : 'text-left'
                             }`}>
                               {children}
@@ -938,7 +948,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className }) => {
                 <div>• Varmista että sarakkeiden nimet ovat selkeitä</div>
                 <div>• Numerot (määrä, hinta) tulee olla numeromuodossa</div>
                 <div>• Tyhjät rivit ja sarakkeet ohitetaan automaattisesti</div>
-                <div>• Voit ladata esimerkkitiedoston "Lataa esimerkki" -painikkeesta</div>
               </div>
             </div>
           </div>
