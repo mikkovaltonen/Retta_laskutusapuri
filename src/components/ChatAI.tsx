@@ -17,6 +17,7 @@ import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { VerificationTableRenderer } from './VerificationTableRenderer';
+import { InteractiveTable } from './InteractiveTable';
 
 interface ChatAIProps {
   className?: string;
@@ -742,6 +743,10 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
                           if (content.includes('| Tampuuri') && content.includes('| RP-numero') && content.includes('| Täsmääkö hinnat')) {
                             return <VerificationTableRenderer content={content} />;
                           }
+                          // Check if this is any table content
+                          if (content.includes('|') && content.split('|').length > 3) {
+                            return <InteractiveTable content={content} />;
+                          }
                           return <p>{children}</p>;
                         },
                         // Customize table styling with better visibility
@@ -766,24 +771,11 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
                             return <VerificationTableRenderer content={fullContent} />;
                           }
                           
-                          // Default table rendering with both scrolling
-                          return (
-                            <div className="my-4" style={{ marginLeft: '-12px', marginRight: '-12px' }}>
-                              <div 
-                                className="overflow-auto scrollbar-visible shadow-md rounded-lg border border-gray-200" 
-                                style={{ 
-                                  maxWidth: 'calc(100vw - 3rem)',
-                                  maxHeight: '400px',
-                                  overflowX: 'auto',
-                                  overflowY: 'auto'
-                                }}
-                              >
-                                <table className="border-collapse w-full">
-                                  {children}
-                                </table>
-                              </div>
-                            </div>
-                          );
+                          // Use InteractiveTable for regular tables
+                          return <InteractiveTable content={fullContent} />;
+                          
+                          // This should not be reached anymore
+                          return null;
                         },
                         thead: ({ children }) => (
                           <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
