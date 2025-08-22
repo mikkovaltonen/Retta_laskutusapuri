@@ -34,7 +34,7 @@ export const TilausApiTester: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
-  const [functionTestOrderNumber, setFunctionTestOrderNumber] = useState('');
+  const [functionTestTampuuriCode, setFunctionTestTampuuriCode] = useState('');
   const [functionTestResult, setFunctionTestResult] = useState<any>(null);
   const [functionTestLoading, setFunctionTestLoading] = useState(false);
   const { user } = useAuth();
@@ -57,10 +57,10 @@ export const TilausApiTester: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      // Build Firestore query - Query ALL tilaus records (shared data)
+      // Query ALL tilaus records without limit (same as UI)
       const q = query(
-        collection(db, 'tilaus_data'),
-        limit(100) // Prevent large queries
+        collection(db, 'tilaus_data')
+        // No limit - get all records
       );
 
       const querySnapshot = await getDocs(q);
@@ -69,29 +69,13 @@ export const TilausApiTester: React.FC = () => {
         ...doc.data()
       })) as TilausRecord[];
 
-      // Apply client-side filtering for all search criteria
-      Object.entries(searchCriteria).forEach(([field, value]) => {
-        if (value !== undefined && value !== '') {
-          records = records.filter(record => {
-            const recordValue = record[field];
-            
-            if (recordValue === undefined || recordValue === null) {
-              return false;
-            }
-            
-            const recordStr = String(recordValue).toLowerCase();
-            const searchStr = String(value).toLowerCase();
-            
-            // For numbers, try exact match first, then partial match
-            if (!isNaN(Number(value)) && !isNaN(Number(recordValue))) {
-              return Number(recordValue) === Number(value) || recordStr.includes(searchStr);
-            }
-            
-            // For strings, partial match
-            return recordStr.includes(searchStr);
-          });
-        }
-      });
+      // Apply Code (Tampuurinumero) filter only
+      if (searchCriteria.code) {
+        records = records.filter(record => {
+          const code = record['Code'] || record['Tampuurinumero'] || '';
+          return String(code).toLowerCase().includes(searchCriteria.code!.toLowerCase());
+        });
+      }
 
       const executionTime = Date.now() - startTime;
 
@@ -155,12 +139,12 @@ export const TilausApiTester: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      console.log('🔧 Testing searchTilaus function with orderNumber:', functionTestOrderNumber);
+      console.log('🔧 Testing searchTilaus function with tampuuriCode:', functionTestTampuuriCode);
       
-      // Query ALL tilaus_data records (shared data) - exactly like in geminiChatService
+      // Query ALL tilaus_data records without limit - exactly like in geminiChatService
       const q = query(
-        collection(db, 'tilaus_data'),
-        limit(100) // Same limit as in the service
+        collection(db, 'tilaus_data')
+        // No limit - get all records
       );
 
       console.log('📊 Querying shared tilaus_data collection');
@@ -180,38 +164,27 @@ export const TilausApiTester: React.FC = () => {
       console.log('📋 All unique field names in collection:', Array.from(allFieldNames));
 
       // Apply filter - exactly like in geminiChatService
-      if (functionTestOrderNumber) {
-        console.log('🔎 Filtering by orderNumber:', functionTestOrderNumber);
+      if (functionTestTampuuriCode) {
+        console.log('🔎 Filtering by Code (Tampuurinumero):', functionTestTampuuriCode);
         const beforeFilter = records.length;
         
         // Log what we're checking for each record
         records = records.filter((record, index) => {
-          // Check various possible field names for order number (same as in service)
-          const orderNumber = 
-            record['OrderNumber'] || 
-            record['RP-tunnus'] || 
-            record['RP-tunnus (tilausnumero)'] || 
-            record['Tilausnumero'] ||
-            record['tilausnumero'] ||
-            record['Tilaustunnus'] ||
-            '';
+          // Check Code field (Tampuurinumero)
+          const code = record['Code'] || record['Tampuurinumero'] || '';
           
           // Log the first few records for debugging
           if (index < 3) {
             console.log(`Record ${index}:`, {
-              OrderNumber: record['OrderNumber'],
-              'RP-tunnus': record['RP-tunnus'],
-              'RP-tunnus (tilausnumero)': record['RP-tunnus (tilausnumero)'],
-              Tilausnumero: record['Tilausnumero'],
-              tilausnumero: record['tilausnumero'],
-              Tilaustunnus: record['Tilaustunnus'],
-              extractedValue: orderNumber,
-              searchTerm: functionTestOrderNumber.toLowerCase(),
-              matches: String(orderNumber).toLowerCase().includes(functionTestOrderNumber.toLowerCase())
+              Code: record['Code'],
+              Tampuurinumero: record['Tampuurinumero'],
+              extractedValue: code,
+              searchTerm: functionTestTampuuriCode.toLowerCase(),
+              matches: String(code).toLowerCase().includes(functionTestTampuuriCode.toLowerCase())
             });
           }
           
-          return String(orderNumber).toLowerCase().includes(functionTestOrderNumber.toLowerCase());
+          return String(code).toLowerCase().includes(functionTestTampuuriCode.toLowerCase());
         });
         console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
       }
@@ -264,7 +237,7 @@ export const TilausApiTester: React.FC = () => {
             Tilaus API Testaus
           </CardTitle>
           <CardDescription>
-            Testaa tilaus-datan hakutoiminnallisuutta eri hakukriteereillä
+            Hae tilauksia tampuurinumerolla (Code-kenttä)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -287,33 +260,24 @@ export const TilausApiTester: React.FC = () => {
             </div>
           )}
 
-          {/* Dynamic Search Form based on available fields */}
-          {availableFields.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {availableFields.slice(0, 9).map(field => ( // Show max 9 fields
-                <div key={field} className="space-y-2">
-                  <Label htmlFor={field}>{field}</Label>
-                  <Input
-                    id={field}
-                    placeholder={`Hae ${field}...`}
-                    value={searchCriteria[field] || ''}
-                    onChange={(e) => handleInputChange(field, e.target.value)}
-                  />
-                </div>
-              ))}
+          {/* Search Form - Only Code */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="code">Hae tampuurinumerolla (Code)</Label>
+              <Input
+                id="code"
+                placeholder="esim. 12345"
+                value={searchCriteria.code || ''}
+                onChange={(e) => handleInputChange('code', e.target.value)}
+              />
+              <p className="text-sm text-gray-500">
+                Haku toimii osittaisella vastaavuudella tampuurinumerolla (Code-kenttä). Esim. "123" löytää kaikki tilaukset joiden koodi sisältää "123".
+              </p>
             </div>
-          )}
-
-          {availableFields.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>Ei tilaus-dataa saatavilla</p>
-              <p className="text-sm">Lataa ensin tilaus-data Admin-sivun kautta</p>
-            </div>
-          )}
+          </div>
 
           <div className="flex gap-2">
-            <Button onClick={handleSearch} disabled={loading || !user || availableFields.length === 0}>
+            <Button onClick={handleSearch} disabled={loading || !user}>
               <Search className="w-4 h-4 mr-2" />
               {loading ? 'Searching...' : 'Hae Tilauksista'}
             </Button>
@@ -399,12 +363,12 @@ export const TilausApiTester: React.FC = () => {
               </Alert>
               
               <div className="space-y-2">
-                <Label htmlFor="functionTestOrderNumber">Order Number (tilausnumero)</Label>
+                <Label htmlFor="functionTestTampuuriCode">Tampuurinumero (Code)</Label>
                 <Input
-                  id="functionTestOrderNumber"
-                  placeholder="esim. RP-0201251024330417"
-                  value={functionTestOrderNumber}
-                  onChange={(e) => setFunctionTestOrderNumber(e.target.value)}
+                  id="functionTestTampuuriCode"
+                  placeholder="esim. 12345"
+                  value={functionTestTampuuriCode}
+                  onChange={(e) => setFunctionTestTampuuriCode(e.target.value)}
                 />
               </div>
               

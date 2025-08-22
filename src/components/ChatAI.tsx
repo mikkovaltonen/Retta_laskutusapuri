@@ -16,15 +16,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
-import { VerificationTableRenderer } from './VerificationTableRenderer';
 import { InteractiveTable } from './InteractiveTable';
 
 interface ChatAIProps {
   className?: string;
-  onOstolaskuDataChange?: (data: any[]) => void;
+  onOstolaskuExcelDataChange?: (data: any[]) => void;
 }
 
-export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange }) => {
+export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataChange }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +33,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentSessionKey, setCurrentSessionKey] = useState<string>('');
   const [messageFeedback, setMessageFeedback] = useState<Record<string, 'thumbs_up' | 'thumbs_down'>>({});
-  const [ostolaskuData, setOstolaskuData] = useState<any[]>([]);
+  const [ostolaskuExcelData, setOstolaskuExcelData] = useState<any[]>([]);
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [uploadedWorkbook, setUploadedWorkbook] = useState<any>(null);
   const [showSheetSelector, setShowSheetSelector] = useState(false);
@@ -100,18 +99,18 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
   const updateWelcomeMessage = () => {
     if (!user) return;
     
-    console.log('🔄 Updating welcome message with ostolasku status', {
-      ostolaskuDataLength: ostolaskuData.length,
+    console.log('🔄 Updating welcome message with OstolaskuExcel status', {
+      ostolaskuExcelDataLength: ostolaskuExcelData.length,
       uploadedFileName,
       currentMessagesCount: messages.length
     });
     
-    // Create updated welcome message with current ostolasku status
-    const ostolaskuStatus = ostolaskuData.length > 0 
-      ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa myyntilaskun luomista kun tiedot on tarkastettu.*`
-      : '\n\n❌ **Ei ostolaskudataa**: Lataa ensin ostolasku (JSON/Excel) painikkeesta yllä';
+    // Create updated welcome message with current OstolaskuExcel status
+    const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 
+      ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
+      : '\n\n❌ **Ei OstolaskuExceldataa**: Lataa ensin OstolaskuExcel (JSON/Excel) painikkeesta yllä';
       
-    const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuStatus}\n\nMiten voin auttaa?`;
+    const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuExcelStatus}\n\nMiten voin auttaa?`;
       
     const welcomeMessage: ChatMessage = {
       id: 'welcome',
@@ -167,7 +166,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
         userId: user.uid,
         systemPrompt,
         sessionId: newSessionId,
-        ostolaskuData: ostolaskuData.length > 0 ? ostolaskuData : undefined
+        ostolaskuExcelData: ostolaskuExcelData.length > 0 ? ostolaskuExcelData : undefined
       };
 
       console.log('📡 Calling geminiChatService.initializeSession...');
@@ -186,12 +185,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
       setCurrentSessionKey(sessionKey);
       console.log('✅ Continuous improvement session created');
 
-      // Add welcome message with ostolasku status
-      const ostolaskuStatus = ostolaskuData.length > 0 
-        ? `\n\n✅ **Ostolaskudata ladattu**: ${ostolaskuData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa myyntilaskun luomista kun tiedot on tarkastettu.*`
-        : '\n\n❌ **Ei ostolaskudataa**: Lataa ensin ostolasku (JSON/Excel) painikkeesta yllä';
+      // Add welcome message with OstolaskuExcel status
+      const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 
+        ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
+        : '\n\n❌ **Ei OstolaskuExceldataa**: Lataa ensin OstolaskuExcel (JSON/Excel) painikkeesta yllä';
         
-      const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuStatus}\n\nMiten voin auttaa?`;
+      const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuExcelStatus}\n\nMiten voin auttaa?`;
         
       const welcomeMessage: ChatMessage = {
         id: 'welcome',
@@ -245,13 +244,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
 
     try {
       console.log('📨 Sending message to geminiChatService...');
-      const response = await geminiChatService.sendMessage(sessionId, inputMessage, user.uid, ostolaskuData);
+      const response = await geminiChatService.sendMessage(sessionId, inputMessage, user.uid, ostolaskuExcelData);
       console.log('✅ Received response from geminiChatService:', response);
       setMessages(prev => [...prev, response]);
     } catch (err) {
       logError('SendMessage', err, { 
         messageLength: inputMessage.length,
-        hasOstolaskuData: ostolaskuData.length > 0,
+        hasOstolaskuExcelData: ostolaskuExcelData.length > 0,
         sessionId 
       });
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -261,7 +260,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
   };
 
   const resetChat = () => {
-    // Clear all chat data including ostolasku
+    // Clear all chat data including OstolaskuExcel
     if (sessionId) {
       geminiChatService.clearSession(sessionId);
     }
@@ -272,8 +271,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
     setMessageFeedback({});
     setCurrentSessionKey('');
     
-    // Clear ostolasku data
-    setOstolaskuData([]);
+    // Clear OstolaskuExcel data
+    setOstolaskuExcelData([]);
     setUploadedFileName('');
     
     // Clear Excel upload states
@@ -287,8 +286,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
     }
     
     // Notify parent component about cleared data
-    if (onOstolaskuDataChange) {
-      onOstolaskuDataChange([]);
+    if (onOstolaskuExcelDataChange) {
+      onOstolaskuExcelDataChange([]);
     }
     
     // Reinitialize fresh chat
@@ -379,7 +378,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
           timestamp: m.timestamp
         })),
         functionCalls: functionCalls,
-        ostolaskuDataSample: ostolaskuData.slice(0, 5), // Only first 5 rows as sample
+        ostolaskuExcelDataSample: ostolaskuExcelData.slice(0, 5), // Only first 5 rows as sample
         uploadedFileName: uploadedFileName,
         timestamp: new Date().toISOString(),
         userId: user?.uid,
@@ -490,44 +489,44 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
         toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
       }
 
-      setOstolaskuData(jsonData);
+      setOstolaskuExcelData(jsonData);
       setUploadedFileName(file.name);
       setError(null);
       
-      console.log('✅ Ostolasku uploaded:', {
+      console.log('✅ OstolaskuExcel uploaded:', {
         fileName: file.name,
         recordCount: jsonData.length,
         fileType: isJson ? 'JSON' : 'Excel'
       });
 
-      // Add a success message and re-initialize session with ostolasku data
+      // Add a success message and re-initialize session with OstolaskuExcel data
       if (user && systemPrompt) {
-        console.log('🔄 Re-initializing chat with ostolasku data...');
+        console.log('🔄 Re-initializing chat with OstolaskuExcel data...');
         
-        // Add a success message about loaded ostolasku
+        // Add a success message about loaded OstolaskuExcel
         const successMessage: ChatMessage = {
-          id: `ostolasku-loaded-${Date.now()}`,
+          id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan MyyntiExcelin luomista.*`,
           timestamp: new Date()
         };
         
         setMessages(prev => [...prev, successMessage]);
         
-        // Re-initialize session with ostolasku data
+        // Re-initialize session with OstolaskuExcel data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
         const context: ChatContext = {
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuData: jsonData
+          ostolaskuExcelData: jsonData
         };
 
         try {
           await geminiChatService.initializeSession(context);
           setSessionId(newSessionId);
-          console.log('✅ Chat re-initialized with ostolasku data');
+          console.log('✅ Chat re-initialized with OstolaskuExcel data');
         } catch (err) {
           console.error('❌ Failed to re-initialize chat:', err);
         }
@@ -560,11 +559,11 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
         return;
       }
 
-      setOstolaskuData(jsonData);
+      setOstolaskuExcelData(jsonData);
       
       // Notify parent component about data change
-      if (onOstolaskuDataChange) {
-        onOstolaskuDataChange(jsonData);
+      if (onOstolaskuExcelDataChange) {
+        onOstolaskuExcelDataChange(jsonData);
       }
       
       setError(null);
@@ -572,7 +571,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
       
       toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
       
-      console.log('✅ Ostolasku sheet selected:', {
+      console.log('✅ OstolaskuExcel sheet selected:', {
         fileName: uploadedFileName,
         sheetName,
         recordCount: jsonData.length
@@ -593,34 +592,34 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
         });
       }
 
-      // Add a success message and re-initialize session with ostolasku data
+      // Add a success message and re-initialize session with OstolaskuExcel data
       if (user && systemPrompt) {
-        console.log('🔄 Re-initializing chat with ostolasku data...');
+        console.log('🔄 Re-initializing chat with OstolaskuExcel data...');
         
-        // Add a success message about loaded ostolasku
+        // Add a success message about loaded OstolaskuExcel
         const successMessage: ChatMessage = {
-          id: `ostolasku-loaded-${Date.now()}`,
+          id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **Ostolasku ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'ostolasku.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan myyntilaskun luomista.*`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan MyyntiExcelin luomista.*`,
           timestamp: new Date()
         };
         
         setMessages(prev => [...prev, successMessage]);
         
-        // Re-initialize session with ostolasku data
+        // Re-initialize session with OstolaskuExcel data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
         const context: ChatContext = {
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuData: jsonData
+          ostolaskuExcelData: jsonData
         };
 
         try {
           await geminiChatService.initializeSession(context);
           setSessionId(newSessionId);
-          console.log('✅ Chat re-initialized with ostolasku data');
+          console.log('✅ Chat re-initialized with OstolaskuExcel data');
         } catch (err) {
           console.error('❌ Failed to re-initialize chat:', err);
         }
@@ -648,18 +647,18 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
               size="sm"
               onClick={triggerFileUpload}
               disabled={loading}
-              title="Lataa edelleen laskutettava ostolasku (JSON tai Excel)"
+              title="Lataa edelleen laskutettava OstolaskuExcel (JSON tai Excel)"
               className="flex items-center gap-2"
             >
               <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">Lataa ostolasku</span>
+              <span className="hidden sm:inline">Lataa OstolaskuExcel</span>
             </Button>
             
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowInfoDialog(true)}
-              title="Näytä tuettu ostolaskujen sarakerakenne"
+              title="Näytä tuettu OstolaskuExceljen sarakerakenne"
               className="flex items-center"
             >
               <Info className="w-4 h-4" />
@@ -670,7 +669,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="truncate max-w-20">{uploadedFileName}</span>
                 <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                  {ostolaskuData.length}
+                  {ostolaskuExcelData.length}
                 </Badge>
               </div>
             )}
@@ -681,7 +680,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
             size="sm"
             onClick={resetChat}
             disabled={loading}
-            title="Resetoi chat ja poista ladattu ostolasku"
+            title="Resetoi chat ja poista ladattu OstolaskuExcel"
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -736,46 +735,20 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        // Check if this is a verification table and use custom renderer
+                        // Always use InteractiveTable for all tables
                         p: ({ children }) => {
-                          // Check if the content contains a verification table
                           const content = String(children);
-                          if (content.includes('| Tampuuri') && content.includes('| RP-numero') && content.includes('| Täsmääkö hinnat')) {
-                            return <VerificationTableRenderer content={content} />;
-                          }
                           // Check if this is any table content
                           if (content.includes('|') && content.split('|').length > 3) {
                             return <InteractiveTable content={content} />;
                           }
                           return <p>{children}</p>;
                         },
-                        // Customize table styling with better visibility
+                        // Always use InteractiveTable for all tables
                         table: ({ children, node }) => {
-                          // Check if this is a verification table by looking at the content
-                          const tableContent = node?.children?.map((child: any) => {
-                            if (child.type === 'element' && child.tagName === 'thead') {
-                              const headers = child.children?.[0]?.children?.map((th: any) => 
-                                th.children?.[0]?.value || ''
-                              ).join(' ');
-                              if (headers?.includes('Tampuuri') && headers?.includes('RP-numero') && headers?.includes('Täsmääkö hinnat')) {
-                                // This is a verification table, let the custom renderer handle it
-                                return null;
-                              }
-                            }
-                            return child;
-                          });
-                          
-                          // Check if we should use custom renderer
                           const fullContent = message.content;
-                          if (fullContent.includes('| Tampuuri') && fullContent.includes('| RP-numero') && fullContent.includes('| Täsmääkö hinnat')) {
-                            return <VerificationTableRenderer content={fullContent} />;
-                          }
-                          
-                          // Use InteractiveTable for regular tables
+                          // Always use InteractiveTable for all tables
                           return <InteractiveTable content={fullContent} />;
-                          
-                          // This should not be reached anymore
-                          return null;
                         },
                         thead: ({ children }) => (
                           <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
@@ -897,13 +870,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
         style={{ display: 'none' }}
       />
 
-      {/* Info Dialog - Ostolaskujen sarakerakenne */}
+      {/* Info Dialog - OstolaskuExceljen sarakerakenne */}
       <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Tuettu ostolaskujen sarakerakenne</DialogTitle>
+            <DialogTitle>Tuettu OstolaskuExceljen sarakerakenne</DialogTitle>
             <DialogDescription>
-              Ohje ostolaskutiedostojen rakenteesta. Voit käyttää joko JSON- tai Excel-tiedostoja.
+              Ohje OstolaskuExceltiedostojen rakenteesta. Voit käyttää joko JSON- tai Excel-tiedostoja.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -957,7 +930,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
           <DialogHeader>
             <DialogTitle>Valitse Excel välilehti</DialogTitle>
             <DialogDescription>
-              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää ostolasku-datan.
+              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää OstolaskuExcel-datan.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-4">
@@ -1007,7 +980,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
               <TabsTrigger value="feedback">Palaute</TabsTrigger>
               <TabsTrigger value="prompt">AI Prompti</TabsTrigger>
               <TabsTrigger value="conversation">Keskustelu</TabsTrigger>
-              <TabsTrigger value="data">Ostolaskudata</TabsTrigger>
+              <TabsTrigger value="data">OstolaskuExceldata</TabsTrigger>
             </TabsList>
             
             <TabsContent value="feedback" className="space-y-4">
@@ -1066,24 +1039,24 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuDataChange
             <TabsContent value="data" className="space-y-4">
               <div>
                 <h4 className="font-medium text-sm mb-2">
-                  Ostolaskudata ({ostolaskuData.length > 0 ? `${ostolaskuData.length} riviä` : 'Ei dataa'}):
+                  OstolaskuExceldata ({ostolaskuExcelData.length > 0 ? `${ostolaskuExcelData.length} riviä` : 'Ei dataa'}):
                 </h4>
-                {ostolaskuData.length > 0 ? (
+                {ostolaskuExcelData.length > 0 ? (
                   <div className="space-y-2">
                     <div className="text-xs text-gray-600">
                       📁 Tiedosto: {uploadedFileName || 'Tuntematon'}
                     </div>
                     <div className="bg-gray-50 p-3 rounded border max-h-[300px] overflow-y-auto">
                       <pre className="text-xs">
-                        {JSON.stringify(ostolaskuData.slice(0, 3), null, 2)}
-                        {ostolaskuData.length > 3 && `\n... ja ${ostolaskuData.length - 3} riviä lisää`}
+                        {JSON.stringify(ostolaskuExcelData.slice(0, 3), null, 2)}
+                        {ostolaskuExcelData.length > 3 && `\n... ja ${ostolaskuExcelData.length - 3} riviä lisää`}
                       </pre>
                     </div>
                   </div>
                 ) : (
                   <div className="bg-yellow-50 p-3 rounded border">
-                    <p className="text-sm text-yellow-700">❌ Ei ostolaskudataa ladattu</p>
-                    <p className="text-xs text-yellow-600 mt-1">Tämä saattaa olla syy ongelmaan - AI ei pysty käsittelemään ostolaskuja ilman dataa.</p>
+                    <p className="text-sm text-yellow-700">❌ Ei OstolaskuExceldataa ladattu</p>
+                    <p className="text-xs text-yellow-600 mt-1">Tämä saattaa olla syy ongelmaan - AI ei pysty käsittelemään OstolaskuExcelja ilman dataa.</p>
                   </div>
                 )}
               </div>

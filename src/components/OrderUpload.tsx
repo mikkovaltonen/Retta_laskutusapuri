@@ -142,7 +142,7 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
     disabled: uploading || !user
   });
 
-  const loadSampleOrderData = async () => {
+  const loadNewSampleOrderData = async () => {
     if (!user) {
       toast.error('Please log in to load sample data');
       return;
@@ -152,46 +152,53 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
       setUploading(true);
       setError(null);
       
-      // Fetch the sample Excel file from public directory with cache busting
+      // Fetch the sample JSON file from public directory with cache busting
       const cacheBuster = Date.now() + Math.random().toString(36).substring(7);
-      const sampleFile = 'Ostomyynti_AI_botti_testi_excel.xlsx';
+      const sampleFile = 'tilaus_data.json';
       const response = await fetch(`/${sampleFile}?v=${cacheBuster}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch sample data: ${response.status}`);
       }
       
-      const arrayBuffer = await response.arrayBuffer();
+      const jsonData = await response.json();
       
-      // Create a File-like object from the fetched data - keep original filename
-      const fileName = `tilaus_${sampleFile}`;
+      // Take only first 500 rows to stay under Firestore 1MB limit
+      const limitedData = jsonData.slice(0, 500);
       
-      const fileObject = {
-        name: fileName,
-        size: arrayBuffer.byteLength,
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        lastModified: Date.now(),
-        arrayBuffer: async () => arrayBuffer,
-        // Required for File interface compatibility
-        webkitRelativePath: '',
-        text: async () => '', // Not used for Excel files
-        stream: () => new Blob([arrayBuffer]).stream(),
-        slice: (start?: number, end?: number) => new Blob([arrayBuffer]).slice(start, end)
-      } as File;
+      // Import XLSX at the top of the file, not dynamically
+      const XLSX = await import('xlsx');
+      
+      // Convert JSON data to Excel format for upload
+      const worksheet = XLSX.utils.json_to_sheet(limitedData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Tilaus');
+      
+      // Convert to array buffer
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      
+      // Create a File-like object from the Excel data
+      const fileName = 'tilaus_ms_dynamics_data.xlsx';
+      
+      const fileObject = new File([excelBuffer], fileName, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
       
       // Upload using the tilaus upload function
       const uploadedDoc = await storageService.uploadTilausDocument(fileObject, user.uid);
       handleUploadComplete(uploadedDoc);
-      toast.success('Tilaus data ladattu onnistuneesti!');
-      console.log('✅ Successfully loaded sample order data');
+      toast.success('MS Dynamics tilaus data ladattu onnistuneesti! (500 riviä / 3534 kokonais)');
+      console.log('✅ Successfully loaded MS Dynamics order data (limited to 500 rows)');
       
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load sample order data';
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load MS Dynamics data';
       setError(errorMessage);
       toast.error(errorMessage);
+      console.error('Error loading sample data:', err);
     } finally {
       setUploading(false);
     }
   };
+
 
   return (
     <Card className="w-full max-w-2xl">
@@ -312,11 +319,11 @@ export const OrderUpload: React.FC<OrderUploadProps> = ({
 
         <div className="mt-4">
           <Button
-            onClick={loadSampleOrderData}
+            onClick={loadNewSampleOrderData}
             disabled={uploading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
-            📋 Lataa esimerkki tilaus data
+            📊 Lataa MS Dynamics tilaus data (500 esimerkkiriviä)
           </Button>
         </div>
 

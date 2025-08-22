@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 interface HinnastoSearchCriteria {
-  tuotetunnus?: string;
+  productName?: string;
   tuote?: string;
   minMyyntihinta?: number;
   maxMyyntihinta?: number;
@@ -47,7 +47,7 @@ export const HinnastoApiTester: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
-  const [functionTestProductNumber, setFunctionTestProductNumber] = useState('');
+  const [functionTestProductName, setFunctionTestProductName] = useState('');
   const [functionTestResult, setFunctionTestResult] = useState<any>(null);
   const [functionTestLoading, setFunctionTestLoading] = useState(false);
   const { user } = useAuth();
@@ -84,18 +84,24 @@ export const HinnastoApiTester: React.FC = () => {
         ...doc.data()
       })) as HinnastoRecord[];
 
-      // Apply filter - check multiple field names like the UI does
-      if (searchCriteria.tuotetunnus) {
+      // Apply filter - check ProductName field with advanced text matching
+      if (searchCriteria.productName) {
         records = records.filter(record => {
-          // Check various possible field names for product number (same as UI)
-          const productNumber = 
-            record['ProductNumber'] || 
-            record['Tuotetunnus'] || 
-            record['tuotetunnus'] || 
-            record['Product Number'] ||
-            record['product_number'] ||
-            '';
-          return String(productNumber).toLowerCase().includes(searchCriteria.tuotetunnus!.toLowerCase());
+          // Check ProductName field with advanced text matching
+          const productName = String(record['ProductName'] || '').trim();
+          
+          // Normalize for comparison (case-insensitive, remove extra spaces)
+          const searchTerms = searchCriteria.productName!.toLowerCase().replace(/\s+/g, ' ').trim().split(' ');
+          const normalizedItemName = productName.toLowerCase().replace(/\s+/g, ' ');
+          
+          // Check if all search terms are found in the product name
+          // This allows searching for "kunto pts" to find "Kuntotutkimus ja PTS"
+          const allTermsMatch = searchTerms.every(term => normalizedItemName.includes(term));
+          
+          // Also check for exact substring match
+          const exactMatch = normalizedItemName.includes(searchCriteria.productName!.toLowerCase().replace(/\s+/g, ' ').trim());
+          
+          return allTermsMatch || exactMatch;
         });
       }
 
@@ -161,9 +167,9 @@ export const HinnastoApiTester: React.FC = () => {
     const startTime = Date.now();
 
     try {
-      console.log('🔧 Testing searchHinnasto function with productNumber:', functionTestProductNumber);
+      console.log('🔧 Testing searchHinnasto function with productName:', functionTestProductName);
       
-      // Query ALL hinnasto records without limit - exactly like in geminiChatService
+      // Query ALL hinnasto records without limit - exactly like in createLasku
       const q = query(
         collection(db, 'hinnasto')
         // No limit - get all records
@@ -185,34 +191,41 @@ export const HinnastoApiTester: React.FC = () => {
       });
       console.log('📋 All unique field names in collection:', Array.from(allFieldNames));
 
-      // Apply filter - exactly like in geminiChatService
-      if (functionTestProductNumber) {
-        console.log('🔎 Filtering by productNumber:', functionTestProductNumber);
+      // Apply filter - exactly like in createLasku function
+      if (functionTestProductName) {
+        console.log('🔎 Filtering by ProductName:', functionTestProductName);
         const beforeFilter = records.length;
         
         // Log what we're checking for each record
         records = records.filter((record, index) => {
-          // Check various possible field names for product number (same as in service)
-          const productNumber = 
-            record['ProductNumber'] || 
-            record['Tuotetunnus'] || 
-            record['tuotetunnus'] || 
-            record['Product Number'] ||
-            record['product_number'] ||
-            '';
+          // Check ProductName field with advanced text matching
+          const productName = String(record['ProductName'] || '').trim();
+          
+          // Normalize for comparison (case-insensitive, remove extra spaces)
+          const searchTerms = functionTestProductName.toLowerCase().replace(/\s+/g, ' ').trim().split(' ');
+          const normalizedItemName = productName.toLowerCase().replace(/\s+/g, ' ');
+          
+          // Check if all search terms are found in the product name
+          const allTermsMatch = searchTerms.every(term => normalizedItemName.includes(term));
+          
+          // Also check for exact substring match
+          const exactMatch = normalizedItemName.includes(functionTestProductName.toLowerCase().replace(/\s+/g, ' ').trim());
+          
+          const matches = allTermsMatch || exactMatch;
           
           // Log the first few records for debugging
           if (index < 3) {
             console.log(`Record ${index}:`, {
-              ProductNumber: record['ProductNumber'],
-              Tuotetunnus: record['Tuotetunnus'],
-              extractedValue: productNumber,
-              searchTerm: functionTestProductNumber.toLowerCase(),
-              matches: String(productNumber).toLowerCase().includes(functionTestProductNumber.toLowerCase())
+              ProductName: record['ProductName'],
+              extractedValue: productName,
+              searchTerms: searchTerms,
+              allTermsMatch: allTermsMatch,
+              exactMatch: exactMatch,
+              matches: matches
             });
           }
           
-          return String(productNumber).toLowerCase().includes(functionTestProductNumber.toLowerCase());
+          return matches;
         });
         console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
       }
@@ -293,20 +306,21 @@ export const HinnastoApiTester: React.FC = () => {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Hinnasto-haku tarkistaa seuraavat kentät: ProductNumber, Tuotetunnus, tuotetunnus, Product Number, product_number. Syötä tuotenumero tai sen osa.
+                Hinnasto-haku tarkistaa ProductName-kentän. Syötä tuotteen nimi tai sen osa.
               </AlertDescription>
             </Alert>
             
             <div className="space-y-2">
-              <Label htmlFor="tuotetunnus">Product Number (tuotetunnus)</Label>
+              <Label htmlFor="productName">Product Name (tuotteen nimi)</Label>
               <Input
-                id="tuotetunnus"
-                placeholder="esim. 42A1003"
-                value={searchCriteria.tuotetunnus || ''}
-                onChange={(e) => handleInputChange('tuotetunnus', e.target.value)}
+                id="productName"
+                placeholder="esim. Kuntotutkimus ja PTS"
+                value={searchCriteria.productName || ''}
+                onChange={(e) => handleInputChange('productName', e.target.value)}
               />
               <p className="text-sm text-gray-500">
-                Haku toimii osittaisella vastaavuudella. Esim. "42A" löytää kaikki tuotteet jotka sisältävät "42A".
+                Haku toimii osittaisella vastaavuudella. Voit hakea yksittäisillä sanoilla tai niiden osilla.
+                <br />Esim: "kunto", "kunto pts", "tutkimus pts" löytävät kaikki "Kuntotutkimus ja PTS".
               </p>
             </div>
           </div>
@@ -404,12 +418,12 @@ export const HinnastoApiTester: React.FC = () => {
               </Alert>
               
               <div className="space-y-2">
-                <Label htmlFor="functionTestProductNumber">Product Number (tuotetunnus)</Label>
+                <Label htmlFor="functionTestProductName">Product Name (tuotteen nimi)</Label>
                 <Input
-                  id="functionTestProductNumber"
-                  placeholder="esim. 27A1010"
-                  value={functionTestProductNumber}
-                  onChange={(e) => setFunctionTestProductNumber(e.target.value)}
+                  id="functionTestProductName"
+                  placeholder="esim. Kuntotutkimus ja PTS"
+                  value={functionTestProductName}
+                  onChange={(e) => setFunctionTestProductName(e.target.value)}
                 />
               </div>
               

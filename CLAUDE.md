@@ -82,7 +82,7 @@ npm run preview
 - **Structured output**: Format data for easy consumption
 - **Interactive chat**: Natural language questions about invoices and data
 - **Function calling**: Automated database queries based on user questions
-- **Invoice generation**: AI-powered sales invoice creation from purchase invoices
+- **Invoice generation**: AI-powered MyyntiExcel creation from OstolaskuExcel
 - **Data correlation**: Cross-reference between price lists, orders, and purchase invoices
 
 ### System Prompt Versioning
@@ -104,7 +104,7 @@ npm run preview
 #### Data Collections
 - **`hinnasto`** - Price list data with product codes, names, sales/purchase prices
 - **`tilaus_data`** - Order data with customer information, order details
-- **`myyntilaskut`** - Generated sales invoices with line items and totals
+- **`myyntiExcel`** - Generated MyyntiExcel invoices with line items and totals
 - **`knowledge`** - User-uploaded markdown documents for context
 
 ## AI Functions Available
@@ -112,31 +112,29 @@ npm run preview
 The chatbot has access to the following Gemini AI functions:
 
 ### 1. searchHinnasto
-**Description**: Search price list data by product code, product name, or price range
+**Description**: Search price list data by product number only
 
 **Parameters**:
-- `tuotetunnus` (string) - Product code to search for
-- `tuote` (string) - Product name or partial name to search for
-- `minMyyntihinta` (number) - Minimum sales price
-- `maxMyyntihinta` (number) - Maximum sales price
-- `minOstohinta` (number) - Minimum purchase price
-- `maxOstohinta` (number) - Maximum purchase price
+- `productNumber` (string) - Product number (tuotetunnus) to search for (partial match supported)
 - `limit` (number) - Maximum results to return (default 10)
 
-**Usage**: "Mikä on tuotteen 27A1008 hinta?" or "Näytä kaikki tuotteet alle 100€"
+**Usage**: "Mikä on tuotteen 27A1008 hinta?" or "Hae tuotetunnus 1A1041"
+
+**Note**: Searches only in ProductNumber field (same as UI filter). Checks fields: ProductNumber, Tuotetunnus, tuotetunnus, Product Number, product_number
 
 ### 2. searchTilaus
-**Description**: Search order data by any field
+**Description**: Search order data by order number only
 
 **Parameters**:
-- `searchField` (string) - Field name to search in
-- `searchValue` (string) - Value to search for
+- `orderNumber` (string) - Order number (RP-tunnus/tilausnumero) to search for (partial match supported)
 - `limit` (number) - Maximum results to return (default 10)
 
-**Usage**: "Hae tilaukset asiakkaalta X" or "Näytä tilaukset tammikuulta"
+**Usage**: "Hae tilaus RP-0201251024330417" or "Näytä tilausnumero RP-020125"
 
-### 3. searchOstolasku
-**Description**: Search uploaded purchase invoice data (when JSON file is loaded)
+**Note**: Searches only in OrderNumber field (same as UI filter). Checks fields: OrderNumber, RP-tunnus, RP-tunnus (tilausnumero), Tilausnumero, tilausnumero, Tilaustunnus
+
+### 3. searchOstolaskuExcel
+**Description**: Search uploaded OstolaskuExcel data (when JSON file is loaded)
 
 **Parameters**:
 - `searchField` (string) - Field name to search in
@@ -147,19 +145,53 @@ The chatbot has access to the following Gemini AI functions:
 - `maxAmount` (number) - Maximum price filter
 - `limit` (number) - Maximum results to return (default 10)
 
-**Usage**: "Näytä kaikki ostolaskurivit" or "Hae tuotekoodi 2078"
+**Usage**: "Näytä kaikki OstolaskuExcel-rivit" or "Hae tuotekoodi 2078"
 
 ### 4. createLasku
-**Description**: Create and save new sales invoice to the myyntilaskut collection
+**Description**: Create and save new MyyntiExcel to the myyntiExcel collection
+
+**Processing Logic**:
+1. **Product Matching**: Uses product description (`tuotenimi`) to find matching `ProductName` in price list
+2. **Price Validation**: Verifies purchase price matches price list `BuyPrice` 
+3. **Sales Price**: Retrieves `SalePrice` from matched price list item
+4. **Error Handling**: Fails if product not found or prices don't match
+
+**CRITICAL Product Matching Instructions for AI**:
+
+When creating invoices (createLasku), you MUST intelligently match products:
+
+1. **First, search the hinnasto (price list) to find the correct product**
+   - Use searchHinnasto to find products with matching prices
+   - If the purchase price (ostohinta) matches a BuyPrice in hinnasto, that's likely the correct product
+
+2. **When calling createLasku, use the EXACT ProductName from hinnasto**
+   - Do NOT use the product name from ostolasku directly
+   - Instead, find the matching product in hinnasto and use that ProductName
+   - The system expects the exact ProductName as it appears in the price list
+
+3. **Intelligent Matching Examples**:
+   - OstolaskuExcel: "Retta Pelastussuunnitelman digitointi ja päivityspalvelu/KOy"
+   - Hinnasto: "Pelastussuunnitelman digitointi ja päivityspalvelu. Asuinrakennukset"
+   - **You should use**: "Pelastussuunnitelman digitointi ja päivityspalvelu. Asuinrakennukset"
+
+4. **Matching Strategy**:
+   - Ignore company prefixes like "Retta", suffixes like "/KOy", "/Oy"
+   - Focus on the core service name
+   - When BuyPrice matches the purchase price, trust that match
+   - If multiple products could match, choose the one where BuyPrice validates
+
+5. **In the createLasku call**:
+   - `tuotenimi` field should contain the EXACT ProductName from hinnasto
+   - This ensures the system can find and validate the product correctly
 
 **Parameters**:
 - `laskurivit` (array) - Array of invoice line items with required fields:
-  - `asiakasnumero` (string, required) - Customer number
-  - `tuotekoodi` (string, required) - Product code
+  - `asiakasnumero` (string, required) - Customer number  
+  - `tuotenimi` (string, required) - Product name/description (used for ProductName matching)
   - `määrä` (number, required) - Quantity
-  - `ahinta` (number, required) - Unit price
+  - `ahinta` (number, optional) - Purchase price for validation (matched against BuyPrice)
   - `kuvaus` (string, required) - Description
-  - `tuotenimi` (string, required) - Product name
+  - `tuotekoodi` (string, optional) - Product code (retrieved from price list if not provided)
   - `selvitys` (string, auto-generated) - Detailed billing justification and pricing logic explanation
   - `tilattuTuote` (string, optional) - Ordered product name from order data
   - `reskontra` (string, optional) - Account type (default: MK)
@@ -168,7 +200,9 @@ The chatbot has access to the following Gemini AI functions:
   - `Tilausnumero` (string, optional) - Order number
 - `laskuotsikko` (string, optional) - Invoice title/description
 
-**Usage**: "Luo lasku asiakkaalle 11111 tuotteesta 2078" or "Tee myyntilasku ostolaskun perusteella"
+**Usage**: "Luo lasku asiakkaalle 11111 tuotteesta [tuotekuvaus]" or "Tee MyyntiExcel OstolaskuExcelin perusteella"
+
+**Note**: The function automatically fetches the sales price from the price list based on product name matching
 
 ## Function Integration
 
@@ -177,13 +211,13 @@ The chatbot has access to the following Gemini AI functions:
 2. **Storage**: Data is parsed and stored in respective Firestore collections
 3. **Query Phase**: AI chatbot uses functions to search stored data
 4. **Analysis**: AI provides insights, calculations, and recommendations
-5. **Invoice Creation**: AI can generate sales invoices based on analysis
+5. **Invoice Creation**: AI can generate MyyntiExcel based on analysis
 
 ### Response Format
 All functions return results in table format using Markdown syntax:
 - **Hinnasto**: Tuotetunnus | Tuote | Myyntihinta (€) | Ostohinta (€)
 - **Tilaus**: Dynamic columns based on data structure
-- **Ostolasku**: Asiakasnumero | Tuotekoodi | Tuotenimi | Määrä | Hinta (€) | Kuvaus
+- **OstolaskuExcel**: Asiakasnumero | Tuotekoodi | Tuotenimi | Määrä | Hinta (€) | Kuvaus
 - **Created Invoice**: Returns invoice ID, line count, and total amount
 
 ## UI Components and Configuration
@@ -197,13 +231,13 @@ All functions return results in table format using Markdown syntax:
 ```
 👋 Hei! Olen Retta-laskutusavustajasi. Voin auttaa sinua ostolaskujen edelleenlaskutuksessa ja laskutustyökaluissa. Kysy minulta esimerkiksi:
 
-• "Luo myyntilasku ostolaskun pohjalta"
+• "Luo MyyntiExcel OstolaskuExcelin pohjalta"
 • "Mikä on tuotteen 2078 myyntihinta?"
-• "Hae asiakkaan 11111 ostolaskut"
+• "Hae asiakkaan 11111 OstolaskuExcel-tiedot"
 • "Tarkista tuotteiden saatavuus hinnastossa"
-• "Näytä kaikki myyntilaskut"
+• "Näytä kaikki MyyntiExcel-tiedot"
 
-Voit myös ladata ostolaskuja JSON-muodossa ja pyytää minua luomaan niiden pohjalta kannattavia myyntilaskuja!
+Voit myös ladata OstolaskuExcel-tiedostoja JSON-muodossa ja pyytää minua luomaan niiden pohjalta kannattavia MyyntiExcel-tiedostoja!
 
 Miten voin auttaa?
 ```
@@ -215,13 +249,13 @@ Miten voin auttaa?
 - Uses line breaks (`\n`) for proper formatting in the chat interface
 
 **Key Features Highlighted**:
-1. **Core Functionality**: Purchase invoice re-billing ("ostolaskujen edelleenlaskutus")
-2. **Main Use Case**: "Luo myyntilasku ostolaskun pohjalta" (Create sales invoice from purchase invoice)
+1. **Core Functionality**: OstolaskuExcel re-billing ("OstolaskuExcel edelleenlaskutus")
+2. **Main Use Case**: "Luo MyyntiExcel OstolaskuExcelin pohjalta" (Create MyyntiExcel from OstolaskuExcel)
 3. **Pricing Queries**: Product price lookups from price list
 4. **Data Search**: Customer and invoice searches
 5. **Pricing**: Product price lookups and comparisons
-6. **Results Tracking**: View created sales invoices
-7. **File Upload**: JSON upload functionality for purchase invoices
+6. **Results Tracking**: View created MyyntiExcel
+7. **File Upload**: JSON upload functionality for OstolaskuExcel invoices
 
 **When to Update**:
 - When adding new AI functions

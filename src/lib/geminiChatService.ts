@@ -19,7 +19,7 @@ export interface ChatContext {
   userId: string;
   systemPrompt: string;
   sessionId: string;
-  ostolaskuData?: any[];
+  ostolaskuExcelData?: any[];
 }
 
 class GeminiChatService {
@@ -55,6 +55,24 @@ class GeminiChatService {
                   }
                 },
                 required: ['productName']
+              }
+            },
+            {
+              name: 'searchHinnastoByPriceList',
+              description: 'Search price list data by PriceListName. Returns all products from a specific price list.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  priceListName: {
+                    type: 'string',
+                    description: 'Price list name to search for (exact match)'
+                  },
+                  limit: {
+                    type: 'number',
+                    description: 'Maximum number of results to return (default 50)'
+                  }
+                },
+                required: ['priceListName']
               }
             },
             {
@@ -226,6 +244,103 @@ class GeminiChatService {
         await addTechnicalLog(sessionId, {
           eventType: 'function_error',
           functionName: 'searchHinnasto',
+          error: error instanceof Error ? error.message : 'Search failed',
+          timestamp: new Date()
+        });
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Search failed'
+      };
+    }
+  }
+
+  private async searchHinnastoByPriceList(userId: string, params: Record<string, any>, sessionId?: string) {
+    console.log('🔍 searchHinnastoByPriceList called with params:', { userId, params });
+    
+    // Log to continuous improvement
+    if (sessionId) {
+      await addTechnicalLog(sessionId, {
+        event: 'function_call_triggered',
+        functionName: 'searchHinnastoByPriceList',
+        functionInputs: params
+      });
+    }
+    
+    try {
+      // Query hinnasto records by PriceListName
+      const q = query(
+        collection(db, 'hinnasto')
+      );
+
+      console.log('📊 Querying hinnasto collection by PriceListName:', params.priceListName);
+      const querySnapshot = await getDocs(q);
+      console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
+      
+      let records = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ProductNumber: data['ProductNumber'] || data['Tuotetunnus'] || data['tuotetunnus'] || 
+                        data['Product Number'] || data['product_number'] || '',
+          ProductName: data['ProductName'] || data['Tuote'] || data['tuote'] || 
+                      data['Product Name'] || data['product_name'] || '',
+          SalePrice: data['SalePrice'] || data['Myyntihinta'] || data['myyntihinta'] || 
+                    data['Sale Price'] || data['sale_price'] || 0,
+          BuyPrice: data['BuyPrice'] || data['Ostohinta'] || data['ostohinta'] || 
+                   data['Buy Price'] || data['buy_price'] || 0,
+          PriceListName: data['PriceListName'] || data['Hintalista'] || data['hintalista'] || 
+                        data['Price List Name'] || data['price_list_name'] || ''
+        };
+      });
+
+      // Filter by PriceListName (exact match)
+      if (params.priceListName) {
+        records = records.filter(r => 
+          r.PriceListName === params.priceListName
+        );
+        console.log(`📊 Filtered to ${records.length} records for PriceListName: "${params.priceListName}"`);
+      }
+
+      const result = {
+        success: true,
+        data: records.slice(0, params.limit || 50),
+        count: records.length,
+        priceListName: params.priceListName
+      };
+      
+      console.log('✅ searchHinnastoByPriceList result:', {
+        success: result.success,
+        resultCount: result.data.length,
+        totalFound: result.count,
+        priceListName: result.priceListName
+      });
+      
+      // Log result to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_result',
+          functionName: 'searchHinnastoByPriceList',
+          result: {
+            success: result.success,
+            recordCount: result.data.length,
+            totalFound: result.count,
+            priceListName: result.priceListName
+          },
+          timestamp: new Date()
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ searchHinnastoByPriceList failed:', error);
+      
+      // Log error to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_error',
+          functionName: 'searchHinnastoByPriceList',
           error: error instanceof Error ? error.message : 'Search failed',
           timestamp: new Date()
         });
@@ -488,7 +603,7 @@ class GeminiChatService {
         if (rivi.ahinta && Math.abs(hinnastoBuyPrice - inputBuyPrice) > 0.01) {
           return {
             success: false,
-            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, Ostolaskulla: ${inputBuyPrice}€`
+            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, OstolaskuExcelissä: ${inputBuyPrice}€`
           };
         }
         
@@ -621,9 +736,9 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         kokonaissumma: processedLaskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
       };
 
-      // Save to Firestore 'myyntilaskut' collection
-      console.log('💾 Saving invoice to myyntilaskut collection...');
-      const docRef = await addDoc(collection(db, 'myyntilaskut'), laskuDocument);
+      // Save to Firestore 'myyntiExcel' collection
+      console.log('💾 Saving invoice to myyntiExcel collection...');
+      const docRef = await addDoc(collection(db, 'myyntiExcel'), laskuDocument);
       
       console.log('✅ Invoice saved successfully with ID:', docRef.id);
 
@@ -652,16 +767,16 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       sessionId: context.sessionId,
       userId: context.userId,
       promptLength: context.systemPrompt.length,
-      hasOstolaskuData: !!context.ostolaskuData
+      hasOstolaskuExcelData: !!context.ostolaskuExcelData
     });
     
     try {
-      // Build the system prompt with ostolasku data if available
+      // Build the system prompt with OstolaskuExcel data if available
       let fullSystemPrompt = context.systemPrompt;
       
-      if (context.ostolaskuData && context.ostolaskuData.length > 0) {
-        const ostolaskuJson = JSON.stringify(context.ostolaskuData, null, 2);
-        fullSystemPrompt += `\n\n=== LADATTU OSTOLASKU DATA ===\nSeuraava ostolasku on ladattu ja analyysiä varten:\n\`\`\`json\n${ostolaskuJson}\n\`\`\`\n\nTämä data on nyt käytettävissä suoraan. Et tarvitse searchOstolasku funktiota - voit viitata suoraan tähän dataan vastauksissa.`;
+      if (context.ostolaskuExcelData && context.ostolaskuExcelData.length > 0) {
+        const ostolaskuExcelJson = JSON.stringify(context.ostolaskuExcelData, null, 2);
+        fullSystemPrompt += `\n\n=== LADATTU OSTOLASKUEXCEL DATA ===\nSeuraava OstolaskuExcel on ladattu ja analyysiä varten:\n\`\`\`json\n${ostolaskuExcelJson}\n\`\`\`\n\nTämä data on nyt käytettävissä suoraan. Et tarvitse searchOstolaskuExcel funktiota - voit viitata suoraan tähän dataan vastauksissa.`;
       }
       
       const chat = this.model.startChat({
@@ -687,15 +802,15 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
     }
   }
 
-  async sendMessage(sessionId: string, message: string, userId: string, ostolaskuData: any[] = []): Promise<ChatMessage> {
+  async sendMessage(sessionId: string, message: string, userId: string, ostolaskuExcelData: any[] = []): Promise<ChatMessage> {
     // Reduce logging for production
     if (process.env.NODE_ENV === 'development') {
       console.log('💬 sendMessage called:', { 
         sessionId, 
         message: message.substring(0, 100) + '...', 
         userId,
-        hasOstolaskuData: ostolaskuData.length > 0,
-        ostolaskuRowCount: ostolaskuData.length
+        hasOstolaskuExcelData: ostolaskuExcelData.length > 0,
+        ostolaskuExcelRowCount: ostolaskuExcelData.length
       });
     }
     
@@ -706,18 +821,18 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
     }
 
     try {
-      // Note: Ostolasku data was already provided during session initialization
+      // Note: OstolaskuExcel data was already provided during session initialization
       // We only need to inform the AI about the current availability status
       let contextNote = '';
       
-      if (ostolaskuData && ostolaskuData.length > 0) {
-        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä ostolasku data ${ostolaskuData.length} rivillä session-kontekstissa]`;
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä OstolaskuExcel data ${ostolaskuExcelData.length} rivillä session-kontekstissa]`;
         if (process.env.NODE_ENV === 'development') {
-          console.log(`ℹ️ Ostolasku data available: ${ostolaskuData.length} rows`);
+          console.log(`ℹ️ OstolaskuExcel data available: ${ostolaskuExcelData.length} rows`);
         }
       } else {
-        contextNote = '\n\n[MUISTUTUS: Ei ostolaskudataa saatavilla tässä sessiossa]';
-        console.log('ℹ️ No ostolasku data available');
+        contextNote = '\n\n[MUISTUTUS: Ei OstolaskuExcel-dataa saatavilla tässä sessiossa]';
+        console.log('ℹ️ No OstolaskuExcel data available');
       }
       
       const fullMessage = message + contextNote;
@@ -782,6 +897,9 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           switch (functionName) {
             case 'searchHinnasto':
               functionResult = await this.searchHinnasto(userId, args, sessionId);
+              break;
+            case 'searchHinnastoByPriceList':
+              functionResult = await this.searchHinnastoByPriceList(userId, args, sessionId);
               break;
             case 'searchTilaus':
               functionResult = await this.searchTilaus(userId, args, sessionId);

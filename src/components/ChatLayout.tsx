@@ -24,11 +24,11 @@ interface DatabaseRecord {
 export const ChatLayout: React.FC = () => {
   const [hinnastoData, setHinnastoData] = useState<DatabaseRecord[]>([]);
   const [tilausData, setTilausData] = useState<DatabaseRecord[]>([]);
-  const [myyntilaskutData, setMyyntilaskutData] = useState<DatabaseRecord[]>([]);
-  const [ostolaskuData, setOstolaskuData] = useState<DatabaseRecord[]>([]);
+  const [myyntiExcelData, setMyyntiExcelData] = useState<DatabaseRecord[]>([]);
+  const [ostolaskuExcelData, setOstolaskuExcelData] = useState<DatabaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku'>('hinnasto');
+  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntiExcel' | 'ostolaskuExcel'>('hinnasto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -38,20 +38,20 @@ export const ChatLayout: React.FC = () => {
   const [productNumberFilter, setProductNumberFilter] = useState<string>('');
   const [orderCodeFilter, setOrderCodeFilter] = useState<string>('');
   const [orderRPFilter, setOrderRPFilter] = useState<string>('');
-  const [ostolaskuTampuuriFilter, setOstolaskuTampuuriFilter] = useState<string>('');
-  const [ostolaskuRPFilter, setOstolaskuRPFilter] = useState<string>('');
-  const [ostolaskuProductFilter, setOstolaskuProductFilter] = useState<string>('');
+  const [ostolaskuExcelTampuuriFilter, setOstolaskuTampuuriFilter] = useState<string>('');
+  const [ostolaskuExcelRPFilter, setOstolaskuRPFilter] = useState<string>('');
+  const [ostolaskuExcelProductFilter, setOstolaskuProductFilter] = useState<string>('');
   const [columnOffset, setColumnOffset] = useState<Record<string, number>>({});
   const [isLeftPanelVisible, setIsLeftPanelVisible] = useState(true);
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
   const { user } = useAuth();
 
   // Filter handlers with useCallback to prevent re-renders
-  const handleOstolaskuTampuuriFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOstolaskuExcelTampuuriFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setOstolaskuTampuuriFilter(e.target.value);
   }, []);
 
-  const handleOstolaskuProductFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleOstolaskuExcelProductFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setOstolaskuProductFilter(e.target.value);
   }, []);
 
@@ -144,8 +144,8 @@ export const ChatLayout: React.FC = () => {
       );
       setTilausData(tilausRecords); // Store all records, will filter in display
 
-      // Load myyntilaskut data in hierarchical format
-      const myyntilaskutDocuments = await storageService.getUserMyyntilaskutDocuments(user.uid);
+      // Load myyntiExcel data in hierarchical format
+      const myyntiExcelDocuments = await storageService.getUserMyyntiExcelDocuments(user.uid);
       
       // Create a lookup map from tilaus data for joining
       const tilausLookup = new Map();
@@ -182,7 +182,7 @@ export const ChatLayout: React.FC = () => {
         }
       });
       
-      const invoiceHeaders = myyntilaskutDocuments.flatMap(doc => 
+      const invoiceHeaders = myyntiExcelDocuments.flatMap(doc => 
         doc.jsonData?.map((lasku, laskuIndex) => {
           // Look up tilaus data using asiakasnumero (which corresponds to Tampuurinumero)
           const tilausInfo = tilausLookup.get(String(lasku.asiakasnumero || '').trim()) || {
@@ -229,11 +229,11 @@ export const ChatLayout: React.FC = () => {
           };
         }) || []
       );
-      setMyyntilaskutData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
+      setMyyntiExcelData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
 
-      // Ostolaskut are session-specific, loaded directly in ChatAI component
+      // OstolaskuExcel are session-specific, loaded directly in ChatAI component
       // Initial empty state - will be updated via callback from ChatAI
-      setOstolaskuData([]);
+      setOstolaskuExcelData([]);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -258,7 +258,7 @@ export const ChatLayout: React.FC = () => {
     if (data.length === 0) return;
     
     // Check if this is invoice data with line items
-    const isInvoiceData = filename === 'myyntilaskut' && data.some(item => item.laskurivit);
+    const isInvoiceData = filename === 'myyntiExcel' && data.some(item => item.laskurivit);
     
     let exportData: DatabaseRecord[] = [];
     
@@ -312,7 +312,7 @@ export const ChatLayout: React.FC = () => {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
     // Add worksheet to workbook
-    const sheetName = isInvoiceData ? 'Myyntilaskut' : filename;
+    const sheetName = isInvoiceData ? 'MyyntiExcel' : filename;
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     
     // Write workbook to buffer
@@ -412,7 +412,7 @@ export const ChatLayout: React.FC = () => {
     
     try {
       // Find the invoice and update the specific field
-      const updatedData = myyntilaskutData.map(invoice => {
+      const updatedData = myyntiExcelData.map(invoice => {
         if (invoice.id === rowId) {
           return { ...invoice, [field]: value };
         }
@@ -431,7 +431,7 @@ export const ChatLayout: React.FC = () => {
         return invoice;
       });
       
-      setMyyntilaskutData(updatedData);
+      setMyyntiExcelData(updatedData);
       // TODO: Save to Firestore
       console.log('Saved:', { rowId, field, value });
     } catch (error) {
@@ -444,7 +444,7 @@ export const ChatLayout: React.FC = () => {
     
     try {
       // Find the invoice to get its firestoreDocId
-      const invoice = myyntilaskutData.find(inv => inv.id === invoiceId);
+      const invoice = myyntiExcelData.find(inv => inv.id === invoiceId);
       if (!invoice || !invoice.firestoreDocId) {
         throw new Error('Invoice not found or missing Firestore document ID');
       }
@@ -456,11 +456,11 @@ export const ChatLayout: React.FC = () => {
       });
       
       // Delete from Firestore using the real Firestore document ID
-      await deleteDoc(doc(db, 'myyntilaskut', invoice.firestoreDocId));
+      await deleteDoc(doc(db, 'myyntiExcel', invoice.firestoreDocId));
       
       // Update UI state
-      const updatedData = myyntilaskutData.filter(inv => inv.id !== invoiceId);
-      setMyyntilaskutData(updatedData);
+      const updatedData = myyntiExcelData.filter(inv => inv.id !== invoiceId);
+      setMyyntiExcelData(updatedData);
       if (selectedInvoiceId === invoiceId) {
         setSelectedInvoiceId(null);
       }
@@ -476,14 +476,14 @@ export const ChatLayout: React.FC = () => {
     if (!user || !confirm('Oletko varma että haluat poistaa tämän laskurivin?')) return;
     
     try {
-      const updatedData = myyntilaskutData.map(invoice => {
+      const updatedData = myyntiExcelData.map(invoice => {
         if (invoice.id === invoiceId && invoice.laskurivit) {
           const updatedLines = invoice.laskurivit.filter(line => line.id !== lineId);
           return { ...invoice, laskurivit: updatedLines, rivienMaara: updatedLines.length };
         }
         return invoice;
       });
-      setMyyntilaskutData(updatedData);
+      setMyyntiExcelData(updatedData);
       // TODO: Save to Firestore
       console.log('Deleted line:', lineId);
     } catch (error) {
@@ -510,7 +510,7 @@ export const ChatLayout: React.FC = () => {
   };
 
   const renderInvoiceEditor = () => {
-    if (myyntilaskutData.length === 0) {
+    if (myyntiExcelData.length === 0) {
       return (
         <div className="text-center py-8 text-gray-500">
           <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -520,18 +520,18 @@ export const ChatLayout: React.FC = () => {
       );
     }
 
-    const selectedInvoice = myyntilaskutData.find(inv => inv.id === selectedInvoiceId);
+    const selectedInvoice = myyntiExcelData.find(inv => inv.id === selectedInvoiceId);
 
     return (
       <div className="space-y-4">
         {/* Invoice Headers List */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <Badge variant="secondary">{myyntilaskutData.length} laskua</Badge>
+            <Badge variant="secondary">{myyntiExcelData.length} laskua</Badge>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => downloadAsExcel(myyntilaskutData, 'myyntilaskut')}
+              onClick={() => downloadAsExcel(myyntiExcelData, 'myyntiExcel')}
             >
               <Download className="w-4 h-4 mr-2" />
               Excel
@@ -555,7 +555,7 @@ export const ChatLayout: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {myyntilaskutData.map((invoice, index) => (
+                {myyntiExcelData.map((invoice, index) => (
                   <tr 
                     key={invoice.id} 
                     className={`cursor-pointer hover:bg-gray-50 ${selectedInvoiceId === invoice.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
@@ -878,11 +878,11 @@ export const ChatLayout: React.FC = () => {
       }
     }
     
-    // Apply filters for Ostolasku
-    if (title === 'Ostolasku') {
+    // Apply filters for OstolaskuExcel
+    if (title === 'OstolaskuExcel') {
       
       // Apply tampuurinumero filter - search in multiple possible field names
-      if (ostolaskuTampuuriFilter) {
+      if (ostolaskuExcelTampuuriFilter) {
         const beforeFilter = filteredData.length;
         filteredData = filteredData.filter((record, index) => {
           // Check multiple possible field names for tampuuri
@@ -896,37 +896,37 @@ export const ChatLayout: React.FC = () => {
                           record['Kohteen tampuuri ID'] ||
                           '';
           
-          const matches = String(tampuuri).toLowerCase().includes(ostolaskuTampuuriFilter.toLowerCase());
+          const matches = String(tampuuri).toLowerCase().includes(ostolaskuExcelTampuuriFilter.toLowerCase());
           
           // Debug log for first few records
-          if (index < 3 && ostolaskuTampuuriFilter) {
-            console.log(`Ostolasku filter: searching for "${ostolaskuTampuuriFilter}" in tampuuri="${tampuuri}", matches=${matches}`);
+          if (index < 3 && ostolaskuExcelTampuuriFilter) {
+            console.log(`OstolaskuExcel filter: searching for "${ostolaskuExcelTampuuriFilter}" in tampuuri="${tampuuri}", matches=${matches}`);
           }
           
           return matches;
         });
       }
       
-      // Apply RP-numero filter for Ostolasku
-      if (ostolaskuRPFilter) {
+      // Apply RP-numero filter for OstolaskuExcel
+      if (ostolaskuExcelRPFilter) {
         filteredData = filteredData.filter(record => {
           const rpNumero = record['RP-numero'] || 
                            record['RP-tunnus'] ||
                            record['RPnumero'] ||
                            record['OrderNumber'] ||
                            '';
-          return String(rpNumero).toLowerCase().includes(ostolaskuRPFilter.toLowerCase());
+          return String(rpNumero).toLowerCase().includes(ostolaskuExcelRPFilter.toLowerCase());
         });
       }
       
       // Apply product description filter - search in "Tuote" field
-      if (ostolaskuProductFilter) {
+      if (ostolaskuExcelProductFilter) {
         const beforeFilter = filteredData.length;
         filteredData = filteredData.filter((record, index) => {
           // Get the Tuote field value
           const tuote = record['Tuote'] || '';
           
-          const matches = String(tuote).toLowerCase().includes(ostolaskuProductFilter.toLowerCase());
+          const matches = String(tuote).toLowerCase().includes(ostolaskuExcelProductFilter.toLowerCase());
           
           
           return matches;
@@ -935,16 +935,16 @@ export const ChatLayout: React.FC = () => {
     }
     
     if (filteredData.length === 0) {
-      const emptyMessage = title === 'Myyntilaskut' 
+      const emptyMessage = title === 'MyyntiExcel' 
         ? 'Luo myyntilasku pyytämällä myyntilaskun AI genrointia chatbotilta'
-        : title === 'Ostolasku'
-        ? (ostolaskuTampuuriFilter || ostolaskuProductFilter)
-          ? ostolaskuTampuuriFilter && ostolaskuProductFilter
-            ? `Ei tuloksia tampuurinumerolle "${ostolaskuTampuuriFilter}" ja tuotekuvaukselle "${ostolaskuProductFilter}"`
-            : ostolaskuTampuuriFilter
-            ? `Ei tuloksia tampuurinumerolle "${ostolaskuTampuuriFilter}"`
-            : `Ei tuloksia tuotekuvaukselle "${ostolaskuProductFilter}"`
-          : 'Lataa ostolasku käyttämällä "Lataa ostolasku" -painiketta Chat AI -näkymässä'
+        : title === 'OstolaskuExcel'
+        ? (ostolaskuExcelTampuuriFilter || ostolaskuExcelProductFilter)
+          ? ostolaskuExcelTampuuriFilter && ostolaskuExcelProductFilter
+            ? `Ei tuloksia tampuurinumerolle "${ostolaskuExcelTampuuriFilter}" ja tuotekuvaukselle "${ostolaskuExcelProductFilter}"`
+            : ostolaskuExcelTampuuriFilter
+            ? `Ei tuloksia tampuurinumerolle "${ostolaskuExcelTampuuriFilter}"`
+            : `Ei tuloksia tuotekuvaukselle "${ostolaskuExcelProductFilter}"`
+          : 'Lataa OstolaskuExcel käyttämällä "Lataa OstolaskuExcel" -painiketta Chat AI -näkymässä'
         : productNumberFilter && title === 'Hinnasto'
         ? `Ei tuloksia tuotetunnukselle "${productNumberFilter}"`
         : orderCodeFilter && title === 'Tilaus'
@@ -1013,17 +1013,17 @@ export const ChatLayout: React.FC = () => {
               </div>
             </div>
           )}
-          {title === 'Ostolasku' && (
+          {title === 'OstolaskuExcel' && (
             <div className="space-y-2">
               <div className="flex gap-2">
                 <input
                   type="text"
                   placeholder="Suodata tampuurinumerolla (Code)..."
-                  value={ostolaskuTampuuriFilter}
+                  value={ostolaskuExcelTampuuriFilter}
                   onChange={(e) => setOstolaskuTampuuriFilter(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {ostolaskuTampuuriFilter && (
+                {ostolaskuExcelTampuuriFilter && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1037,11 +1037,11 @@ export const ChatLayout: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Suodata RP-numerolla..."
-                  value={ostolaskuRPFilter}
+                  value={ostolaskuExcelRPFilter}
                   onChange={(e) => setOstolaskuRPFilter(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {ostolaskuRPFilter && (
+                {ostolaskuExcelRPFilter && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1055,11 +1055,11 @@ export const ChatLayout: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Suodata tuotekuvauksella..."
-                  value={ostolaskuProductFilter}
+                  value={ostolaskuExcelProductFilter}
                   onChange={(e) => setOstolaskuProductFilter(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {ostolaskuProductFilter && (
+                {ostolaskuExcelProductFilter && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1145,26 +1145,26 @@ export const ChatLayout: React.FC = () => {
           </div>
         )}
         
-        {title === 'Ostolasku' && (
+        {title === 'OstolaskuExcel' && (
           <div className="space-y-2">
             {data.length > 0 && (
               <Alert className="bg-green-50 border-green-200">
                 <AlertDescription className="text-sm text-green-700">
-                  ✅ Sessiokohtaista ostolaskudataa ladattu: {data.length} riviä
+                  ✅ Sessiokohtaista OstolaskuExcel-dataa ladattu: {data.length} riviä
                 </AlertDescription>
               </Alert>
             )}
             <div className="flex gap-2">
               <Input
-                id="ostolasku-tampuuri-filter"
-                key="ostolasku-tampuuri-filter"
+                id="ostolaskuExcel-tampuuri-filter"
+                key="ostolaskuExcel-tampuuri-filter"
                 type="text"
                 placeholder="Suodata tampuurinumerolla..."
-                value={ostolaskuTampuuriFilter}
-                onChange={handleOstolaskuTampuuriFilterChange}
+                value={ostolaskuExcelTampuuriFilter}
+                onChange={handleOstolaskuExcelTampuuriFilterChange}
                 className="flex-1"
               />
-              {ostolaskuTampuuriFilter && (
+              {ostolaskuExcelTampuuriFilter && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1176,15 +1176,15 @@ export const ChatLayout: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <Input
-                id="ostolasku-product-filter"
-                key="ostolasku-product-filter"
+                id="ostolaskuExcel-product-filter"
+                key="ostolaskuExcel-product-filter"
                 type="text"
                 placeholder="Suodata tuotteella..."
-                value={ostolaskuProductFilter}
-                onChange={handleOstolaskuProductFilterChange}
+                value={ostolaskuExcelProductFilter}
+                onChange={handleOstolaskuExcelProductFilterChange}
                 className="flex-1"
               />
-              {ostolaskuProductFilter && (
+              {ostolaskuExcelProductFilter && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1200,7 +1200,7 @@ export const ChatLayout: React.FC = () => {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Badge variant="secondary">
-              {(productNumberFilter && title === 'Hinnasto') || (orderCodeFilter && title === 'Tilaus') || ((ostolaskuTampuuriFilter || ostolaskuProductFilter) && title === 'Ostolasku')
+              {(productNumberFilter && title === 'Hinnasto') || (orderCodeFilter && title === 'Tilaus') || ((ostolaskuExcelTampuuriFilter || ostolaskuExcelProductFilter) && title === 'OstolaskuExcel')
                 ? `${filteredData.length} / ${data.length} riviä` 
                 : `${filteredData.length} riviä`}
             </Badge>
@@ -1320,7 +1320,7 @@ export const ChatLayout: React.FC = () => {
         </div>
       </div>
     );
-  }, [ostolaskuTampuuriFilter, ostolaskuRPFilter, ostolaskuProductFilter, productNumberFilter, orderCodeFilter, orderRPFilter, editingCell, columnOffset]);
+  }, [ostolaskuExcelTampuuriFilter, ostolaskuExcelRPFilter, ostolaskuExcelProductFilter, productNumberFilter, orderCodeFilter, orderRPFilter, editingCell, columnOffset]);
 
   return (
     <div id="chat-layout-container" className="h-full flex gap-2 relative">
@@ -1413,12 +1413,12 @@ export const ChatLayout: React.FC = () => {
               </Alert>
             )}
             
-            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntilaskut' | 'ostolasku')} className="flex flex-col h-full">
+            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntiExcel' | 'ostolaskuExcel')} className="flex flex-col h-full">
               <TabsList className="grid w-full grid-cols-4 flex-shrink-0 sticky top-0 bg-white z-10">
                 <TabsTrigger value="hinnasto">Hinnasto</TabsTrigger>
                 <TabsTrigger value="tilaus">Tilaukset</TabsTrigger>
-                <TabsTrigger value="ostolasku">Ostolaskut</TabsTrigger>
-                <TabsTrigger value="myyntilaskut">Myyntilaskut</TabsTrigger>
+                <TabsTrigger value="ostolaskuExcel">OstolaskuExcel</TabsTrigger>
+                <TabsTrigger value="myyntiExcel">MyyntiExcel</TabsTrigger>
               </TabsList>
               
               <TabsContent value="hinnasto" className="mt-4 flex-1 overflow-auto">
@@ -1429,11 +1429,11 @@ export const ChatLayout: React.FC = () => {
                 {renderDataTable(tilausData, 'Tilaus')}
               </TabsContent>
               
-              <TabsContent value="ostolasku" className="mt-4 flex-1 overflow-auto">
-                {renderDataTable(ostolaskuData, 'Ostolasku')}
+              <TabsContent value="ostolaskuExcel" className="mt-4 flex-1 overflow-auto">
+                {renderDataTable(ostolaskuExcelData, 'OstolaskuExcel')}
               </TabsContent>
               
-              <TabsContent value="myyntilaskut" className="mt-4 flex-1 overflow-auto">
+              <TabsContent value="myyntiExcel" className="mt-4 flex-1 overflow-auto">
                 {renderInvoiceEditor()}
               </TabsContent>
             </Tabs>
@@ -1472,7 +1472,7 @@ export const ChatLayout: React.FC = () => {
         <CardContent className="pt-0 flex-1 overflow-hidden p-0">
           <ChatAI 
             className="h-full" 
-            onOstolaskuDataChange={(data) => setOstolaskuData(data)}
+            onOstolaskuExcelDataChange={(data) => setOstolaskuExcelData(data)}
           />
         </CardContent>
       </Card>

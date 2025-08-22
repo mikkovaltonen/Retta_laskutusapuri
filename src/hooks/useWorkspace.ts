@@ -21,8 +21,8 @@ export const workspaceConfigs = {
     name: 'Retta Laskutus', 
     chatTitle: 'Retta - omien kulujen laskuttajan työpöytä',
     adminTitle: 'Laskutuksen hallinta',
-    erpTitle: 'Myyntilaskujen integraatio',
-    apiTestTitle: 'Myyntilasku API:n testaus'
+    erpTitle: 'MyyntiExcel integraatio',
+    apiTestTitle: 'MyyntiExcel API:n testaus'
   }
 } as const;
 

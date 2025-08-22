@@ -768,12 +768,12 @@ export class StorageService {
   }
 
   /**
-   * Get user's myyntilaskut documents
+   * Get user's myyntiExcel documents
    */
-  async getUserMyyntilaskutDocuments(userId: string): Promise<ERPDocument[]> {
+  async getUserMyyntiExcelDocuments(userId: string): Promise<ERPDocument[]> {
     try {
       const recordsQ = query(
-        collection(db, 'myyntilaskut'),
+        collection(db, 'myyntiExcel'),
         where('userId', '==', userId)
       );
       
@@ -787,14 +787,14 @@ export class StorageService {
         };
       });
       
-      console.log(`📋 Loaded ${jsonData.length} myyntilaskut records`);
+      console.log(`📋 Loaded ${jsonData.length} myyntiExcel records`);
       
       // Group by laskuotsikko or create single document
       const fileGroups = new Map<string, Record<string, unknown>[]>();
       
       for (const doc of recordsSnapshot.docs) {
         const data = doc.data();
-        const fileName = data.laskuotsikko || 'Myyntilaskut Data';
+        const fileName = data.laskuotsikko || 'MyyntiExcel Data';
         
         if (!fileGroups.has(fileName)) {
           fileGroups.set(fileName, []);
@@ -811,16 +811,16 @@ export class StorageService {
       const documents: ERPDocument[] = [];
       for (const [fileName, records] of fileGroups) {
         const firstRecord = recordsSnapshot.docs.find(doc => 
-          (doc.data().laskuotsikko || 'Myyntilaskut Data') === fileName
+          (doc.data().laskuotsikko || 'MyyntiExcel Data') === fileName
         );
         const firstRecordData = firstRecord?.data();
         
         documents.push({
-          id: `myyntilaskut_${fileName}_${Date.now()}`,
+          id: `myyntiExcel_${fileName}_${Date.now()}`,
           name: fileName,
           originalFormat: 'json',
           jsonData: records,
-          sheets: ['Myyntilaskut'],
+          sheets: ['MyyntiExcel'],
           size: records.length * 200,
           uploadedAt: new Date(firstRecordData?.luontipaiva || firstRecordData?.uploadedAt || new Date()),
           userId: userId,
@@ -834,16 +834,16 @@ export class StorageService {
         new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
       );
     } catch (error) {
-      console.error('Failed to fetch myyntilaskut documents:', error);
-      throw new Error('Failed to fetch myyntilaskut documents');
+      console.error('Failed to fetch myyntiExcel documents:', error);
+      throw new Error('Failed to fetch myyntiExcel documents');
     }
   }
 
   /**
-   * Delete user's myyntilaskut documents
+   * Delete user's myyntiExcel documents
    */
-  async deleteMyyntilaskutDocuments(userId: string): Promise<void> {
-    await this.deleteUserDocumentsFromCollection(userId, 'myyntilaskut');
+  async deleteMyyntiExcelDocuments(userId: string): Promise<void> {
+    await this.deleteUserDocumentsFromCollection(userId, 'myyntiExcel');
   }
 
   /**
