@@ -8,8 +8,9 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Search, Database, Clock, FileText, AlertCircle } from 'lucide-react';
+import { Search, Database, Clock, FileText, AlertCircle, Bot } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 interface HinnastoSearchCriteria {
   tuotetunnus?: string;
@@ -22,10 +23,14 @@ interface HinnastoSearchCriteria {
 
 interface HinnastoRecord {
   id: string;
-  Tuotetunnus?: string;
-  Tuote?: string;
-  Myyntihinta?: number;
-  Ostohinta?: number;
+  ProductNumber?: string;
+  ProductName?: string;
+  SalePrice?: number;
+  BuyPrice?: number;
+  Tuotetunnus?: string; // Keep old field for compatibility
+  Tuote?: string; // Keep old field for compatibility
+  Myyntihinta?: number; // Keep old field for compatibility
+  Ostohinta?: number; // Keep old field for compatibility
   [key: string]: unknown;
 }
 
@@ -42,6 +47,9 @@ export const HinnastoApiTester: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
+  const [functionTestProductNumber, setFunctionTestProductNumber] = useState('');
+  const [functionTestResult, setFunctionTestResult] = useState<any>(null);
+  const [functionTestLoading, setFunctionTestLoading] = useState(false);
   const { user } = useAuth();
 
   const handleInputChange = (field: string, value: string) => {
@@ -67,14 +75,8 @@ export const HinnastoApiTester: React.FC = () => {
         collection(db, 'hinnasto')
       );
 
-      // Add search filters
-      if (searchCriteria.tuotetunnus) {
-        q = query(q, where('Tuotetunnus', '>=', searchCriteria.tuotetunnus));
-        q = query(q, where('Tuotetunnus', '<=', searchCriteria.tuotetunnus + '\uf8ff'));
-      }
-
-      // Add limit to prevent large queries
-      q = query(q, limit(100));
+      // Query all records without limit (same as UI)
+      // No limit - get all records
 
       const querySnapshot = await getDocs(q);
       let records: HinnastoRecord[] = querySnapshot.docs.map(doc => ({
@@ -82,38 +84,18 @@ export const HinnastoApiTester: React.FC = () => {
         ...doc.data()
       })) as HinnastoRecord[];
 
-      // Apply client-side filtering for complex criteria
-      if (searchCriteria.tuote) {
-        records = records.filter(record => 
-          record.Tuote?.toString().toLowerCase().includes(searchCriteria.tuote!.toLowerCase())
-        );
-      }
-
-      if (searchCriteria.minMyyntihinta !== undefined) {
+      // Apply filter - check multiple field names like the UI does
+      if (searchCriteria.tuotetunnus) {
         records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price >= searchCriteria.minMyyntihinta!;
-        });
-      }
-
-      if (searchCriteria.maxMyyntihinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price <= searchCriteria.maxMyyntihinta!;
-        });
-      }
-
-      if (searchCriteria.minOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price >= searchCriteria.minOstohinta!;
-        });
-      }
-
-      if (searchCriteria.maxOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price <= searchCriteria.maxOstohinta!;
+          // Check various possible field names for product number (same as UI)
+          const productNumber = 
+            record['ProductNumber'] || 
+            record['Tuotetunnus'] || 
+            record['tuotetunnus'] || 
+            record['Product Number'] ||
+            record['product_number'] ||
+            '';
+          return String(productNumber).toLowerCase().includes(searchCriteria.tuotetunnus!.toLowerCase());
         });
       }
 
@@ -167,8 +149,115 @@ export const HinnastoApiTester: React.FC = () => {
     setError(null);
   };
 
+  // Test the searchHinnasto function exactly as the chatbot uses it
+  const testSearchHinnastoFunction = async () => {
+    if (!user) {
+      setError('Please log in to test the function');
+      return;
+    }
+
+    setFunctionTestLoading(true);
+    setFunctionTestResult(null);
+    const startTime = Date.now();
+
+    try {
+      console.log('🔧 Testing searchHinnasto function with productNumber:', functionTestProductNumber);
+      
+      // Query ALL hinnasto records without limit - exactly like in geminiChatService
+      const q = query(
+        collection(db, 'hinnasto')
+        // No limit - get all records
+      );
+
+      console.log('📊 Querying shared hinnasto collection');
+      const querySnapshot = await getDocs(q);
+      console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
+      
+      let records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Log all unique field names for debugging
+      const allFieldNames = new Set<string>();
+      records.forEach(record => {
+        Object.keys(record).forEach(key => allFieldNames.add(key));
+      });
+      console.log('📋 All unique field names in collection:', Array.from(allFieldNames));
+
+      // Apply filter - exactly like in geminiChatService
+      if (functionTestProductNumber) {
+        console.log('🔎 Filtering by productNumber:', functionTestProductNumber);
+        const beforeFilter = records.length;
+        
+        // Log what we're checking for each record
+        records = records.filter((record, index) => {
+          // Check various possible field names for product number (same as in service)
+          const productNumber = 
+            record['ProductNumber'] || 
+            record['Tuotetunnus'] || 
+            record['tuotetunnus'] || 
+            record['Product Number'] ||
+            record['product_number'] ||
+            '';
+          
+          // Log the first few records for debugging
+          if (index < 3) {
+            console.log(`Record ${index}:`, {
+              ProductNumber: record['ProductNumber'],
+              Tuotetunnus: record['Tuotetunnus'],
+              extractedValue: productNumber,
+              searchTerm: functionTestProductNumber.toLowerCase(),
+              matches: String(productNumber).toLowerCase().includes(functionTestProductNumber.toLowerCase())
+            });
+          }
+          
+          return String(productNumber).toLowerCase().includes(functionTestProductNumber.toLowerCase());
+        });
+        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+      }
+
+      const executionTime = Date.now() - startTime;
+      
+      const result = {
+        success: true,
+        data: records.slice(0, 10), // Limit to 10 like in the service
+        count: records.length,
+        executionTime,
+        allFieldNames: Array.from(allFieldNames),
+        sampleRecord: records[0] || null
+      };
+      
+      console.log('✅ searchHinnasto test result:', {
+        success: result.success,
+        resultCount: result.data.length,
+        totalFound: result.count
+      });
+      
+      setFunctionTestResult(result);
+    } catch (err) {
+      console.error('❌ Function test error:', err);
+      setFunctionTestResult({
+        success: false,
+        error: err instanceof Error ? err.message : 'Test failed'
+      });
+    } finally {
+      setFunctionTestLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <Tabs defaultValue="api-test" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="api-test">API Testaus</TabsTrigger>
+          <TabsTrigger value="function-test">
+            <Bot className="w-4 h-4 mr-2" />
+            Function Call Testaus
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="api-test" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -199,70 +288,26 @@ export const HinnastoApiTester: React.FC = () => {
             </div>
           )}
 
-          {/* Search Form */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Search Form - Only ProductNumber */}
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Hinnasto-haku tarkistaa seuraavat kentät: ProductNumber, Tuotetunnus, tuotetunnus, Product Number, product_number. Syötä tuotenumero tai sen osa.
+              </AlertDescription>
+            </Alert>
+            
             <div className="space-y-2">
-              <Label htmlFor="tuotetunnus">Tuotetunnus</Label>
+              <Label htmlFor="tuotetunnus">Product Number (tuotetunnus)</Label>
               <Input
                 id="tuotetunnus"
-                placeholder="esim. 27A1008"
+                placeholder="esim. 42A1003"
                 value={searchCriteria.tuotetunnus || ''}
                 onChange={(e) => handleInputChange('tuotetunnus', e.target.value)}
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="tuote">Tuote (sisältää)</Label>
-              <Input
-                id="tuote"
-                placeholder="esim. Vuosihuolto"
-                value={searchCriteria.tuote || ''}
-                onChange={(e) => handleInputChange('tuote', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="minMyyntihinta">Min Myyntihinta</Label>
-              <Input
-                id="minMyyntihinta"
-                type="number"
-                placeholder="esim. 100"
-                value={searchCriteria.minMyyntihinta || ''}
-                onChange={(e) => handleInputChange('minMyyntihinta', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="maxMyyntihinta">Max Myyntihinta</Label>
-              <Input
-                id="maxMyyntihinta"
-                type="number"
-                placeholder="esim. 500"
-                value={searchCriteria.maxMyyntihinta || ''}
-                onChange={(e) => handleInputChange('maxMyyntihinta', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="minOstohinta">Min Ostohinta</Label>
-              <Input
-                id="minOstohinta"
-                type="number"
-                placeholder="esim. 50"
-                value={searchCriteria.minOstohinta || ''}
-                onChange={(e) => handleInputChange('minOstohinta', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="maxOstohinta">Max Ostohinta</Label>
-              <Input
-                id="maxOstohinta"
-                type="number"
-                placeholder="esim. 300"
-                value={searchCriteria.maxOstohinta || ''}
-                onChange={(e) => handleInputChange('maxOstohinta', e.target.value)}
-              />
+              <p className="text-sm text-gray-500">
+                Haku toimii osittaisella vastaavuudella. Esim. "42A" löytää kaikki tuotteet jotka sisältävät "42A".
+              </p>
             </div>
           </div>
 
@@ -278,8 +323,8 @@ export const HinnastoApiTester: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Search Results */}
-      {searchResult && (
+          {/* Search Results */}
+          {searchResult && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -313,16 +358,16 @@ export const HinnastoApiTester: React.FC = () => {
                     {searchResult.records.map((record, index) => (
                       <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                         <td className="border border-gray-300 px-3 py-2">
-                          {record.Tuotetunnus || '-'}
+                          {record.ProductNumber || record.Tuotetunnus || '-'}
                         </td>
                         <td className="border border-gray-300 px-3 py-2">
-                          {record.Tuote || '-'}
+                          {record.ProductName || record.Tuote || '-'}
                         </td>
                         <td className="border border-gray-300 px-3 py-2 text-right">
-                          {record.Myyntihinta ? `${record.Myyntihinta} €` : '-'}
+                          {record.SalePrice || record.Myyntihinta ? `${record.SalePrice || record.Myyntihinta} €` : '-'}
                         </td>
                         <td className="border border-gray-300 px-3 py-2 text-right">
-                          {record.Ostohinta ? `${record.Ostohinta} €` : '-'}
+                          {record.BuyPrice || record.Ostohinta ? `${record.BuyPrice || record.Ostohinta} €` : '-'}
                         </td>
                       </tr>
                     ))}
@@ -337,6 +382,164 @@ export const HinnastoApiTester: React.FC = () => {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+        
+        <TabsContent value="function-test" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="w-5 h-5" />
+                searchHinnasto Function Call Testaus
+              </CardTitle>
+              <CardDescription>
+                Testaa searchHinnasto-funktiota täsmälleen samalla tavalla kuin chatbot käyttää sitä
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Tämä testeri simuloi chatbotin searchHinnasto-funktiokutsua. Se näyttää tarkan debug-lokin siitä, miten funktio käsittelee dataa.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="space-y-2">
+                <Label htmlFor="functionTestProductNumber">Product Number (tuotetunnus)</Label>
+                <Input
+                  id="functionTestProductNumber"
+                  placeholder="esim. 27A1010"
+                  value={functionTestProductNumber}
+                  onChange={(e) => setFunctionTestProductNumber(e.target.value)}
+                />
+              </div>
+              
+              <Button 
+                onClick={testSearchHinnastoFunction} 
+                disabled={functionTestLoading || !user}
+              >
+                <Search className="w-4 h-4 mr-2" />
+                {functionTestLoading ? 'Testing...' : 'Test searchHinnasto Function'}
+              </Button>
+              
+              {functionTestResult && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <h4 className="font-medium mb-2">📊 Test Result:</h4>
+                    <div className="space-y-2 text-sm">
+                      <div>✅ Success: {functionTestResult.success ? 'Yes' : 'No'}</div>
+                      {functionTestResult.error && (
+                        <div className="text-red-600">❌ Error: {functionTestResult.error}</div>
+                      )}
+                      {functionTestResult.success && (
+                        <>
+                          <div>📝 Results found: {functionTestResult.count}</div>
+                          <div>⏱️ Execution time: {functionTestResult.executionTime}ms</div>
+                          <div>📋 Data returned: {functionTestResult.data?.length || 0} records</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {functionTestResult.allFieldNames && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="font-medium text-blue-800 mb-2">🔍 Detected Field Names in Collection:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {functionTestResult.allFieldNames.map((field: string) => (
+                          <Badge 
+                            key={field} 
+                            variant={field.toLowerCase().includes('tuote') || field.toLowerCase().includes('product') ? 'default' : 'secondary'}
+                          >
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {functionTestResult.sampleRecord && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <h4 className="font-medium text-yellow-800 mb-2">📄 Sample Record Structure:</h4>
+                      <pre className="text-xs overflow-x-auto">
+                        {JSON.stringify(functionTestResult.sampleRecord, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {functionTestResult.data && functionTestResult.data.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <h4 className="font-medium mb-2">📊 Found Records:</h4>
+                      <table className="w-full text-sm border-collapse border border-gray-300">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="border border-gray-300 px-3 py-2 text-left">Product Fields</th>
+                            <th className="border border-gray-300 px-3 py-2 text-left">Name</th>
+                            <th className="border border-gray-300 px-3 py-2 text-right">Sales Price</th>
+                            <th className="border border-gray-300 px-3 py-2 text-right">Purchase Price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {functionTestResult.data.map((record: any, index: number) => {
+                            const productNumber = 
+                              record['ProductNumber'] || 
+                              record['Tuotetunnus'] || 
+                              record['tuotetunnus'] || 
+                              record['Product Number'] ||
+                              record['product_number'] ||
+                              '-';
+                            const productName = 
+                              record['Tuote'] || 
+                              record['ProductName'] || 
+                              record['tuote'] || 
+                              record['Product Name'] ||
+                              record['product_name'] ||
+                              '-';
+                            const salesPrice = 
+                              record['Myyntihinta'] || 
+                              record['SalesPrice'] || 
+                              record['myyntihinta'] || 
+                              record['Sales Price'] ||
+                              record['sales_price'];
+                            const purchasePrice = 
+                              record['Ostohinta'] || 
+                              record['PurchasePrice'] || 
+                              record['ostohinta'] || 
+                              record['Purchase Price'] ||
+                              record['purchase_price'];
+                              
+                            return (
+                              <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="border border-gray-300 px-3 py-2">
+                                  {productNumber}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2">
+                                  {productName}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2 text-right">
+                                  {salesPrice ? `${salesPrice} €` : '-'}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2 text-right">
+                                  {purchasePrice ? `${purchasePrice} €` : '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  
+                  <div className="p-4 bg-gray-100 rounded-lg">
+                    <h4 className="font-medium mb-2">🔍 Console Log:</h4>
+                    <p className="text-xs text-gray-600">
+                      Avaa selaimen Developer Console (F12) nähdäksesi yksityiskohtaiset debug-lokit
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

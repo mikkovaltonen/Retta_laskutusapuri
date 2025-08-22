@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, User, LogOut, MessageSquare, Settings, Home } from 'lucide-react';
+import { User, LogOut, MessageSquare, Settings, Home, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useAuth } from '../hooks/useAuth';
@@ -17,7 +16,7 @@ interface WorkspaceNavigationProps {
 }
 
 export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogout }) => {
-  const { currentWorkspace, setWorkspace, workspaceConfig } = useWorkspace();
+  const { currentWorkspace, workspaceConfig } = useWorkspace();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,27 +53,11 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
             </Button>
           </div>
 
-          {/* Workspace Switcher */}
+          {/* Workspace Name - No selector needed since there's only one option */}
           {isWorkbenchPage && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="flex items-center space-x-2">
-                  <span>{workspaceConfig[currentWorkspace].name}</span>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem
-                  onClick={() => setWorkspace('invoicer')}
-                  className={currentWorkspace === 'invoicer' ? 'bg-blue-50' : ''}
-                >
-                  <div className="flex flex-col">
-                    <span className="font-medium">Retta Laskutus</span>
-                    <span className="text-sm text-gray-500">Myyntilaskujen hallinta</span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="text-gray-700 font-medium">
+              {workspaceConfig[currentWorkspace].name}
+            </div>
           )}
 
           {/* Tab Navigation */}

@@ -8,8 +8,9 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Search, Database, Clock, FileText, AlertCircle } from 'lucide-react';
+import { Search, Database, Clock, FileText, AlertCircle, Bot } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 interface TilausSearchCriteria {
   [key: string]: string | number | undefined;
@@ -33,6 +34,9 @@ export const TilausApiTester: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [availableFields, setAvailableFields] = useState<string[]>([]);
+  const [functionTestOrderNumber, setFunctionTestOrderNumber] = useState('');
+  const [functionTestResult, setFunctionTestResult] = useState<any>(null);
+  const [functionTestLoading, setFunctionTestLoading] = useState(false);
   const { user } = useAuth();
 
   const handleInputChange = (field: string, value: string) => {
@@ -139,8 +143,120 @@ export const TilausApiTester: React.FC = () => {
     setError(null);
   };
 
+  // Test the searchTilaus function exactly as the chatbot uses it
+  const testSearchTilausFunction = async () => {
+    if (!user) {
+      setError('Please log in to test the function');
+      return;
+    }
+
+    setFunctionTestLoading(true);
+    setFunctionTestResult(null);
+    const startTime = Date.now();
+
+    try {
+      console.log('🔧 Testing searchTilaus function with orderNumber:', functionTestOrderNumber);
+      
+      // Query ALL tilaus_data records (shared data) - exactly like in geminiChatService
+      const q = query(
+        collection(db, 'tilaus_data'),
+        limit(100) // Same limit as in the service
+      );
+
+      console.log('📊 Querying shared tilaus_data collection');
+      const querySnapshot = await getDocs(q);
+      console.log('📊 Found', querySnapshot.docs.length, 'documents in tilaus_data collection');
+      
+      let records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Log all unique field names for debugging
+      const allFieldNames = new Set<string>();
+      records.forEach(record => {
+        Object.keys(record).forEach(key => allFieldNames.add(key));
+      });
+      console.log('📋 All unique field names in collection:', Array.from(allFieldNames));
+
+      // Apply filter - exactly like in geminiChatService
+      if (functionTestOrderNumber) {
+        console.log('🔎 Filtering by orderNumber:', functionTestOrderNumber);
+        const beforeFilter = records.length;
+        
+        // Log what we're checking for each record
+        records = records.filter((record, index) => {
+          // Check various possible field names for order number (same as in service)
+          const orderNumber = 
+            record['OrderNumber'] || 
+            record['RP-tunnus'] || 
+            record['RP-tunnus (tilausnumero)'] || 
+            record['Tilausnumero'] ||
+            record['tilausnumero'] ||
+            record['Tilaustunnus'] ||
+            '';
+          
+          // Log the first few records for debugging
+          if (index < 3) {
+            console.log(`Record ${index}:`, {
+              OrderNumber: record['OrderNumber'],
+              'RP-tunnus': record['RP-tunnus'],
+              'RP-tunnus (tilausnumero)': record['RP-tunnus (tilausnumero)'],
+              Tilausnumero: record['Tilausnumero'],
+              tilausnumero: record['tilausnumero'],
+              Tilaustunnus: record['Tilaustunnus'],
+              extractedValue: orderNumber,
+              searchTerm: functionTestOrderNumber.toLowerCase(),
+              matches: String(orderNumber).toLowerCase().includes(functionTestOrderNumber.toLowerCase())
+            });
+          }
+          
+          return String(orderNumber).toLowerCase().includes(functionTestOrderNumber.toLowerCase());
+        });
+        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+      }
+
+      const executionTime = Date.now() - startTime;
+      
+      const result = {
+        success: true,
+        data: records.slice(0, 10), // Limit to 10 like in the service
+        count: records.length,
+        executionTime,
+        allFieldNames: Array.from(allFieldNames),
+        sampleRecord: records[0] || null
+      };
+      
+      console.log('✅ searchTilaus test result:', {
+        success: result.success,
+        resultCount: result.data.length,
+        totalFound: result.count
+      });
+      
+      setFunctionTestResult(result);
+    } catch (err) {
+      console.error('❌ Function test error:', err);
+      setFunctionTestResult({
+        success: false,
+        error: err instanceof Error ? err.message : 'Test failed'
+      });
+    } finally {
+      setFunctionTestLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <Tabs defaultValue="api-test" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="api-test">API Testaus</TabsTrigger>
+          <TabsTrigger value="function-test">
+            <Bot className="w-4 h-4 mr-2" />
+            Function Call Testaus
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="api-test" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -208,8 +324,8 @@ export const TilausApiTester: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Search Results */}
-      {searchResult && (
+          {/* Search Results */}
+          {searchResult && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -261,6 +377,170 @@ export const TilausApiTester: React.FC = () => {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+        
+        <TabsContent value="function-test" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="w-5 h-5" />
+                searchTilaus Function Call Testaus
+              </CardTitle>
+              <CardDescription>
+                Testaa searchTilaus-funktiota täsmälleen samalla tavalla kuin chatbot käyttää sitä
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Tämä testeri simuloi chatbotin searchTilaus-funktiokutsua. Se näyttää tarkan debug-lokin siitä, miten funktio käsittelee dataa.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="space-y-2">
+                <Label htmlFor="functionTestOrderNumber">Order Number (tilausnumero)</Label>
+                <Input
+                  id="functionTestOrderNumber"
+                  placeholder="esim. RP-0201251024330417"
+                  value={functionTestOrderNumber}
+                  onChange={(e) => setFunctionTestOrderNumber(e.target.value)}
+                />
+              </div>
+              
+              <Button 
+                onClick={testSearchTilausFunction} 
+                disabled={functionTestLoading || !user}
+              >
+                <Search className="w-4 h-4 mr-2" />
+                {functionTestLoading ? 'Testing...' : 'Test searchTilaus Function'}
+              </Button>
+              
+              {functionTestResult && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <h4 className="font-medium mb-2">📊 Test Result:</h4>
+                    <div className="space-y-2 text-sm">
+                      <div>✅ Success: {functionTestResult.success ? 'Yes' : 'No'}</div>
+                      {functionTestResult.error && (
+                        <div className="text-red-600">❌ Error: {functionTestResult.error}</div>
+                      )}
+                      {functionTestResult.success && (
+                        <>
+                          <div>📝 Results found: {functionTestResult.count}</div>
+                          <div>⏱️ Execution time: {functionTestResult.executionTime}ms</div>
+                          <div>📋 Data returned: {functionTestResult.data?.length || 0} records</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {functionTestResult.allFieldNames && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h4 className="font-medium text-blue-800 mb-2">🔍 Detected Field Names in Collection:</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {functionTestResult.allFieldNames.map((field: string) => (
+                          <Badge 
+                            key={field} 
+                            variant={field.toLowerCase().includes('rp') || field.toLowerCase().includes('tilaus') || field.toLowerCase().includes('order') ? 'default' : 'secondary'}
+                          >
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {functionTestResult.sampleRecord && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <h4 className="font-medium text-yellow-800 mb-2">📄 Sample Record Structure:</h4>
+                      <pre className="text-xs overflow-x-auto">
+                        {JSON.stringify(functionTestResult.sampleRecord, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {functionTestResult.data && functionTestResult.data.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <h4 className="font-medium mb-2">📊 Found Records:</h4>
+                      <table className="w-full text-sm border-collapse border border-gray-300">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="border border-gray-300 px-3 py-2 text-left">Order Number</th>
+                            <th className="border border-gray-300 px-3 py-2 text-left">Customer</th>
+                            <th className="border border-gray-300 px-3 py-2 text-left">Product</th>
+                            <th className="border border-gray-300 px-3 py-2 text-left">Other Fields</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {functionTestResult.data.map((record: any, index: number) => {
+                            const orderNumber = 
+                              record['OrderNumber'] || 
+                              record['RP-tunnus'] || 
+                              record['RP-tunnus (tilausnumero)'] || 
+                              record['Tilausnumero'] ||
+                              record['tilausnumero'] ||
+                              record['Tilaustunnus'] ||
+                              '-';
+                            const customer = 
+                              record['Asiakas'] || 
+                              record['Customer'] || 
+                              record['asiakas'] || 
+                              record['Asiakasnimi'] ||
+                              record['asiakasnimi'] ||
+                              '-';
+                            const product = 
+                              record['Tuote'] || 
+                              record['Product'] || 
+                              record['tuote'] || 
+                              record['Tuotenimi'] ||
+                              record['tuotenimi'] ||
+                              '-';
+                              
+                            // Get all other fields
+                            const otherFields = Object.entries(record)
+                              .filter(([key]) => !['id', 'OrderNumber', 'RP-tunnus', 'RP-tunnus (tilausnumero)', 
+                                                   'Tilausnumero', 'tilausnumero', 'Tilaustunnus',
+                                                   'Asiakas', 'Customer', 'asiakas', 'Asiakasnimi', 'asiakasnimi',
+                                                   'Tuote', 'Product', 'tuote', 'Tuotenimi', 'tuotenimi'].includes(key))
+                              .slice(0, 3) // Show max 3 other fields
+                              .map(([key, value]) => `${key}: ${value}`)
+                              .join(' | ');
+                              
+                            return (
+                              <tr key={record.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="border border-gray-300 px-3 py-2">
+                                  {orderNumber}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2">
+                                  {customer}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2">
+                                  {product}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-2 text-xs">
+                                  {otherFields || '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  
+                  <div className="p-4 bg-gray-100 rounded-lg">
+                    <h4 className="font-medium mb-2">🔍 Console Log:</h4>
+                    <p className="text-xs text-gray-600">
+                      Avaa selaimen Developer Console (F12) nähdäksesi yksityiskohtaiset debug-lokit
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

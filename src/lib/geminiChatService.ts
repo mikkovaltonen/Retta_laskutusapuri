@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, GenerativeModel, ChatSession } from '@google/genera
 import { collection, query, where, getDocs, limit, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { storageService } from './storageService';
+import { addTechnicalLog } from './firestoreService';
 
 // Initialize Gemini 2.5 Pro
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
@@ -40,60 +41,38 @@ class GeminiChatService {
           functionDeclarations: [
             {
               name: 'searchHinnasto',
-              description: 'Search price list data (hinnasto) by product code, product name, or price range',
+              description: 'Search price list data by product name. Returns product details including ProductNumber, ProductName, SalePrice, and BuyPrice.',
               parameters: {
                 type: 'object',
                 properties: {
-                  tuotetunnus: {
+                  productName: {
                     type: 'string',
-                    description: 'Product code to search for'
-                  },
-                  tuote: {
-                    type: 'string',
-                    description: 'Product name or partial name to search for'
-                  },
-                  minMyyntihinta: {
-                    type: 'number',
-                    description: 'Minimum sales price'
-                  },
-                  maxMyyntihinta: {
-                    type: 'number',
-                    description: 'Maximum sales price'
-                  },
-                  minOstohinta: {
-                    type: 'number',
-                    description: 'Minimum purchase price'
-                  },
-                  maxOstohinta: {
-                    type: 'number',
-                    description: 'Maximum purchase price'
+                    description: 'Product name to search for (checks fields: ProductName, Tuote, etc. - partial match supported)'
                   },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
-                }
+                },
+                required: ['productName']
               }
             },
             {
               name: 'searchTilaus',
-              description: 'Search order data (tilaus_data) by any field',
+              description: 'Search order data by Tampuuri code. Returns order details including OrderNumber, ProductName, TotalSellPrice, TotalBuyPrice, Supplier, and customer Name.',
               parameters: {
                 type: 'object',
                 properties: {
-                  searchField: {
+                  tampuuriCode: {
                     type: 'string',
-                    description: 'Field name to search in'
-                  },
-                  searchValue: {
-                    type: 'string',
-                    description: 'Value to search for'
+                    description: 'Tampuuri code to search for (Code field - partial match supported)'
                   },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
-                }
+                },
+                required: ['tampuuriCode']
               }
             },
             {
@@ -140,63 +119,76 @@ class GeminiChatService {
   }
 
   // Function implementations for Gemini to call
-  private async searchHinnasto(userId: string, params: Record<string, any>) {
+  private async searchHinnasto(userId: string, params: Record<string, any>, sessionId?: string) {
     console.log('🔍 searchHinnasto called with params:', { userId, params });
+    
+    // Log to continuous improvement
+    if (sessionId) {
+      await addTechnicalLog(sessionId, {
+        event: 'function_call_triggered',
+        functionName: 'searchHinnasto',
+        functionInputs: params
+      });
+    }
+    
     try {
-      // Query ALL hinnasto records (shared data)
+      // Query ALL hinnasto records without limit to match UI behavior
       const q = query(
-        collection(db, 'hinnasto'),
-        limit(params.limit || 100) // Increased limit for shared data
+        collection(db, 'hinnasto')
+        // No limit - get all records like the UI does
       );
 
       console.log('📊 Querying shared hinnasto collection');
       const querySnapshot = await getDocs(q);
       console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
       
-      let records = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      let records = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        // Return only the fields needed for pricing verification
+        return {
+          id: doc.id,
+          ProductName: data.ProductName || '',
+          SalePrice: data.SalePrice || 0,
+          BuyPrice: data.BuyPrice || 0
+        };
+      });
 
-      // Apply filters
-      if (params.tuotetunnus) {
-        records = records.filter(record => 
-          record.Tuotetunnus?.toString().toLowerCase().includes(params.tuotetunnus.toLowerCase())
-        );
-      }
-
-      if (params.tuote) {
-        records = records.filter(record => 
-          record.Tuote?.toString().toLowerCase().includes(params.tuote.toLowerCase())
-        );
-      }
-
-      if (params.minMyyntihinta !== undefined) {
+      // Apply filter - search by ProductName field only
+      if (params.productName) {
+        console.log('🔎 Filtering by productName:', params.productName);
+        const beforeFilter = records.length;
+        const searchTerm = params.productName.toLowerCase();
+        
         records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price >= params.minMyyntihinta;
+          // Check various possible field names for product name
+          const productName = 
+            record['ProductName'] || 
+            record['Tuote'] || 
+            record['tuote'] || 
+            record['Product Name'] ||
+            record['product_name'] ||
+            '';
+          return String(productName).toLowerCase().includes(searchTerm);
         });
-      }
-
-      if (params.maxMyyntihinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Myyntihinta);
-          return !isNaN(price) && price <= params.maxMyyntihinta;
-        });
-      }
-
-      if (params.minOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price >= params.minOstohinta;
-        });
-      }
-
-      if (params.maxOstohinta !== undefined) {
-        records = records.filter(record => {
-          const price = Number(record.Ostohinta);
-          return !isNaN(price) && price <= params.maxOstohinta;
-        });
+        
+        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+        if (records.length > 0) {
+          console.log('🔍 Sample matching records:', 
+            records.slice(0, 3).map(r => ({
+              ProductNumber: r['ProductNumber'] || r['Tuotetunnus'],
+              ProductName: r['ProductName'] || r['Tuote'],
+              SalePrice: r['SalePrice'],
+              BuyPrice: r['BuyPrice']
+            })));
+        }
+      } else {
+        // productName is now required
+        console.warn('⚠️ searchHinnasto called without productName - returning empty result');
+        return {
+          success: true,
+          data: [],
+          count: 0
+        };
       }
 
       const result = {
@@ -211,9 +203,34 @@ class GeminiChatService {
         totalFound: result.count
       });
       
+      // Log result to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_result',
+          functionName: 'searchHinnasto',
+          result: {
+            success: result.success,
+            recordCount: result.data.length,
+            totalFound: result.count
+          },
+          timestamp: new Date()
+        });
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ searchHinnasto failed:', error);
+      
+      // Log error to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_error',
+          functionName: 'searchHinnasto',
+          error: error instanceof Error ? error.message : 'Search failed',
+          timestamp: new Date()
+        });
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Search failed'
@@ -221,13 +238,24 @@ class GeminiChatService {
     }
   }
 
-  private async searchTilaus(userId: string, params: Record<string, any>) {
+  private async searchTilaus(userId: string, params: Record<string, any>, sessionId?: string) {
     console.log('🔍 searchTilaus called with params:', { userId, params });
+    
+    // Log to continuous improvement
+    if (sessionId) {
+      await addTechnicalLog(sessionId, {
+        eventType: 'function_call',
+        functionName: 'searchTilaus',
+        parameters: params,
+        timestamp: new Date()
+      });
+    }
+    
     try {
-      // Query ALL tilaus_data records (shared data)
+      // Query ALL tilaus_data records without limit to match UI behavior
       const q = query(
-        collection(db, 'tilaus_data'),
-        limit(params.limit || 100) // Increased limit for shared data
+        collection(db, 'tilaus_data')
+        // No limit - get all records like the UI does
       );
 
       console.log('📊 Querying shared tilaus_data collection');
@@ -239,16 +267,51 @@ class GeminiChatService {
         ...doc.data()
       }));
 
-      // Apply search filter
-      if (params.searchField && params.searchValue) {
+      // Apply filter - search by Code (Tampuurinumero) OR OrderNumber (RP-numero)
+      if (params.tampuuriCode) {
+        console.log('🔎 Filtering by Code (Tampuurinumero) field:', params.tampuuriCode);
+        const beforeFilter = records.length;
+        const searchCode = String(params.tampuuriCode).trim();
+        
         records = records.filter(record => {
-          const fieldValue = record[params.searchField];
-          if (fieldValue === undefined || fieldValue === null) return false;
+          // Check Code field (Tampuurinumero) - exact match or starts with for longer codes
+          const code = String(record['Code'] || record['Tampuurinumero'] || '').trim();
           
-          const valueStr = String(fieldValue).toLowerCase();
-          const searchStr = String(params.searchValue).toLowerCase();
-          return valueStr.includes(searchStr);
+          // Debug logging for first few records
+          if (records.indexOf(record) < 3) {
+            console.log(`  Comparing: searchCode="${searchCode}" with code="${code}"`);
+          }
+          
+          // For short search terms (1-3 chars), require exact match
+          if (searchCode.length <= 3) {
+            return code === searchCode;
+          }
+          
+          // For longer search terms, allow partial match (starts with or contains)
+          return code.startsWith(searchCode) || code.includes(searchCode);
         });
+        console.log(`📊 Filtered by tampuuriCode from ${beforeFilter} to ${records.length} records`);
+      } else if (params.orderNumber) {
+        console.log('🔎 Filtering by OrderNumber (RP-numero) field:', params.orderNumber);
+        const beforeFilter = records.length;
+        const searchOrder = String(params.orderNumber).trim();
+        
+        records = records.filter(record => {
+          // Check OrderNumber field (RP-numero)
+          const orderNum = String(record['OrderNumber'] || record['RP-numero'] || '').trim();
+          
+          // For RP numbers, always use contains/partial match since they are long
+          return orderNum.toLowerCase().includes(searchOrder.toLowerCase());
+        });
+        console.log(`📊 Filtered by orderNumber from ${beforeFilter} to ${records.length} records`);
+      } else {
+        // Either tampuuriCode or orderNumber required
+        console.warn('⚠️ searchTilaus called without tampuuriCode or orderNumber - returning empty result');
+        return {
+          success: true,
+          data: [],
+          count: 0
+        };
       }
 
       const result = {
@@ -263,9 +326,34 @@ class GeminiChatService {
         totalFound: result.count
       });
       
+      // Log result to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_result',
+          functionName: 'searchTilaus',
+          result: {
+            success: result.success,
+            recordCount: result.data.length,
+            totalFound: result.count
+          },
+          timestamp: new Date()
+        });
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ searchTilaus failed:', error);
+      
+      // Log error to continuous improvement
+      if (sessionId) {
+        await addTechnicalLog(sessionId, {
+          eventType: 'function_error',
+          functionName: 'searchTilaus',
+          error: error instanceof Error ? error.message : 'Search failed',
+          timestamp: new Date()
+        });
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Search failed'
@@ -315,6 +403,12 @@ class GeminiChatService {
       // Fetch tilaus data for this customer to match products
       const tilausData = await this.fetchTilausDataForCustomer(userId, asiakasnumero);
       
+      // Fetch hinnasto data to validate prices and get sales prices
+      const hinnastoQuery = query(collection(db, 'hinnasto'));
+      const hinnastoSnapshot = await getDocs(hinnastoQuery);
+      const hinnastoData = hinnastoSnapshot.docs.map(doc => doc.data());
+      console.log('📊 Loaded', hinnastoData.length, 'price list items for validation');
+      
       // Validate header fields
       if (!asiakasnumero) {
         return {
@@ -330,10 +424,14 @@ class GeminiChatService {
         };
       }
 
-      // Validate each laskurivi (asiakasnumero no longer in line level)
+      // Validate and process each laskurivi with price lookup
+      const processedLaskurivit = [];
+      
       for (let i = 0; i < laskurivit.length; i++) {
         const rivi = laskurivit[i];
-        const requiredFields = ['tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi'];
+        
+        // Required fields updated - tuotekoodi is optional now
+        const requiredFields = ['määrä', 'tuotenimi'];
         
         for (const field of requiredFields) {
           if (!rivi[field]) {
@@ -351,17 +449,80 @@ class GeminiChatService {
             error: `Laskurivi ${i + 1}: Määrä ei ole kelvollinen positiivinen numero`
           };
         }
-
-        if (isNaN(Number(rivi.ahinta)) || Number(rivi.ahinta) <= 0) {
+        
+        // Find matching product in hinnasto by ProductName
+        const productDescription = String(rivi.tuotenimi || '').trim();
+        console.log(`🔍 Looking for product: "${productDescription}" in price list`);
+        
+        // Find matching hinnasto item by ProductName - let AI handle intelligent matching
+        // AI should already provide the correct ProductName that exists in hinnasto
+        const matchingHinnastoItem = hinnastoData.find(item => {
+          const itemProductName = String(item['ProductName'] || '').trim().toLowerCase();
+          const searchProduct = productDescription.toLowerCase().trim();
+          
+          // Simple exact match first (AI should provide exact name when possible)
+          if (itemProductName === searchProduct) {
+            return true;
+          }
+          
+          // Allow partial match if core service name is the same
+          // This is a fallback - AI should ideally provide the exact ProductName from hinnasto
+          const itemCore = itemProductName.replace(/[.\-,]/g, ' ').replace(/\s+/g, ' ');
+          const searchCore = searchProduct.replace(/[.\-,]/g, ' ').replace(/\s+/g, ' ');
+          
+          // Check if one contains the other (for flexibility)
+          return itemCore.includes(searchCore) || searchCore.includes(itemCore);
+        });
+        
+        if (!matchingHinnastoItem) {
           return {
             success: false,
-            error: `Laskurivi ${i + 1}: Ahinta ei ole kelvollinen positiivinen numero`
+            error: `Laskurivi ${i + 1}: Tuotetta "${productDescription}" ei löydy hinnastosta (ProductName)`
           };
         }
+        
+        // Validate that purchase price matches (if ahinta is provided in input)
+        const hinnastoBuyPrice = Number(matchingHinnastoItem['BuyPrice'] || 0);
+        const inputBuyPrice = Number(rivi.ahinta || 0);
+        
+        if (rivi.ahinta && Math.abs(hinnastoBuyPrice - inputBuyPrice) > 0.01) {
+          return {
+            success: false,
+            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, Ostolaskulla: ${inputBuyPrice}€`
+          };
+        }
+        
+        // Get the sales price from hinnasto
+        const salePrice = Number(matchingHinnastoItem['SalePrice'] || 0);
+        
+        if (salePrice <= 0) {
+          return {
+            success: false,
+            error: `Laskurivi ${i + 1}: Myyntihintaa ei löydy hinnastosta tuotteelle "${productDescription}"`
+          };
+        }
+        
+        // Use product code from hinnasto if available
+        const productCode = matchingHinnastoItem['ProductNumber'] || 
+                           matchingHinnastoItem['Tuotetunnus'] || 
+                           matchingHinnastoItem['tuotetunnus'] || 
+                           rivi.tuotekoodi || 
+                           'N/A';
+        
+        console.log(`✅ Found matching product: ${productDescription} -> Code: ${productCode}, Sale price: ${salePrice}€`);
+        
+        // Add processed line with sales price from hinnasto
+        processedLaskurivit.push({
+          ...rivi,
+          tuotekoodi: productCode,
+          ahinta: salePrice, // Use sales price from hinnasto
+          ostohinta: hinnastoBuyPrice, // Store original buy price for reference
+          kuvaus: rivi.kuvaus || `${productDescription} - Edelleenlaskutus`
+        });
       }
 
       // Generate detailed explanations for each line item with product matching
-      const laskurivitWithSelvitys = await Promise.all(laskurivit.map(async (rivi, index) => {
+      const laskurivitWithSelvitys = await Promise.all(processedLaskurivit.map(async (rivi, index) => {
         // Find matching "Tilattu tuote" from tilaus data
         let tilattuTuote = 'ei löydy';
         
@@ -399,7 +560,8 @@ class GeminiChatService {
 - Tuotenimi: ${rivi.tuotenimi}
 - Kuvaus: ${rivi.kuvaus}
 - Määrä: ${rivi.määrä}
-- Yksikköhinta: ${rivi.ahinta}€
+- Myyntihinta: ${rivi.ahinta}€
+- Ostohinta: ${rivi.ostohinta}€
 - Kokonaishinta: ${Number(rivi.määrä) * Number(rivi.ahinta)}€
 - Asiakasnumero: ${asiakasnumero}
 - Tilattu tuote: ${tilattuTuote}
@@ -456,7 +618,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         laskuotsikko: laskuotsikko || 'Edelleenlaskutus',
         laskurivit: laskurivitWithSelvitys,
         luontipaiva: new Date().toISOString(),
-        kokonaissumma: laskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
+        kokonaissumma: processedLaskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
       };
 
       // Save to Firestore 'myyntilaskut' collection
@@ -469,7 +631,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         success: true,
         data: {
           laskuId: docRef.id,
-          rivienMaara: laskurivit.length,
+          rivienMaara: processedLaskurivit.length,
           kokonaissumma: laskuDocument.kokonaissumma,
           laskuotsikko: laskuDocument.laskuotsikko,
           laskurivit: laskuDocument.laskurivit
@@ -526,15 +688,18 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
   }
 
   async sendMessage(sessionId: string, message: string, userId: string, ostolaskuData: any[] = []): Promise<ChatMessage> {
-    console.log('💬 sendMessage called:', { 
-      sessionId, 
-      message: message.substring(0, 100) + '...', 
-      userId,
-      hasOstolaskuData: ostolaskuData.length > 0,
-      ostolaskuRowCount: ostolaskuData.length
-    });
+    // Reduce logging for production
+    if (process.env.NODE_ENV === 'development') {
+      console.log('💬 sendMessage called:', { 
+        sessionId, 
+        message: message.substring(0, 100) + '...', 
+        userId,
+        hasOstolaskuData: ostolaskuData.length > 0,
+        ostolaskuRowCount: ostolaskuData.length
+      });
+    }
     
-    const session = this.activeSessions.get(sessionId);
+    let session = this.activeSessions.get(sessionId);
     if (!session) {
       console.error('❌ Chat session not found:', sessionId);
       throw new Error('Chat session not found');
@@ -547,7 +712,9 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       
       if (ostolaskuData && ostolaskuData.length > 0) {
         contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä ostolasku data ${ostolaskuData.length} rivillä session-kontekstissa]`;
-        console.log(`ℹ️ Ostolasku data available: ${ostolaskuData.length} rows`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`ℹ️ Ostolasku data available: ${ostolaskuData.length} rows`);
+        }
       } else {
         contextNote = '\n\n[MUISTUTUS: Ei ostolaskudataa saatavilla tässä sessiossa]';
         console.log('ℹ️ No ostolasku data available');
@@ -555,11 +722,45 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       
       const fullMessage = message + contextNote;
       
-      console.log('🔄 Sending message to Gemini...');
-      const result = await session.sendMessage(fullMessage);
-      const response = result.response;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 Sending message to Gemini...');
+      }
       
-      console.log('📦 Initial response received, checking for function calls...');
+      // Retry logic for initial message
+      let result;
+      let response;
+      let initialRetries = 0;
+      const maxInitialRetries = 2;
+      
+      while (initialRetries <= maxInitialRetries) {
+        try {
+          result = await session.sendMessage(fullMessage);
+          response = result.response;
+          
+          // Validate initial response
+          if (response) {
+            console.log('📦 Initial response received, checking for function calls...');
+            break;
+          }
+          
+          initialRetries++;
+          console.log(`⚠️ Empty initial response, retry ${initialRetries}/${maxInitialRetries}`);
+          if (initialRetries <= maxInitialRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        } catch (error) {
+          initialRetries++;
+          console.error(`❌ Initial request failed, retry ${initialRetries}/${maxInitialRetries}:`, error);
+          if (initialRetries > maxInitialRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      if (!response) {
+        throw new Error('Failed to get response from Gemini after retries');
+      }
       
       // Handle function calls
       const functionCalls: string[] = [];
@@ -580,10 +781,10 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           let functionResult;
           switch (functionName) {
             case 'searchHinnasto':
-              functionResult = await this.searchHinnasto(userId, args);
+              functionResult = await this.searchHinnasto(userId, args, sessionId);
               break;
             case 'searchTilaus':
-              functionResult = await this.searchTilaus(userId, args);
+              functionResult = await this.searchTilaus(userId, args, sessionId);
               break;
             case 'createLasku':
               functionResult = await this.createLasku(userId, args);
@@ -604,21 +805,81 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           });
         }
         
-        // Send all function results back to model at once
+        // Send all function results back to model at once with retry logic
         console.log('📤 Sending function results back to Gemini...');
-        const finalResult = await session.sendMessage(functionResponses);
-        finalContent = finalResult.response.text();
-        console.log('✅ Final response received from Gemini');
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+          try {
+            const finalResult = await session.sendMessage(functionResponses);
+            finalContent = finalResult.response.text();
+            
+            // Check if response is valid
+            if (finalContent && finalContent.trim() !== '') {
+              console.log('✅ Final response received from Gemini');
+              break;
+            } else {
+              retryCount++;
+              console.log(`⚠️ Empty response on attempt ${retryCount}/${maxRetries}, retrying...`);
+              if (retryCount < maxRetries) {
+                // Wait before retry (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+              }
+            }
+          } catch (retryError) {
+            retryCount++;
+            console.error(`❌ Retry ${retryCount}/${maxRetries} failed:`, retryError);
+            if (retryCount >= maxRetries) {
+              throw retryError;
+            }
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+          }
+        }
+        
+        if (!finalContent || finalContent.trim() === '') {
+          console.log('⚠️ All retries exhausted, generating detailed fallback');
+          // Generate more detailed fallback based on function results
+          if (functionCalls.length > 0) {
+            finalContent = `Käsittelin ${functionCalls.length} funktiokutsua. Tarkista taulukko tuloksista yllä. Voin auttaa lisää tarvittaessa.`;
+          } else {
+            finalContent = 'Anteeksi, vastaukseni jäi kesken. Voisitko toistaa kysymyksen?';
+          }
+        }
       } else {
         // No function calls, use the original response
         console.log('💭 No function calls, using direct response');
         finalContent = response.text();
       }
       
-      // Ensure we have content to return
+      // Final validation and safety check
       if (!finalContent || finalContent.trim() === '') {
-        console.log('⚠️ Empty response detected, using fallback message');
-        finalContent = 'Anteeksi, vastaukseni jäi kesken. Voisitko toistaa kysymyksen?';
+        console.log('⚠️ Empty response detected after all attempts, using fallback message');
+        finalContent = 'Anteeksi, tekninen ongelma esti vastauksen. Yritä uudelleen hetken kuluttua.';
+      }
+      
+      // Check for incomplete responses (common patterns)
+      const incompletePatterns = [
+        /^\*\*$/,  // Just asterisks
+        /^#{1,6}\s*$/,  // Just markdown headers
+        /^\|\s*$/,  // Just table start
+        /^```$/,  // Just code block start
+        /^-\s*$/,  // Just list item start
+      ];
+      
+      if (incompletePatterns.some(pattern => pattern.test(finalContent.trim()))) {
+        console.log('⚠️ Incomplete response pattern detected, appending notice');
+        finalContent += '\n\n*[Vastaus jäi kesken. Pyydä jatkoa kirjoittamalla "jatka"]*';
+      }
+      
+      // Check if response seems cut off (ends mid-sentence)
+      const lastChar = finalContent.trim().slice(-1);
+      const midSentenceEndings = [',', ':', '-', '(', '[', '{'];
+      if (midSentenceEndings.includes(lastChar) || 
+          (finalContent.length > 100 && !['!', '.', '?', '```'].some(end => finalContent.trim().endsWith(end)))) {
+        console.log('⚠️ Response appears to be cut off mid-sentence');
+        finalContent += '\n\n*[Vastaus saattoi jäädä kesken. Kirjoita "jatka" jos haluat lisää tietoa]*';
       }
       
       const chatMessage = {
