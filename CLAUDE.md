@@ -112,26 +112,37 @@ npm run preview
 The chatbot has access to the following Gemini AI functions:
 
 ### 1. searchHinnasto
-**Description**: Search price list data by product number only
+**Description**: Search price list data by product name, price list name, or supplier (any combination)
 
 **Parameters**:
-- `productNumber` (string) - Product number (tuotetunnus) to search for (partial match supported)
-- `limit` (number) - Maximum results to return (default 10)
+- `productName` (string, optional) - Product name to search for (partial match supported)
+- `priceListName` (string, optional) - Price list name to search for (partial match supported)
+- `priceListSupplier` (string, optional) - Price list supplier to search for (partial match supported)
+- `limit` (number) - Maximum results to return (default 10 for product search, 50 for price list search)
 
-**Usage**: "Mikä on tuotteen 27A1008 hinta?" or "Hae tuotetunnus 1A1041"
+**Returns**: ProductNumber, ProductName, PriceListSupplier, PriceListName, BuyPrice, SalePrice, SalePriceVat
 
-**Note**: Searches only in ProductNumber field (same as UI filter). Checks fields: ProductNumber, Tuotetunnus, tuotetunnus, Product Number, product_number
+**Usage**: 
+- "Mikä on Kuntotutkimus ja PTS hinta?" (uses productName)
+- "Hae tuote pelastussuunnitelma" (uses productName)
+- "Hae kaikki tuotteet Yleishinnasto 2024 listalta" (uses priceListName)
+- "Näytä kaikki tuotteet toimittajalta Retta" (uses priceListSupplier)
+
+**Note**: At least one search parameter must be provided. Searches can combine multiple parameters for more specific results.
 
 ### 2. searchTilaus
-**Description**: Search order data by order number only
+**Description**: Search order data by Tampuuri code OR RP-number
 
 **Parameters**:
-- `orderNumber` (string) - Order number (RP-tunnus/tilausnumero) to search for (partial match supported)
+- `tampuuriCode` (string, optional) - Tampuuri code to search for (Code field - partial match supported)
+- `orderNumber` (string, optional) - RP-number to search for (OrderNumber field - partial match supported)
 - `limit` (number) - Maximum results to return (default 10)
 
-**Usage**: "Hae tilaus RP-0201251024330417" or "Näytä tilausnumero RP-020125"
+**Returns**: OrderNumber, Code, Name, ProductName, TotalSellPrice, PriceListName
 
-**Note**: Searches only in OrderNumber field (same as UI filter). Checks fields: OrderNumber, RP-tunnus, RP-tunnus (tilausnumero), Tilausnumero, tilausnumero, Tilaustunnus
+**Usage**: "Hae tilaus RP-0201251024330417" or "Hae tampuurinumero 12345" or "Näytä tilaus 567"
+
+**Note**: Searches by either tampuuriCode (Code/Tampuurinumero fields) OR orderNumber (OrderNumber/RP-tunnus fields). At least one search parameter must be provided.
 
 ### 3. searchOstolaskuExcel
 **Description**: Search uploaded OstolaskuExcel data (when JSON file is loaded)
@@ -215,7 +226,7 @@ When creating invoices (createLasku), you MUST intelligently match products:
 
 ### Response Format
 All functions return results in table format using Markdown syntax:
-- **Hinnasto**: Tuotetunnus | Tuote | Myyntihinta (€) | Ostohinta (€)
+- **Hinnasto**: Tuotetunnus | Tuote | Hintalistan toimittaja | Hintalista | Ostohinta (€) | Myyntihinta (€) | Myyntihinta ALV (€)
 - **Tilaus**: Dynamic columns based on data structure
 - **OstolaskuExcel**: Asiakasnumero | Tuotekoodi | Tuotenimi | Määrä | Hinta (€) | Kuvaus
 - **Created Invoice**: Returns invoice ID, line count, and total amount

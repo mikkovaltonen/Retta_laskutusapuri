@@ -41,7 +41,7 @@ class GeminiChatService {
           functionDeclarations: [
             {
               name: 'searchHinnasto',
-              description: 'Search price list data by product name. Returns product details including ProductNumber, ProductName, SalePrice, and BuyPrice.',
+              description: 'Search price list data by product name, price list name, or supplier. Can search by any combination of these fields. Returns product details including ProductNumber, ProductName, PriceListSupplier, PriceListName, BuyPrice, SalePrice, and SalePriceVat.',
               parameters: {
                 type: 'object',
                 properties: {
@@ -49,35 +49,25 @@ class GeminiChatService {
                     type: 'string',
                     description: 'Product name to search for (checks fields: ProductName, Tuote, etc. - partial match supported)'
                   },
-                  limit: {
-                    type: 'number',
-                    description: 'Maximum number of results to return (default 10)'
-                  }
-                },
-                required: ['productName']
-              }
-            },
-            {
-              name: 'searchHinnastoByPriceList',
-              description: 'Search price list data by PriceListName. Returns all products from a specific price list.',
-              parameters: {
-                type: 'object',
-                properties: {
                   priceListName: {
                     type: 'string',
-                    description: 'Price list name to search for (exact match)'
+                    description: 'Price list name to search for (partial match supported)'
+                  },
+                  priceListSupplier: {
+                    type: 'string',
+                    description: 'Price list supplier to search for (partial match supported)'
                   },
                   limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default 50)'
+                    description: 'Maximum number of results to return (default 10 for product search, 50 for price list search)'
                   }
                 },
-                required: ['priceListName']
+                required: []  // All parameters are optional - at least one search parameter should be provided
               }
             },
             {
               name: 'searchTilaus',
-              description: 'Search order data by Tampuuri code. Returns order details including OrderNumber, ProductName, TotalSellPrice, TotalBuyPrice, Supplier, and customer Name.',
+              description: 'Search order data by Tampuuri code OR RP-number. Returns order details including OrderNumber, Code, Name, ProductName, TotalSellPrice, and PriceListName.',
               parameters: {
                 type: 'object',
                 properties: {
@@ -85,12 +75,16 @@ class GeminiChatService {
                     type: 'string',
                     description: 'Tampuuri code to search for (Code field - partial match supported)'
                   },
+                  orderNumber: {
+                    type: 'string',
+                    description: 'RP-number to search for (OrderNumber field - partial match supported)'
+                  },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
                 },
-                required: ['tampuuriCode']
+                required: []  // Neither is required - can search by either one
               }
             },
             {
@@ -162,46 +156,29 @@ class GeminiChatService {
       
       let records = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        // Return only the fields needed for pricing verification
+        // Return all seven fields needed for pricing verification and product identification
         return {
           id: doc.id,
-          ProductName: data.ProductName || '',
-          SalePrice: data.SalePrice || 0,
-          BuyPrice: data.BuyPrice || 0
+          ProductNumber: data.ProductNumber || data.Tuotetunnus || data.tuotetunnus || 
+                        data['Product Number'] || data.product_number || '',
+          ProductName: data.ProductName || data.Tuote || data.tuote || 
+                      data['Product Name'] || data.product_name || '',
+          PriceListSupplier: data.PriceListSupplier || data.Hintalistan_toimittaja || data.hintalistan_toimittaja || 
+                            data['Price List Supplier'] || data.price_list_supplier || '',
+          PriceListName: data.PriceListName || data.Hintalista || data.hintalista || 
+                        data['Price List Name'] || data.price_list_name || '',
+          BuyPrice: data.BuyPrice || data.Ostohinta || data.ostohinta || 
+                   data['Buy Price'] || data.buy_price || 0,
+          SalePrice: data.SalePrice || data.Myyntihinta || data.myyntihinta || 
+                    data['Sale Price'] || data.sale_price || 0,
+          SalePriceVat: data.SalePriceVat || data.Myyntihinta_alv || data.myyntihinta_alv || 
+                       data['Sale Price VAT'] || data.sale_price_vat || 0
         };
       });
 
-      // Apply filter - search by ProductName field only
-      if (params.productName) {
-        console.log('🔎 Filtering by productName:', params.productName);
-        const beforeFilter = records.length;
-        const searchTerm = params.productName.toLowerCase();
-        
-        records = records.filter(record => {
-          // Check various possible field names for product name
-          const productName = 
-            record['ProductName'] || 
-            record['Tuote'] || 
-            record['tuote'] || 
-            record['Product Name'] ||
-            record['product_name'] ||
-            '';
-          return String(productName).toLowerCase().includes(searchTerm);
-        });
-        
-        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
-        if (records.length > 0) {
-          console.log('🔍 Sample matching records:', 
-            records.slice(0, 3).map(r => ({
-              ProductNumber: r['ProductNumber'] || r['Tuotetunnus'],
-              ProductName: r['ProductName'] || r['Tuote'],
-              SalePrice: r['SalePrice'],
-              BuyPrice: r['BuyPrice']
-            })));
-        }
-      } else {
-        // productName is now required
-        console.warn('⚠️ searchHinnasto called without productName - returning empty result');
+      // Check if at least one search parameter is provided
+      if (!params.productName && !params.priceListName && !params.priceListSupplier) {
+        console.warn('⚠️ searchHinnasto called without any search parameters - returning empty result');
         return {
           success: true,
           data: [],
@@ -209,9 +186,48 @@ class GeminiChatService {
         };
       }
 
+      // Apply filters based on provided parameters (OR logic)
+      const beforeFilter = records.length;
+      
+      // Filter by ProductName (partial match)
+      if (params.productName) {
+        console.log('🔎 Filtering by productName:', params.productName);
+        const searchTerm = params.productName.toLowerCase();
+        
+        records = records.filter(record => {
+          const productName = String(record.ProductName).toLowerCase();
+          return productName.includes(searchTerm);
+        });
+      }
+      
+      // Filter by PriceListName (partial match)
+      if (params.priceListName) {
+        console.log('🔎 Filtering by priceListName:', params.priceListName);
+        const searchTerm = params.priceListName.toLowerCase();
+        records = records.filter(record => {
+          const priceListName = String(record.PriceListName).toLowerCase();
+          return priceListName.includes(searchTerm);
+        });
+      }
+      
+      // Filter by PriceListSupplier (partial match)
+      if (params.priceListSupplier) {
+        console.log('🔎 Filtering by priceListSupplier:', params.priceListSupplier);
+        const searchTerm = params.priceListSupplier.toLowerCase();
+        records = records.filter(record => {
+          const priceListSupplier = String(record.PriceListSupplier).toLowerCase();
+          return priceListSupplier.includes(searchTerm);
+        });
+      }
+      
+      console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+      
+      // Determine default limit based on search type
+      const defaultLimit = params.priceListName || params.priceListSupplier ? 50 : 10;
+      
       const result = {
         success: true,
-        data: records.slice(0, params.limit || 10),
+        data: records.slice(0, params.limit || defaultLimit),
         count: records.length
       };
       
@@ -244,103 +260,6 @@ class GeminiChatService {
         await addTechnicalLog(sessionId, {
           eventType: 'function_error',
           functionName: 'searchHinnasto',
-          error: error instanceof Error ? error.message : 'Search failed',
-          timestamp: new Date()
-        });
-      }
-      
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Search failed'
-      };
-    }
-  }
-
-  private async searchHinnastoByPriceList(userId: string, params: Record<string, any>, sessionId?: string) {
-    console.log('🔍 searchHinnastoByPriceList called with params:', { userId, params });
-    
-    // Log to continuous improvement
-    if (sessionId) {
-      await addTechnicalLog(sessionId, {
-        event: 'function_call_triggered',
-        functionName: 'searchHinnastoByPriceList',
-        functionInputs: params
-      });
-    }
-    
-    try {
-      // Query hinnasto records by PriceListName
-      const q = query(
-        collection(db, 'hinnasto')
-      );
-
-      console.log('📊 Querying hinnasto collection by PriceListName:', params.priceListName);
-      const querySnapshot = await getDocs(q);
-      console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
-      
-      let records = querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ProductNumber: data['ProductNumber'] || data['Tuotetunnus'] || data['tuotetunnus'] || 
-                        data['Product Number'] || data['product_number'] || '',
-          ProductName: data['ProductName'] || data['Tuote'] || data['tuote'] || 
-                      data['Product Name'] || data['product_name'] || '',
-          SalePrice: data['SalePrice'] || data['Myyntihinta'] || data['myyntihinta'] || 
-                    data['Sale Price'] || data['sale_price'] || 0,
-          BuyPrice: data['BuyPrice'] || data['Ostohinta'] || data['ostohinta'] || 
-                   data['Buy Price'] || data['buy_price'] || 0,
-          PriceListName: data['PriceListName'] || data['Hintalista'] || data['hintalista'] || 
-                        data['Price List Name'] || data['price_list_name'] || ''
-        };
-      });
-
-      // Filter by PriceListName (exact match)
-      if (params.priceListName) {
-        records = records.filter(r => 
-          r.PriceListName === params.priceListName
-        );
-        console.log(`📊 Filtered to ${records.length} records for PriceListName: "${params.priceListName}"`);
-      }
-
-      const result = {
-        success: true,
-        data: records.slice(0, params.limit || 50),
-        count: records.length,
-        priceListName: params.priceListName
-      };
-      
-      console.log('✅ searchHinnastoByPriceList result:', {
-        success: result.success,
-        resultCount: result.data.length,
-        totalFound: result.count,
-        priceListName: result.priceListName
-      });
-      
-      // Log result to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_result',
-          functionName: 'searchHinnastoByPriceList',
-          result: {
-            success: result.success,
-            recordCount: result.data.length,
-            totalFound: result.count,
-            priceListName: result.priceListName
-          },
-          timestamp: new Date()
-        });
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('❌ searchHinnastoByPriceList failed:', error);
-      
-      // Log error to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_error',
-          functionName: 'searchHinnastoByPriceList',
           error: error instanceof Error ? error.message : 'Search failed',
           timestamp: new Date()
         });
@@ -897,9 +816,6 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           switch (functionName) {
             case 'searchHinnasto':
               functionResult = await this.searchHinnasto(userId, args, sessionId);
-              break;
-            case 'searchHinnastoByPriceList':
-              functionResult = await this.searchHinnastoByPriceList(userId, args, sessionId);
               break;
             case 'searchTilaus':
               functionResult = await this.searchTilaus(userId, args, sessionId);

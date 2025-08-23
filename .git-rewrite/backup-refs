@@ -1,0 +1,17 @@
+ea1ba53c88f063d6d4fe3edf73239e77419b3c6b commit	refs/heads/firebase-migration-and-ui-improvements
+b95622690781d893d35b8961398e0a319c64b996 commit	refs/heads/fix-ostolasku-filters-and-tab-order
+778d4b696b0bcd76bdeb27ee34efffae5efe7eaa commit	refs/heads/fix-table-scrolling-and-filters
+6ad5a9a3ece8ef0848675a82cd8f13a841738500 commit	refs/heads/fix-tilaus-valintalogiikka
+98af09f8c1308bc8a075aa08c19c182246b59229 commit	refs/heads/main
+744bb11fcb8948e6e2d8aa54c89b15454115712b commit	refs/heads/price-list-json-sample-upload
+f1b4d0ac55dd1f2ea1950b98fe0bd1185e2dd52a commit	refs/heads/remove-api-testers-from-admin
+fba58f33d7570f675911fcbb81dea42d1f7ad790 commit	refs/remotes/origin/HEAD
+ea1ba53c88f063d6d4fe3edf73239e77419b3c6b commit	refs/remotes/origin/firebase-migration-and-ui-improvements
+b95622690781d893d35b8961398e0a319c64b996 commit	refs/remotes/origin/fix-ostolasku-filters-and-tab-order
+778d4b696b0bcd76bdeb27ee34efffae5efe7eaa commit	refs/remotes/origin/fix-table-scrolling-and-filters
+6ad5a9a3ece8ef0848675a82cd8f13a841738500 commit	refs/remotes/origin/fix-tilaus-valintalogiikka
+3654df2862e291d9fc5e6a9d68323ae589038048 commit	refs/remotes/origin/kaikki-muutokset-turvaan
+fba58f33d7570f675911fcbb81dea42d1f7ad790 commit	refs/remotes/origin/main
+b45043e1b57d1682f4f125866ded03a3c8ef1e9b commit	refs/remotes/origin/muutokset-20250703-163103
+744bb11fcb8948e6e2d8aa54c89b15454115712b commit	refs/remotes/origin/price-list-json-sample-upload
+f1b4d0ac55dd1f2ea1950b98fe0bd1185e2dd52a commit	refs/remotes/origin/remove-api-testers-from-admin
