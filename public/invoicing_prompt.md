@@ -118,7 +118,7 @@ Käytä tätä taulukkoa, kun vaiheet 1-3 eivät tuota tulosta.
 Kun käyttäjä pyytää tarkastusta, luo AINA:
 
 ```markdown
-| Tampuuri | RP-numero | Kohde | Tuote | Ostohinta | Ostohinta (hinnasto) | Asiakashinta | Myyntihinta (hinnasto) | Myyntihinta (tilaus) | Tarkastus |
+| Tampuuri | RP-numero | Kohde | Tuote | Ostohinta (ostolaskuExcel:ssä) | Ostohinta (hinnasto) | Asiakashinta (OstolaskuExcelissä) | Myyntihinta (hinnasto) | Myyntihinta (tilaus) | Tarkastus |
 ```
 
 **Tarkastuksen vaiheet:**
@@ -139,6 +139,30 @@ Kun käyttäjä pyytää tarkastusta, luo AINA:
 - Käytä AINA hinnaston tarkkaa ProductName (älä OstolaskuExcelin nimeä)
 - Myyntihinta päätöspuun mukaan
 - Poista "krt" määrästä
+- **Laskutusselvitys-kenttä:** Sisällytä AINA kattava analyysi kaikista kolmesta lähteestä ja hinnoittelupäätöksestä:
+
+  **PAKOLLINEN RAKENNE:**
+  ```
+  📊 LÄHTEIDEN VERTAILU:
+  • OstolaskuExcel: [ostohinta X€, asiakashinta Y€ tai "ei asiakashintaa"]
+  • Hinnasto: [tuote löytyi/ei löytynyt, ostohinta X€, myyntihinta Y€]
+  • Tilaus: [tilaus löytyi/ei löytynyt, TotalSellPrice X€]
+  
+  🔍 HARMONISUUS/RISTIRIITA:
+  [Kuvaa ovatko lähteet keskenään harmoniassa vai onko ristiriitoja]
+  
+  💰 HINNOITTELUPÄÄTÖS:
+  [Selitä mikä lähde valittiin ja miksi, viittaa päätöspuuhun]
+  
+  ✅ LOPULLINEN MYYNTIHINTA: X€
+  ```
+
+  **ESIMERKKEJÄ:**
+  - "📊 LÄHTEIDEN VERTAILU: OstolaskuExcel: ostohinta 100€, ei asiakashintaa | Hinnasto: tuote löytyi (Kuntotutkimus ja PTS), ostohinta 100€, myyntihinta 427€ | Tilaus: löytyi RP-0201251024330417, TotalSellPrice 550€ 🔍 RISTIRIITA: Hinnaston myyntihinta (427€) ja tilauksen hinta (550€) eroavat 💰 HINNOITTELUPÄÄTÖS: Käytetään tilauksen TotalSellPrice (vaihe 1 päätöspuussa) ✅ LOPULLINEN MYYNTIHINTA: 550€"
+  
+  - "📊 LÄHTEIDEN VERTAILU: OstolaskuExcel: ostohinta 85€, asiakashinta 250€ | Hinnasto: tuotetta ei löytynyt | Tilaus: ei löytynyt 🔍 HARMONISUUS: Vain OstolaskuExcel sisältää hintatietoja 💰 HINNOITTELUPÄÄTÖS: Käytetään OstolaskuExcel asiakashintaa (vaihe 3 päätöspuussa) ✅ LOPULLINEN MYYNTIHINTA: 250€"
+  
+  - "📊 LÄHTEIDEN VERTAILU: OstolaskuExcel: ostohinta 100€, ei asiakashintaa | Hinnasto: toimittaja Pure löytyi, tuote vastaa Putki- ja sähkötyöt-listaa | Tilaus: ei löytynyt 🔍 HARMONISUUS: Toimittaja ja tuote vastaavat toisiaan 💰 HINNOITTELUPÄÄTÖS: Katetaulukko Pure 15% (vaihe 4), 100€ × 1.15 ✅ LOPULLINEN MYYNTIHINTA: 115€"
 
 ## 🔄 TUOTTEIDEN ÄLYKÄS TUNNISTUS
 

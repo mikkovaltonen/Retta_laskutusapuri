@@ -25,10 +25,9 @@ export const ChatLayout: React.FC = () => {
   const [hinnastoData, setHinnastoData] = useState<DatabaseRecord[]>([]);
   const [tilausData, setTilausData] = useState<DatabaseRecord[]>([]);
   const [myyntiExcelData, setMyyntiExcelData] = useState<DatabaseRecord[]>([]);
-  const [ostolaskuExcelData, setOstolaskuExcelData] = useState<DatabaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntiExcel' | 'ostolaskuExcel'>('hinnasto');
+  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntiExcel'>('hinnasto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -40,22 +39,11 @@ export const ChatLayout: React.FC = () => {
   const [priceListSupplierFilter, setPriceListSupplierFilter] = useState<string>('');  // Aligned with searchHinnasto function
   const [tampuuriCodeFilter, setTampuuriCodeFilter] = useState<string>('');  // Aligned with searchTilaus function
   const [orderRPFilter, setOrderRPFilter] = useState<string>('');
-  const [ostolaskuExcelTampuuriFilter, setOstolaskuTampuuriFilter] = useState<string>('');
-  const [ostolaskuExcelRPFilter, setOstolaskuRPFilter] = useState<string>('');
-  const [ostolaskuExcelProductFilter, setOstolaskuProductFilter] = useState<string>('');
   const [columnOffset, setColumnOffset] = useState<Record<string, number>>({});
   const [isLeftPanelVisible, setIsLeftPanelVisible] = useState(true);
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
   const { user } = useAuth();
 
-  // Filter handlers with useCallback to prevent re-renders
-  const handleOstolaskuExcelTampuuriFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setOstolaskuTampuuriFilter(e.target.value);
-  }, []);
-
-  const handleOstolaskuExcelProductFilterChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setOstolaskuProductFilter(e.target.value);
-  }, []);
 
   const handleMouseDown = useCallback(() => {
     setIsDragging(true);
@@ -193,20 +181,29 @@ export const ChatLayout: React.FC = () => {
             tilaajanNimi: ''
           };
           
+          // Handle both old structure (laskurivit) and new structure (rivit)
+          const rows = lasku.rivit || lasku.laskurivit || [];
+          
           return {
             id: `${doc.id}_${laskuIndex}`,
             docId: doc.id,
             firestoreDocId: lasku.id, // The real Firestore document ID
+            // Header fields from new structure
             asiakasnumero: lasku.asiakasnumero,
+            Tilausnumero: lasku.Tilausnumero || lasku.tilausnumero || '',
+            Laskutusselvitys: lasku.Laskutusselvitys || '',
+            reskontra: lasku.reskontra || 'MK',
+            // Legacy fields for compatibility
             laskuotsikko: lasku.laskuotsikko || 'Myyntilasku',
             luontipaiva: lasku.luontipaiva,
             kokonaissumma: lasku.kokonaissumma,
-            rivienMaara: lasku.laskurivit?.length || 0,
+            rivienMaara: rows.length,
             // Add tilaus information
             tilaustunnus: tilausInfo.tilaustunnus,
             yhtiönNimi: tilausInfo.yhtiönNimi,
             tilaajanNimi: tilausInfo.tilaajanNimi,
-            laskurivit: lasku.laskurivit?.map((rivi, riviIndex) => {
+            // Map rows with new structure
+            laskurivit: rows.map((rivi, riviIndex) => {
               // Find matching "Tilattu tuote" based on description similarity
               const customerProducts = tilausProductLookup.get(String(lasku.asiakasnumero || '').trim()) || [];
               let tilattuTuote = '';
@@ -225,17 +222,23 @@ export const ChatLayout: React.FC = () => {
                 id: `${doc.id}_${laskuIndex}_${riviIndex}`,
                 invoiceId: `${doc.id}_${laskuIndex}`,
                 tilattuTuote,
+                // New structure fields
+                määrä: rivi.määrä || 0,
+                ahinta: rivi.ahinta || 0,
+                Yhteensä: rivi.Yhteensä || (rivi.määrä * rivi.ahinta) || 0,
+                kuvaus: rivi.kuvaus || '',
+                yksikkö: rivi.yksikkö || '',
+                tuotenimi: rivi.tuotenimi || '',
+                alvkoodi: rivi.alvkoodi || '',
+                // Keep any other fields that might exist
                 ...rivi
               };
-            }) || []
+            })
           };
         }) || []
       );
       setMyyntiExcelData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
 
-      // OstolaskuExcel are session-specific, loaded directly in ChatAI component
-      // Initial empty state - will be updated via callback from ChatAI
-      setOstolaskuExcelData([]);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -274,26 +277,22 @@ export const ChatLayout: React.FC = () => {
           // Create a row for each invoice line
           (invoice.laskurivit as DatabaseRecord[]).forEach(line => {
             exportData.push({
-              // Invoice header fields
+              // Header fields (new structure)
               asiakasnumero: headerData.asiakasnumero,
-              tilaustunnus: headerData.tilaustunnus,
-              yhtiönNimi: headerData.yhtiönNimi,
-              tilaajanNimi: headerData.tilaajanNimi,
-              laskuotsikko: headerData.laskuotsikko,
-              luontipaiva: headerData.luontipaiva,
-              rivienMaara: headerData.rivienMaara,
-              docId: headerData.docId,
-              // Invoice line fields
-              tuotekoodi: line.tuotekoodi,
-              tuotenimi: line.tuotenimi,
+              Tilausnumero: headerData.Tilausnumero || '',
+              reskontra: headerData.reskontra || 'MK',
+              // Row fields (new structure)
               määrä: line.määrä,
-              yksikkö: line.yksikkö,
               ahinta: line.ahinta,
-              rivihinta: line.rivihinta || (Number(line.määrä) * Number(line.ahinta)),
+              Yhteensä: line.Yhteensä || (Number(line.määrä) * Number(line.ahinta)),
               kuvaus: line.kuvaus,
-              selvitys: line.selvitys,
-              alvkoodi: line.alvkoodi,
-              reskontra: line.reskontra,
+              yksikkö: line.yksikkö || '',
+              tuotenimi: line.tuotenimi || '',
+              alvkoodi: line.alvkoodi || '',
+              // Additional info for reference
+              luontipaiva: headerData.luontipaiva,
+              yhtiönNimi: headerData.yhtiönNimi || '',
+              docId: headerData.docId,
               tilattuTuote: line.tilattuTuote
             });
           });
@@ -545,14 +544,8 @@ export const ChatLayout: React.FC = () => {
               <thead>
                 <tr className="bg-gray-100 sticky top-0">
                   <th className="border-b px-1 py-1 text-left font-medium text-xs">Valitse</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Asiakas</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilaustunnus</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Yhtiön nimi</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tilaajan nimi</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Otsikko</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Päivämäärä</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Summa</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Rivit</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tampuuri</th>
+                  <th className="border-b px-1 py-1 text-left font-medium text-xs">RP-numero</th>
                   <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
                 </tr>
               </thead>
@@ -574,50 +567,18 @@ export const ChatLayout: React.FC = () => {
                     <td className="border-b px-1 py-1 text-xs">
                       {invoice.asiakasnumero || '-'}
                     </td>
-                    <td className="border-b px-1 py-1 text-xs truncate max-w-[80px]" title={invoice.tilaustunnus}>
-                      {invoice.tilaustunnus || '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs truncate max-w-[100px]" title={invoice.yhtiönNimi}>
-                      {invoice.yhtiönNimi || '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs truncate max-w-[100px]" title={invoice.tilaajanNimi}>
-                      {invoice.tilaajanNimi || '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs truncate max-w-[80px]" title={invoice.laskuotsikko}>
-                      {invoice.laskuotsikko}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs">
-                      {invoice.luontipaiva ? (() => {
-                        // Handle Firebase Timestamp
-                        if (invoice.luontipaiva && typeof invoice.luontipaiva === 'object' && 'seconds' in invoice.luontipaiva) {
-                          const date = new Date(invoice.luontipaiva.seconds * 1000);
-                          return date.toLocaleDateString('fi-FI');
-                        }
-                        // Handle Excel date format (number of days since 1900-01-01)
-                        if (typeof invoice.luontipaiva === 'number') {
-                          const excelEpoch = new Date(1900, 0, 1);
-                          const date = new Date(excelEpoch.getTime() + (invoice.luontipaiva - 2) * 24 * 60 * 60 * 1000);
-                          return date.toLocaleDateString('fi-FI');
-                        }
-                        // Handle normal ISO date string
-                        return new Date(invoice.luontipaiva).toLocaleDateString('fi-FI');
-                      })() : '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs">
-                      {invoice.kokonaissumma ? `${invoice.kokonaissumma}€` : '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs">
-                      {invoice.rivienMaara || 0} kpl
+                    <td className="border-b px-1 py-1 text-xs truncate max-w-[120px]" title={invoice.Tilausnumero}>
+                      {invoice.Tilausnumero || '-'}
                     </td>
                     <td className="border-b px-1 py-1">
                       <Button
-                        variant="destructive"
+                        variant="ghost"
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteInvoiceHeader(invoice.id);
+                          handleDeleteInvoice(invoice.id);
                         }}
-                        className="h-6 w-6 p-0"
+                        className="h-6 w-6 p-0 text-red-600 hover:text-red-800"
                       >
                         🗑️
                       </Button>
@@ -629,19 +590,33 @@ export const ChatLayout: React.FC = () => {
           </div>
         </div>
 
+        {/* Invoice-level Laskutusselvitys */}
+        {selectedInvoice && selectedInvoice.Laskutusselvitys && (
+          <div className="space-y-2 mb-4">
+            <h4 className="font-medium text-sm">Laskutusselvitys</h4>
+            <div className="border rounded p-3 bg-gray-50 max-h-40 overflow-y-auto">
+              <div className="text-sm prose prose-sm max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {selectedInvoice.Laskutusselvitys}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Selected Invoice Line Items */}
         {selectedInvoice && selectedInvoice.laskurivit && selectedInvoice.laskurivit.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">Laskurivit: {selectedInvoice.laskuotsikko}</h4>
+            <h4 className="font-medium text-sm">Laskurivit: {selectedInvoice.laskuotsikko || 'Myyntilasku'}</h4>
             <div className="max-h-60 overflow-y-auto border rounded">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-gray-100 sticky top-0">
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Tuotekoodi</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Määrä</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">á-hinta</th>
+                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Yhteensä</th>
                     <th className="border-b px-2 py-1 text-left font-medium text-xs min-w-[150px]">Kuvaus</th>
-                    <th className="border-b px-2 py-1 text-left font-medium text-xs min-w-[150px]">Tilattu tuote</th>
+                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Yksikkö</th>
                     <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
                   </tr>
                 </thead>
@@ -652,32 +627,6 @@ export const ChatLayout: React.FC = () => {
                       className={`cursor-pointer ${selectedLineId === line.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}
                       onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
                     >
-                      <td className="border-b px-1 py-1 text-xs">
-                        {editingCell?.rowId === line.id && editingCell?.field === 'tuotekoodi' ? (
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-20 px-1 text-xs border rounded"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave();
-                                if (e.key === 'Escape') handleCellCancel();
-                              }}
-                              autoFocus
-                            />
-                            <Button size="sm" onClick={handleCellSave} className="h-5 w-5 p-0 text-xs">✓</Button>
-                            <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-5 w-5 p-0 text-xs">✕</Button>
-                          </div>
-                        ) : (
-                          <span 
-                            className="cursor-pointer hover:bg-gray-200 px-1 rounded"
-                            onClick={() => handleCellEdit(line.id, 'tuotekoodi', String(line.tuotekoodi || ''))}
-                          >
-                            {line.tuotekoodi || '-'}
-                          </span>
-                        )}
-                      </td>
                       <td className="border-b px-1 py-1 text-xs">
                         {editingCell?.rowId === line.id && editingCell?.field === 'määrä' ? (
                           <div className="flex gap-1">
@@ -731,6 +680,9 @@ export const ChatLayout: React.FC = () => {
                           </span>
                         )}
                       </td>
+                      <td className="border-b px-1 py-1 text-xs">
+                        {line.Yhteensä ? `${line.Yhteensä.toFixed(2)}€` : '-'}
+                      </td>
                       <td className="border-b px-2 py-1 text-xs min-w-[150px] max-w-[250px]">
                         {editingCell?.rowId === line.id && editingCell?.field === 'kuvaus' ? (
                           <div className="flex gap-1">
@@ -764,24 +716,15 @@ export const ChatLayout: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="border-b px-2 py-1 text-xs min-w-[150px] max-w-[250px]">
-                        <div className="group relative">
-                          <span className="block break-words whitespace-normal">
-                            {line.tilattuTuote || '-'}
-                          </span>
-                          {line.tilattuTuote && line.tilattuTuote.length > 50 && (
-                            <div className="absolute z-10 hidden group-hover:block bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 max-w-md">
-                              <span className="text-xs">{line.tilattuTuote}</span>
-                            </div>
-                          )}
-                        </div>
+                      <td className="border-b px-1 py-1 text-xs">
+                        {line.yksikkö || '-'}
                       </td>
                       <td className="border-b px-1 py-1">
                         <Button
-                          variant="destructive"
+                          variant="ghost"
                           size="sm"
                           onClick={() => deleteInvoiceLine(selectedInvoice.id, line.id)}
-                          className="h-5 w-5 p-0 text-xs"
+                          className="h-5 w-5 p-0 text-red-600 hover:text-red-800"
                         >
                           🗑️
                         </Button>
@@ -793,28 +736,6 @@ export const ChatLayout: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Selected Line Item Explanation */}
-        {selectedInvoice && selectedLineId && (() => {
-          const selectedLine = selectedInvoice.laskurivit?.find(line => line.id === selectedLineId);
-          if (!selectedLine) return null;
-          
-          return (
-            <div className="space-y-2 mt-4">
-              <h4 className="font-medium text-sm">Laskutusselvitys: {selectedLine.tuotenimi}</h4>
-              <div className="border rounded p-3 bg-gray-50 max-h-96 overflow-y-auto">
-                <div className="text-sm prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {selectedLine.selvitys || 'Selvitystä ei ole saatavilla tälle laskuriville.'}
-                  </ReactMarkdown>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Klikkaa laskuriviä nähdäksesi sen selvityksen. Klikkaa uudelleen piilottaaksesi.
-              </p>
-            </div>
-          );
-        })()}
 
         {selectedInvoice && (!selectedInvoice.laskurivit || selectedInvoice.laskurivit.length === 0) && (
           <div className="text-center py-4 text-gray-500">
@@ -925,73 +846,9 @@ export const ChatLayout: React.FC = () => {
       }
     }
     
-    // Apply filters for OstolaskuExcel
-    if (title === 'OstolaskuExcel') {
-      
-      // Apply tampuurinumero filter - search in multiple possible field names
-      if (ostolaskuExcelTampuuriFilter) {
-        const beforeFilter = filteredData.length;
-        filteredData = filteredData.filter((record, index) => {
-          // Check multiple possible field names for tampuuri
-          const tampuuri = record['tampuuri'] || 
-                          record['Tampuuri'] || 
-                          record['TAMPUURI'] ||
-                          record['tampuurinumero'] ||
-                          record['Tampuurinumero'] ||
-                          record['Code'] ||
-                          record['code'] ||
-                          record['Kohteen tampuuri ID'] ||
-                          '';
-          
-          const matches = String(tampuuri).toLowerCase().includes(ostolaskuExcelTampuuriFilter.toLowerCase());
-          
-          // Debug log for first few records
-          if (index < 3 && ostolaskuExcelTampuuriFilter) {
-            console.log(`OstolaskuExcel filter: searching for "${ostolaskuExcelTampuuriFilter}" in tampuuri="${tampuuri}", matches=${matches}`);
-          }
-          
-          return matches;
-        });
-      }
-      
-      // Apply RP-numero filter for OstolaskuExcel
-      if (ostolaskuExcelRPFilter) {
-        filteredData = filteredData.filter(record => {
-          const rpNumero = record['RP-numero'] || 
-                           record['RP-tunnus'] ||
-                           record['RPnumero'] ||
-                           record['OrderNumber'] ||
-                           '';
-          return String(rpNumero).toLowerCase().includes(ostolaskuExcelRPFilter.toLowerCase());
-        });
-      }
-      
-      // Apply product description filter - search in "Tuote" field
-      if (ostolaskuExcelProductFilter) {
-        const beforeFilter = filteredData.length;
-        filteredData = filteredData.filter((record, index) => {
-          // Get the Tuote field value
-          const tuote = record['Tuote'] || '';
-          
-          const matches = String(tuote).toLowerCase().includes(ostolaskuExcelProductFilter.toLowerCase());
-          
-          
-          return matches;
-        });
-      }
-    }
-    
     if (filteredData.length === 0) {
       const emptyMessage = title === 'MyyntiExcel' 
         ? 'Luo myyntilasku pyytämällä myyntilaskun AI genrointia chatbotilta'
-        : title === 'OstolaskuExcel'
-        ? (ostolaskuExcelTampuuriFilter || ostolaskuExcelProductFilter)
-          ? ostolaskuExcelTampuuriFilter && ostolaskuExcelProductFilter
-            ? `Ei tuloksia tampuurinumerolle "${ostolaskuExcelTampuuriFilter}" ja tuotekuvaukselle "${ostolaskuExcelProductFilter}"`
-            : ostolaskuExcelTampuuriFilter
-            ? `Ei tuloksia tampuurinumerolle "${ostolaskuExcelTampuuriFilter}"`
-            : `Ei tuloksia tuotekuvaukselle "${ostolaskuExcelProductFilter}"`
-          : 'Lataa OstolaskuExcel käyttämällä "Lataa OstolaskuExcel" -painiketta Chat AI -näkymässä'
         : (productNameFilter || priceListNameFilter || priceListSupplierFilter) && title === 'Hinnasto'
         ? (() => {
             const filters = [];
@@ -1107,69 +964,6 @@ export const ChatLayout: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => setOrderRPFilter('')}
-                  >
-                    Tyhjennä
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-          {title === 'OstolaskuExcel' && (
-            <div className="space-y-2">
-              <Alert className="bg-yellow-50 border-yellow-200">
-                <AlertDescription className="text-sm text-yellow-700">
-                  OstolaskuExcel: Sessiokohtainen data ladataan Chat AI -näkymässä
-                </AlertDescription>
-              </Alert>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Suodata tampuurinumerolla (Code)..."
-                  value={ostolaskuExcelTampuuriFilter}
-                  onChange={handleOstolaskuExcelTampuuriFilterChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {ostolaskuExcelTampuuriFilter && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOstolaskuTampuuriFilter('')}
-                  >
-                    Tyhjennä
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Suodata RP-numerolla..."
-                  value={ostolaskuExcelRPFilter}
-                  onChange={(e) => setOstolaskuRPFilter(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {ostolaskuExcelRPFilter && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOstolaskuRPFilter('')}
-                  >
-                    Tyhjennä
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Suodata tuotekuvauksella..."
-                  value={ostolaskuExcelProductFilter}
-                  onChange={handleOstolaskuExcelProductFilterChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                {ostolaskuExcelProductFilter && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setOstolaskuProductFilter('')}
                   >
                     Tyhjennä
                   </Button>
@@ -1319,62 +1113,11 @@ export const ChatLayout: React.FC = () => {
           </div>
         )}
         
-        {title === 'OstolaskuExcel' && (
-          <div className="space-y-2">
-            {data.length > 0 && (
-              <Alert className="bg-green-50 border-green-200">
-                <AlertDescription className="text-sm text-green-700">
-                  ✅ Sessiokohtaista OstolaskuExcel-dataa ladattu: {data.length} riviä
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="flex gap-2">
-              <Input
-                id="ostolaskuExcel-tampuuri-filter"
-                key="ostolaskuExcel-tampuuri-filter"
-                type="text"
-                placeholder="Suodata tampuurinumerolla..."
-                value={ostolaskuExcelTampuuriFilter}
-                onChange={handleOstolaskuExcelTampuuriFilterChange}
-                className="flex-1"
-              />
-              {ostolaskuExcelTampuuriFilter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOstolaskuTampuuriFilter('')}
-                >
-                  Tyhjennä
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                id="ostolaskuExcel-product-filter"
-                key="ostolaskuExcel-product-filter"
-                type="text"
-                placeholder="Suodata tuotteella..."
-                value={ostolaskuExcelProductFilter}
-                onChange={handleOstolaskuExcelProductFilterChange}
-                className="flex-1"
-              />
-              {ostolaskuExcelProductFilter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOstolaskuProductFilter('')}
-                >
-                  Tyhjennä
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
         
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Badge variant="secondary">
-              {(productNameFilter && title === 'Hinnasto') || (priceListNameFilter && title === 'Hinnasto') || (priceListSupplierFilter && title === 'Hinnasto') || (tampuuriCodeFilter && title === 'Tilaus') || ((ostolaskuExcelTampuuriFilter || ostolaskuExcelProductFilter) && title === 'OstolaskuExcel')
+              {(productNameFilter && title === 'Hinnasto') || (priceListNameFilter && title === 'Hinnasto') || (priceListSupplierFilter && title === 'Hinnasto') || (tampuuriCodeFilter && title === 'Tilaus')
                 ? `${filteredData.length} / ${data.length} riviä` 
                 : `${filteredData.length} riviä`}
             </Badge>
@@ -1567,7 +1310,7 @@ export const ChatLayout: React.FC = () => {
         </div>
       </div>
     );
-  }, [ostolaskuExcelTampuuriFilter, ostolaskuExcelRPFilter, ostolaskuExcelProductFilter, productNameFilter, priceListNameFilter, priceListSupplierFilter, tampuuriCodeFilter, orderRPFilter, editingCell, columnOffset]);
+  }, [productNameFilter, priceListNameFilter, priceListSupplierFilter, tampuuriCodeFilter, orderRPFilter, editingCell, columnOffset]);
 
   return (
     <div id="chat-layout-container" className="h-full flex gap-2 relative">
@@ -1660,11 +1403,10 @@ export const ChatLayout: React.FC = () => {
               </Alert>
             )}
             
-            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntiExcel' | 'ostolaskuExcel')} className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-4 flex-shrink-0 sticky top-0 bg-white z-10">
+            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntiExcel')} className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-3 flex-shrink-0 sticky top-0 bg-white z-10">
                 <TabsTrigger value="hinnasto">searchHinnasto</TabsTrigger>
                 <TabsTrigger value="tilaus">searchTilaus</TabsTrigger>
-                <TabsTrigger value="ostolaskuExcel">OstolaskuExcel</TabsTrigger>
                 <TabsTrigger value="myyntiExcel">MyyntiExcel</TabsTrigger>
               </TabsList>
               
@@ -1676,9 +1418,6 @@ export const ChatLayout: React.FC = () => {
                 {renderDataTable(tilausData, 'Tilaus')}
               </TabsContent>
               
-              <TabsContent value="ostolaskuExcel" className="mt-4 flex-1 overflow-auto">
-                {renderDataTable(ostolaskuExcelData, 'OstolaskuExcel')}
-              </TabsContent>
               
               <TabsContent value="myyntiExcel" className="mt-4 flex-1 overflow-auto">
                 {renderInvoiceEditor()}
@@ -1719,7 +1458,6 @@ export const ChatLayout: React.FC = () => {
         <CardContent className="pt-0 flex-1 overflow-hidden p-0">
           <ChatAI 
             className="h-full" 
-            onOstolaskuExcelDataChange={(data) => setOstolaskuExcelData(data)}
           />
         </CardContent>
       </Card>
