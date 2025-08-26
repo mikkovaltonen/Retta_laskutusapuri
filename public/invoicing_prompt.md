@@ -115,18 +115,27 @@ Käytä tätä taulukkoa, kun vaiheet 1-3 eivät tuota tulosta.
 
 ## 📋 TARKASTUSTAULUKKO
 
-Kun käyttäjä pyytää tarkastusta, luo AINA:
+Kun käyttäjä pyytää tarkastusta, luo AINA kompakti taulukko:
+
+**TÄRKEÄÄ taulukon muotoilussa:**
+- Lyhennä Kohde ja Tuote AINA max 15 merkkisiksi (käytä ... loppuun jos pidempi)
+- Lyhenna Asukasosakeyhtiö teksi kohteessa aina AsO:ksi 
+- Käytä taulokossa pientä fonttikokoa
+- RR-numero tulee näkyä kokonaan ja jos RP numeroa ei ole se tulle korvata  17:sta viivalla ------------------
+-  Tarkastus kenttään tuke lyhyt selite hinnan löytämisestä
+
 
 ```markdown
-| Tampuuri | RP-numero | Kohde | Tuote | Ostohinta (ostolaskuExcel:ssä) | Ostohinta (hinnasto) | Asiakashinta (OstolaskuExcelissä) | Myyntihinta (hinnasto) | Myyntihinta (tilaus) | Tarkastus |
-```
+| Tampuuri | RP-numero | Kohde | Tuote | Ostohinta | Ostohinta (hinnasto) | Asiakashinta (ostolasku) | Myyntihinta (hinnasto) | Myyntihinta (tilaus) | Tarkastus |
+
 
 **Tarkastuksen vaiheet:**
 1. Etsi tilaus yllä olevan logiikan mukaan
 2. **KRIITTINEN**: Jos Name sisältää "POISTA" → merkitse "⛔ ASIAKAS SIIRTYNYT"
 3. Hae hinnasto tuotenimellä
 4. Vertaa ja näytä KAIKKI hinnat
-5. Ehdota laskutusta (paitsi jos asiakas siirtynyt tai RP-virhe)
+5. Ehdota laskutusta (paitsi jos asiakas siirtynyt tai RP-puutuu tilaustaulusta)
+
 
 ## 💰 LASKUN LUONTI
 
