@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, limit, addDoc } from 'firebase/fires
 import { db } from './firebase';
 import { storageService } from './storageService';
 import { addTechnicalLog } from './firestoreService';
+import { logger } from './loggingService';
 
 // Initialize Gemini 2.5 Pro
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
@@ -89,39 +90,40 @@ class GeminiChatService {
             },
             {
               name: 'createLasku',
-              description: 'Create and save new invoice with header and lines. Creates one invoice per unique customer.',
+              description: 'Save MyyntiExcel invoice to database. LLM must calculate prices according to invoicing_prompt.md decision tree BEFORE calling this. This function only saves data 1:1 without any logic.',
               parameters: {
                 type: 'object',
                 properties: {
                   asiakasnumero: { 
                     type: 'string', 
-                    description: 'Customer number (header level) - all lines must be for this customer' 
+                    description: 'Tampuuri number from OstolaskuExcel' 
                   },
-                  laskuotsikko: {
+                  Tilausnumero: {
                     type: 'string',
-                    description: 'Invoice title or description (header level)'
+                    description: 'RP-number from OstolaskuExcel'
                   },
-                  laskurivit: {
+                  Laskutusselvitys: {
+                    type: 'string',
+                    description: 'Detailed explanation of why this product should be invoiced at this price, including data sources used (e.g., "Price from hinnasto: Yleishinnasto 2024, product matched by name similarity", "Applied 15% margin according to pricing table", etc.)'
+                  },
+                  rivit: {
                     type: 'array',
                     items: {
                       type: 'object',
                       properties: {
-                        reskontra: { type: 'string', description: 'Account type (e.g., MK)' },
-                        tuotekoodi: { type: 'string', description: 'Product code' },
                         määrä: { type: 'number', description: 'Quantity' },
-                        ahinta: { type: 'number', description: 'Unit price' },
-                        kuvaus: { type: 'string', description: 'Description of the service/product' },
-                        yksikkö: { type: 'string', description: 'Unit (e.g., kpl, h)' },
-                        tuotenimi: { type: 'string', description: 'Product name' },
-                        alvkoodi: { type: 'string', description: 'VAT code (optional)' },
-                        Tilausnumero: { type: 'string', description: 'Order number' }
+                        ahinta: { type: 'number', description: 'Sales price (calculated by LLM using decision tree)' },
+                        Yhteensä: { type: 'number', description: 'Total (määrä × ahinta)' },
+                        kuvaus: { type: 'string', description: 'Description from OstolaskuExcel' },
+                        yksikkö: { type: 'string', description: 'Unit from OstolaskuExcel' },
+                        alvkoodi: { type: 'string', description: 'VAT code from OstolaskuExcel' }
                       },
-                      required: ['tuotekoodi', 'määrä', 'ahinta', 'kuvaus', 'tuotenimi']
+                      required: ['määrä', 'ahinta', 'Yhteensä', 'kuvaus']
                     },
-                    description: 'Array of invoice lines for this customer'
+                    description: 'Invoice rows with prices already calculated by LLM'
                   }
                 },
-                required: ['asiakasnumero', 'laskurivit']
+                required: ['asiakasnumero', 'rivit']
               }
             }
           ]
@@ -132,7 +134,7 @@ class GeminiChatService {
 
   // Function implementations for Gemini to call
   private async searchHinnasto(userId: string, params: Record<string, any>, sessionId?: string) {
-    console.log('🔍 searchHinnasto called with params:', { userId, params });
+    // Reduced logging - only log errors
     
     // Log to continuous improvement
     if (sessionId) {
@@ -150,9 +152,7 @@ class GeminiChatService {
         // No limit - get all records like the UI does
       );
 
-      console.log('📊 Querying shared hinnasto collection');
       const querySnapshot = await getDocs(q);
-      console.log('📊 Found', querySnapshot.docs.length, 'documents in hinnasto collection');
       
       let records = querySnapshot.docs.map(doc => {
         const data = doc.data();
@@ -178,7 +178,7 @@ class GeminiChatService {
 
       // Check if at least one search parameter is provided
       if (!params.productName && !params.priceListName && !params.priceListSupplier) {
-        console.warn('⚠️ searchHinnasto called without any search parameters - returning empty result');
+        logger.warn('GeminiChatService', 'searchHinnasto', '⚠️ searchHinnasto called without any search parameters - returning empty result', undefined, sessionId);
         return {
           success: true,
           data: [],
@@ -191,7 +191,6 @@ class GeminiChatService {
       
       // Filter by ProductName (partial match)
       if (params.productName) {
-        console.log('🔎 Filtering by productName:', params.productName);
         const searchTerm = params.productName.toLowerCase();
         
         records = records.filter(record => {
@@ -202,7 +201,6 @@ class GeminiChatService {
       
       // Filter by PriceListName (partial match)
       if (params.priceListName) {
-        console.log('🔎 Filtering by priceListName:', params.priceListName);
         const searchTerm = params.priceListName.toLowerCase();
         records = records.filter(record => {
           const priceListName = String(record.PriceListName).toLowerCase();
@@ -212,15 +210,12 @@ class GeminiChatService {
       
       // Filter by PriceListSupplier (partial match)
       if (params.priceListSupplier) {
-        console.log('🔎 Filtering by priceListSupplier:', params.priceListSupplier);
         const searchTerm = params.priceListSupplier.toLowerCase();
         records = records.filter(record => {
           const priceListSupplier = String(record.PriceListSupplier).toLowerCase();
           return priceListSupplier.includes(searchTerm);
         });
       }
-      
-      console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
       
       // Determine default limit based on search type
       const defaultLimit = params.priceListName || params.priceListSupplier ? 50 : 10;
@@ -230,12 +225,6 @@ class GeminiChatService {
         data: records.slice(0, params.limit || defaultLimit),
         count: records.length
       };
-      
-      console.log('✅ searchHinnasto result:', {
-        success: result.success,
-        resultCount: result.data.length,
-        totalFound: result.count
-      });
       
       // Log result to continuous improvement
       if (sessionId) {
@@ -253,7 +242,7 @@ class GeminiChatService {
       
       return result;
     } catch (error) {
-      console.error('❌ searchHinnasto failed:', error);
+      logger.error('GeminiChatService', 'searchHinnasto', '❌ searchHinnasto failed', error, sessionId);
       
       // Log error to continuous improvement
       if (sessionId) {
@@ -273,7 +262,7 @@ class GeminiChatService {
   }
 
   private async searchTilaus(userId: string, params: Record<string, any>, sessionId?: string) {
-    console.log('🔍 searchTilaus called with params:', { userId, params });
+    // Reduced logging - only log errors
     
     // Log to continuous improvement
     if (sessionId) {
@@ -292,9 +281,7 @@ class GeminiChatService {
         // No limit - get all records like the UI does
       );
 
-      console.log('📊 Querying shared tilaus_data collection');
       const querySnapshot = await getDocs(q);
-      console.log('📊 Found', querySnapshot.docs.length, 'documents in tilaus_data collection');
       
       let records = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -303,18 +290,12 @@ class GeminiChatService {
 
       // Apply filter - search by Code (Tampuurinumero) OR OrderNumber (RP-numero)
       if (params.tampuuriCode) {
-        console.log('🔎 Filtering by Code (Tampuurinumero) field:', params.tampuuriCode);
         const beforeFilter = records.length;
         const searchCode = String(params.tampuuriCode).trim();
         
         records = records.filter(record => {
           // Check Code field (Tampuurinumero) - exact match or starts with for longer codes
           const code = String(record['Code'] || record['Tampuurinumero'] || '').trim();
-          
-          // Debug logging for first few records
-          if (records.indexOf(record) < 3) {
-            console.log(`  Comparing: searchCode="${searchCode}" with code="${code}"`);
-          }
           
           // For short search terms (1-3 chars), require exact match
           if (searchCode.length <= 3) {
@@ -324,9 +305,7 @@ class GeminiChatService {
           // For longer search terms, allow partial match (starts with or contains)
           return code.startsWith(searchCode) || code.includes(searchCode);
         });
-        console.log(`📊 Filtered by tampuuriCode from ${beforeFilter} to ${records.length} records`);
       } else if (params.orderNumber) {
-        console.log('🔎 Filtering by OrderNumber (RP-numero) field:', params.orderNumber);
         const beforeFilter = records.length;
         const searchOrder = String(params.orderNumber).trim();
         
@@ -337,10 +316,9 @@ class GeminiChatService {
           // For RP numbers, always use contains/partial match since they are long
           return orderNum.toLowerCase().includes(searchOrder.toLowerCase());
         });
-        console.log(`📊 Filtered by orderNumber from ${beforeFilter} to ${records.length} records`);
       } else {
         // Either tampuuriCode or orderNumber required
-        console.warn('⚠️ searchTilaus called without tampuuriCode or orderNumber - returning empty result');
+        logger.warn('GeminiChatService', 'searchTilaus', '⚠️ searchTilaus called without tampuuriCode or orderNumber - returning empty result', undefined, sessionId);
         return {
           success: true,
           data: [],
@@ -353,12 +331,6 @@ class GeminiChatService {
         data: records.slice(0, params.limit || 10),
         count: records.length
       };
-      
-      console.log('✅ searchTilaus result:', {
-        success: result.success,
-        resultCount: result.data.length,
-        totalFound: result.count
-      });
       
       // Log result to continuous improvement
       if (sessionId) {
@@ -376,7 +348,7 @@ class GeminiChatService {
       
       return result;
     } catch (error) {
-      console.error('❌ searchTilaus failed:', error);
+      logger.error('GeminiChatService', 'searchTilaus', '❌ searchTilaus failed', error, sessionId);
       
       // Log error to continuous improvement
       if (sessionId) {
@@ -397,283 +369,92 @@ class GeminiChatService {
 
 
 
-  private async fetchTilausDataForCustomer(userId: string, asiakasnumero: string): Promise<any[]> {
-    try {
-      // Query ALL tilaus_data records (shared data)
-      const q = query(
-        collection(db, 'tilaus_data')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const tilausRecords = querySnapshot.docs.map(doc => doc.data());
-      
-      // Filter for this customer by finding matching company ID field
-      const customerTilaukset = tilausRecords.filter(record => {
-        const companyIdField = Object.keys(record).find(key => 
-          key.includes('Yhtiön tunnus') || key.includes('yhtiön tunnus') || 
-          key.includes('Yhtiötunnus') || key.includes('yhtiötunnus') ||
-          key.toLowerCase().includes('company') && key.toLowerCase().includes('id')
-        );
-        
-        if (companyIdField) {
-          return String(record[companyIdField]).trim() === String(asiakasnumero).trim();
-        }
-        return false;
-      });
-      
-      return customerTilaukset;
-    } catch (error) {
-      console.error('Failed to fetch tilaus data:', error);
-      return [];
-    }
-  }
 
   private async createLasku(userId: string, params: Record<string, any>) {
-    console.log('💰 createLasku called with params:', { userId, params });
+    logger.info('GeminiChatService', 'createLasku', '💰 createLasku called with params', { userId, params });
     
     try {
-      const { asiakasnumero, laskurivit, laskuotsikko } = params;
+      const { asiakasnumero, Tilausnumero, Laskutusselvitys, rivit } = params;
       
-      // Fetch tilaus data for this customer to match products
-      const tilausData = await this.fetchTilausDataForCustomer(userId, asiakasnumero);
-      
-      // Fetch hinnasto data to validate prices and get sales prices
-      const hinnastoQuery = query(collection(db, 'hinnasto'));
-      const hinnastoSnapshot = await getDocs(hinnastoQuery);
-      const hinnastoData = hinnastoSnapshot.docs.map(doc => doc.data());
-      console.log('📊 Loaded', hinnastoData.length, 'price list items for validation');
-      
-      // Validate header fields
+      // Simple validation - just check required fields exist
       if (!asiakasnumero) {
         return {
           success: false,
-          error: 'Asiakasnumero on pakollinen header-kenttä'
+          error: 'Asiakasnumero (Tampuuri) on pakollinen'
         };
       }
       
-      if (!laskurivit || !Array.isArray(laskurivit) || laskurivit.length === 0) {
+      if (!rivit || !Array.isArray(rivit) || rivit.length === 0) {
         return {
           success: false,
-          error: 'Laskurivit array on pakollinen ja ei saa olla tyhjä'
+          error: 'Rivit array on pakollinen ja ei saa olla tyhjä'
         };
       }
 
-      // Validate and process each laskurivi with price lookup
-      const processedLaskurivit = [];
-      
-      for (let i = 0; i < laskurivit.length; i++) {
-        const rivi = laskurivit[i];
-        
-        // Required fields updated - tuotekoodi is optional now
-        const requiredFields = ['määrä', 'tuotenimi'];
+      // Validate each row has required fields
+      for (let i = 0; i < rivit.length; i++) {
+        const rivi = rivit[i];
+        const requiredFields = ['määrä', 'ahinta', 'Yhteensä', 'kuvaus'];
         
         for (const field of requiredFields) {
-          if (!rivi[field]) {
+          if (rivi[field] === undefined || rivi[field] === null) {
             return {
               success: false,
-              error: `Laskurivi ${i + 1}: Pakollinen kenttä '${field}' puuttuu`
+              error: `Rivi ${i + 1}: Pakollinen kenttä '${field}' puuttuu`
             };
           }
         }
-
-        // Validate numeric fields
+        
+        // Basic numeric validation
         if (isNaN(Number(rivi.määrä)) || Number(rivi.määrä) <= 0) {
           return {
             success: false,
-            error: `Laskurivi ${i + 1}: Määrä ei ole kelvollinen positiivinen numero`
+            error: `Rivi ${i + 1}: Määrä ei ole kelvollinen positiivinen numero`
           };
         }
         
-        // Find matching product in hinnasto by ProductName
-        const productDescription = String(rivi.tuotenimi || '').trim();
-        console.log(`🔍 Looking for product: "${productDescription}" in price list`);
-        
-        // Find matching hinnasto item by ProductName - let AI handle intelligent matching
-        // AI should already provide the correct ProductName that exists in hinnasto
-        const matchingHinnastoItem = hinnastoData.find(item => {
-          const itemProductName = String(item['ProductName'] || '').trim().toLowerCase();
-          const searchProduct = productDescription.toLowerCase().trim();
-          
-          // Simple exact match first (AI should provide exact name when possible)
-          if (itemProductName === searchProduct) {
-            return true;
-          }
-          
-          // Allow partial match if core service name is the same
-          // This is a fallback - AI should ideally provide the exact ProductName from hinnasto
-          const itemCore = itemProductName.replace(/[.\-,]/g, ' ').replace(/\s+/g, ' ');
-          const searchCore = searchProduct.replace(/[.\-,]/g, ' ').replace(/\s+/g, ' ');
-          
-          // Check if one contains the other (for flexibility)
-          return itemCore.includes(searchCore) || searchCore.includes(itemCore);
-        });
-        
-        if (!matchingHinnastoItem) {
+        if (isNaN(Number(rivi.ahinta)) || Number(rivi.ahinta) <= 0) {
           return {
             success: false,
-            error: `Laskurivi ${i + 1}: Tuotetta "${productDescription}" ei löydy hinnastosta (ProductName)`
+            error: `Rivi ${i + 1}: Ahinta ei ole kelvollinen positiivinen numero`
           };
         }
-        
-        // Validate that purchase price matches (if ahinta is provided in input)
-        const hinnastoBuyPrice = Number(matchingHinnastoItem['BuyPrice'] || 0);
-        const inputBuyPrice = Number(rivi.ahinta || 0);
-        
-        if (rivi.ahinta && Math.abs(hinnastoBuyPrice - inputBuyPrice) > 0.01) {
-          return {
-            success: false,
-            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, OstolaskuExcelissä: ${inputBuyPrice}€`
-          };
-        }
-        
-        // Get the sales price from hinnasto
-        const salePrice = Number(matchingHinnastoItem['SalePrice'] || 0);
-        
-        if (salePrice <= 0) {
-          return {
-            success: false,
-            error: `Laskurivi ${i + 1}: Myyntihintaa ei löydy hinnastosta tuotteelle "${productDescription}"`
-          };
-        }
-        
-        // Use product code from hinnasto if available
-        const productCode = matchingHinnastoItem['ProductNumber'] || 
-                           matchingHinnastoItem['Tuotetunnus'] || 
-                           matchingHinnastoItem['tuotetunnus'] || 
-                           rivi.tuotekoodi || 
-                           'N/A';
-        
-        console.log(`✅ Found matching product: ${productDescription} -> Code: ${productCode}, Sale price: ${salePrice}€`);
-        
-        // Add processed line with sales price from hinnasto
-        processedLaskurivit.push({
-          ...rivi,
-          tuotekoodi: productCode,
-          ahinta: salePrice, // Use sales price from hinnasto
-          ostohinta: hinnastoBuyPrice, // Store original buy price for reference
-          kuvaus: rivi.kuvaus || `${productDescription} - Edelleenlaskutus`
-        });
       }
 
-      // Generate detailed explanations for each line item with product matching
-      const laskurivitWithSelvitys = await Promise.all(processedLaskurivit.map(async (rivi, index) => {
-        // Find matching "Tilattu tuote" from tilaus data
-        let tilattuTuote = 'ei löydy';
-        
-        if (tilausData.length > 0) {
-          // Extract all available ordered products for this customer
-          const availableProducts = tilausData
-            .map(tilaus => tilaus['Tilattu tuote'] || tilaus['tilattu tuote'] || tilaus['Product'])
-            .filter(product => product && String(product).trim() !== '')
-            .map(product => String(product).trim());
-          
-          if (availableProducts.length > 0) {
-            const tuotenimi = String(rivi.tuotenimi || '').toLowerCase().trim();
-            const kuvaus = String(rivi.kuvaus || '').toLowerCase().trim();
-            
-            // Find best match by checking similarity with tuotenimi (primary) and kuvaus (secondary)
-            const bestMatch = availableProducts.find(product => {
-              const productLower = String(product).toLowerCase().trim();
-              // Check if product name contains tuotenimi or vice versa
-              return tuotenimi.includes(productLower) || 
-                     productLower.includes(tuotenimi) ||
-                     kuvaus.includes(productLower) ||
-                     productLower.includes(kuvaus);
-            });
-            
-            if (bestMatch) {
-              tilattuTuote = bestMatch;
-            }
-          }
-        }
-        
-        const selvitysPrompt = `Luo yksityiskohtainen laskutusselvitys tälle laskuriville Markdown-muodossa:
-
-**Laskurivi ${index + 1}:**
-- Tuotekoodi: ${rivi.tuotekoodi}
-- Tuotenimi: ${rivi.tuotenimi}
-- Kuvaus: ${rivi.kuvaus}
-- Määrä: ${rivi.määrä}
-- Myyntihinta: ${rivi.ahinta}€
-- Ostohinta: ${rivi.ostohinta}€
-- Kokonaishinta: ${Number(rivi.määrä) * Number(rivi.ahinta)}€
-- Asiakasnumero: ${asiakasnumero}
-- Tilattu tuote: ${tilattuTuote}
-
-Kirjoita kattava selvitys joka sisältää:
-1. **Laskutusperuste** - Miksi tämä rivi laskutetaan
-2. **Hinnoittelulogiikka** - Miten hinta on määritetty (hinnastosta, sopimuksesta tms.)
-3. **Määrän peruste** - Miksi tämä määrä laskutetaan
-4. **Asiakastiedot** - Kenen vastuulla laskutus on
-5. **Tilausperuste** - Mihin tilaukseen tai sopimukseen perustuu
-
-Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
-
-        try {
-          const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-          const result = await model.generateContent(selvitysPrompt);
-          const selvitys = result.response.text() || 'Selvitystä ei voitu generoida.';
-          
-          return {
-            reskontra: rivi.reskontra || 'MK',
-            tuotekoodi: rivi.tuotekoodi,
-            määrä: Number(rivi.määrä),
-            ahinta: Number(rivi.ahinta),
-            kuvaus: rivi.kuvaus,
-            selvitys: selvitys,
-            tilattuTuote: tilattuTuote,
-            yksikkö: rivi.yksikkö || 'kpl',
-            tuotenimi: rivi.tuotenimi,
-            alvkoodi: rivi.alvkoodi || '',
-            Tilausnumero: rivi.Tilausnumero || `LASKU-${Date.now()}`
-          };
-        } catch (error) {
-          console.error('Failed to generate selvitys for line', index + 1, error);
-          return {
-            reskontra: rivi.reskontra || 'MK',
-            tuotekoodi: rivi.tuotekoodi,
-            määrä: Number(rivi.määrä),
-            ahinta: Number(rivi.ahinta),
-            kuvaus: rivi.kuvaus,
-            selvitys: 'Selvitystä ei voitu generoida automaattisesti.',
-            tilattuTuote: tilattuTuote,
-            yksikkö: rivi.yksikkö || 'kpl',
-            tuotenimi: rivi.tuotenimi,
-            alvkoodi: rivi.alvkoodi || '',
-            Tilausnumero: rivi.Tilausnumero || `LASKU-${Date.now()}`
-          };
-        }
-      }));
-
-      // Prepare document to save (new structure with header-level customer)
+      // Prepare document - pass through LLM data 1:1 with only minimal additions
       const laskuDocument = {
         userId,
-        asiakasnumero, // Header level customer number
-        laskuotsikko: laskuotsikko || 'Edelleenlaskutus',
-        laskurivit: laskurivitWithSelvitys,
+        // Header fields - pass through what LLM sends
+        asiakasnumero,
+        Tilausnumero: Tilausnumero || '',
+        Laskutusselvitys: Laskutusselvitys || '', // Add billing explanation
+        reskontra: 'MK', // Add fixed value
+        // Row data - pass through exactly what LLM sends
+        rivit: rivit.map(rivi => ({
+          ...rivi,
+          tuotenimi: rivi.tuotenimi || '' // Ensure tuotenimi exists (empty by default)
+        })),
+        // Metadata
         luontipaiva: new Date().toISOString(),
-        kokonaissumma: processedLaskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
+        kokonaissumma: rivit.reduce((sum, rivi) => sum + Number(rivi.Yhteensä || 0), 0)
       };
 
       // Save to Firestore 'myyntiExcel' collection
-      console.log('💾 Saving invoice to myyntiExcel collection...');
+      logger.info('GeminiChatService', 'createLasku', '💾 Saving invoice to myyntiExcel collection...');
       const docRef = await addDoc(collection(db, 'myyntiExcel'), laskuDocument);
       
-      console.log('✅ Invoice saved successfully with ID:', docRef.id);
+      logger.info('GeminiChatService', 'createLasku', '✅ Invoice saved successfully', { invoiceId: docRef.id });
 
       return {
         success: true,
         data: {
           laskuId: docRef.id,
-          rivienMaara: processedLaskurivit.length,
-          kokonaissumma: laskuDocument.kokonaissumma,
-          laskuotsikko: laskuDocument.laskuotsikko,
-          laskurivit: laskuDocument.laskurivit
+          message: `Lasku tallennettu: ${laskuDocument.rivit.length} riviä, yhteensä ${laskuDocument.kokonaissumma.toFixed(2)}€`
         }
       };
 
     } catch (error) {
-      console.error('❌ createLasku failed:', error);
+      logger.error('GeminiChatService', 'createLasku', '❌ createLasku failed', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Laskun luonti epäonnistui'
@@ -682,12 +463,12 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
   }
 
   async initializeSession(context: ChatContext): Promise<string> {
-    console.log('🚀 Initializing chat session:', {
+    logger.info('GeminiChatService', 'initializeSession', '🚀 Initializing chat session', {
       sessionId: context.sessionId,
       userId: context.userId,
       promptLength: context.systemPrompt.length,
       hasOstolaskuExcelData: !!context.ostolaskuExcelData
-    });
+    }, context.sessionId);
     
     try {
       // Build the system prompt with OstolaskuExcel data if available
@@ -712,30 +493,25 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       });
 
       this.activeSessions.set(context.sessionId, chat);
-      console.log('✅ Chat session initialized successfully:', context.sessionId);
+      logger.info('GeminiChatService', 'initializeSession', '✅ Chat session initialized successfully', { sessionId: context.sessionId }, context.sessionId);
       
       return context.sessionId;
     } catch (error) {
-      console.error('❌ Failed to initialize chat session:', error);
+      logger.error('GeminiChatService', 'initializeSession', '❌ Failed to initialize chat session', error);
       throw new Error(`Failed to initialize chat session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   async sendMessage(sessionId: string, message: string, userId: string, ostolaskuExcelData: any[] = []): Promise<ChatMessage> {
-    // Reduce logging for production
-    if (process.env.NODE_ENV === 'development') {
-      console.log('💬 sendMessage called:', { 
-        sessionId, 
-        message: message.substring(0, 100) + '...', 
-        userId,
-        hasOstolaskuExcelData: ostolaskuExcelData.length > 0,
-        ostolaskuExcelRowCount: ostolaskuExcelData.length
-      });
-    }
+    // Only log if there's an issue or it's critical
+    logger.debug('GeminiChatService', 'sendMessage', '💬 Processing message', { 
+      messageLength: message.length,
+      hasData: ostolaskuExcelData.length > 0
+    }, sessionId);
     
     let session = this.activeSessions.get(sessionId);
     if (!session) {
-      console.error('❌ Chat session not found:', sessionId);
+      logger.error('GeminiChatService', 'sendMessage', '❌ Chat session not found', { sessionId }, sessionId);
       throw new Error('Chat session not found');
     }
 
@@ -746,19 +522,11 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       
       if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
         contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä OstolaskuExcel data ${ostolaskuExcelData.length} rivillä session-kontekstissa]`;
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`ℹ️ OstolaskuExcel data available: ${ostolaskuExcelData.length} rows`);
-        }
       } else {
         contextNote = '\n\n[MUISTUTUS: Ei OstolaskuExcel-dataa saatavilla tässä sessiossa]';
-        console.log('ℹ️ No OstolaskuExcel data available');
       }
       
       const fullMessage = message + contextNote;
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 Sending message to Gemini...');
-      }
       
       // Retry logic for initial message
       let result;
@@ -773,18 +541,17 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           
           // Validate initial response
           if (response) {
-            console.log('📦 Initial response received, checking for function calls...');
             break;
           }
           
           initialRetries++;
-          console.log(`⚠️ Empty initial response, retry ${initialRetries}/${maxInitialRetries}`);
+          logger.warn('GeminiChatService', 'sendMessage', '⚠️ Empty initial response, retry', { retryCount: initialRetries, maxRetries: maxInitialRetries }, sessionId);
           if (initialRetries <= maxInitialRetries) {
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
         } catch (error) {
           initialRetries++;
-          console.error(`❌ Initial request failed, retry ${initialRetries}/${maxInitialRetries}:`, error);
+          logger.error('GeminiChatService', 'sendMessage', '❌ Initial request failed, retry', { retryCount: initialRetries, maxRetries: maxInitialRetries, error }, sessionId);
           if (initialRetries > maxInitialRetries) {
             throw error;
           }
@@ -802,7 +569,10 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       
       const functionCallsArray = response.functionCalls && typeof response.functionCalls === 'function' ? response.functionCalls() : null;
       if (functionCallsArray && Array.isArray(functionCallsArray) && functionCallsArray.length > 0) {
-        console.log('🔧 Function calls detected:', functionCallsArray.length);
+        // Only log if many function calls (potential issue)
+        if (functionCallsArray.length > 10) {
+          logger.info('GeminiChatService', 'sendMessage', '🔧 Many function calls detected', { count: functionCallsArray.length }, sessionId);
+        }
         
         const functionResponses = [];
         
@@ -810,7 +580,10 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
           const functionName = call.name;
           const args = call.args;
           
-          console.log(`🔧 Executing function: ${functionName} with args:`, args);
+          // Only log critical functions
+          if (functionName === 'createLasku') {
+            logger.info('GeminiChatService', 'sendMessage', `🔧 Executing critical function: ${functionName}`, { functionName, args }, sessionId);
+          }
           
           let functionResult;
           switch (functionName) {
@@ -824,7 +597,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
               functionResult = await this.createLasku(userId, args);
               break;
             default:
-              console.error('❌ Unknown function called:', functionName);
+              logger.error('GeminiChatService', 'sendMessage', '❌ Unknown function called', { functionName }, sessionId);
               functionResult = { success: false, error: 'Unknown function' };
           }
           
@@ -840,7 +613,6 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         }
         
         // Send all function results back to model at once with retry logic
-        console.log('📤 Sending function results back to Gemini...');
         let retryCount = 0;
         const maxRetries = 3;
         
@@ -851,11 +623,10 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
             
             // Check if response is valid
             if (finalContent && finalContent.trim() !== '') {
-              console.log('✅ Final response received from Gemini');
               break;
             } else {
               retryCount++;
-              console.log(`⚠️ Empty response on attempt ${retryCount}/${maxRetries}, retrying...`);
+              logger.warn('GeminiChatService', 'sendMessage', '⚠️ Empty response, retrying...', { retryCount, maxRetries }, sessionId);
               if (retryCount < maxRetries) {
                 // Wait before retry (exponential backoff)
                 await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
@@ -863,7 +634,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
             }
           } catch (retryError) {
             retryCount++;
-            console.error(`❌ Retry ${retryCount}/${maxRetries} failed:`, retryError);
+            logger.error('GeminiChatService', 'sendMessage', '❌ Retry failed', { retryCount, maxRetries, error: retryError }, sessionId);
             if (retryCount >= maxRetries) {
               throw retryError;
             }
@@ -873,7 +644,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         }
         
         if (!finalContent || finalContent.trim() === '') {
-          console.log('⚠️ All retries exhausted, generating detailed fallback');
+          logger.warn('GeminiChatService', 'sendMessage', '⚠️ All retries exhausted, generating detailed fallback', undefined, sessionId);
           // Generate more detailed fallback based on function results
           if (functionCalls.length > 0) {
             finalContent = `Käsittelin ${functionCalls.length} funktiokutsua. Tarkista taulukko tuloksista yllä. Voin auttaa lisää tarvittaessa.`;
@@ -883,14 +654,23 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         }
       } else {
         // No function calls, use the original response
-        console.log('💭 No function calls, using direct response');
         finalContent = response.text();
+        
+        // Log if response is empty (critical issue)
+        if (!finalContent || finalContent.trim() === '') {
+          logger.error('GeminiChatService', 'sendMessage', '⚠️ Empty direct response from Gemini', { sessionId }, sessionId);
+        }
       }
       
       // Final validation and safety check
       if (!finalContent || finalContent.trim() === '') {
-        console.log('⚠️ Empty response detected after all attempts, using fallback message');
-        finalContent = 'Anteeksi, tekninen ongelma esti vastauksen. Yritä uudelleen hetken kuluttua.';
+        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Empty response detected after all attempts, using fallback message', undefined, sessionId);
+        // More specific error message based on context
+        if (message.toLowerCase().includes('lasku') || message.toLowerCase().includes('luo')) {
+          finalContent = 'Yritän luoda laskuja... Jos tämä viesti näkyy, yritä uudelleen sanomalla "Luo MyyntiExcel kaikille paitsi siirtyneille asiakkaille".';
+        } else {
+          finalContent = 'Anteeksi, tekninen ongelma esti vastauksen. Yritä uudelleen hetken kuluttua.';
+        }
       }
       
       // Check for incomplete responses (common patterns)
@@ -903,7 +683,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       ];
       
       if (incompletePatterns.some(pattern => pattern.test(finalContent.trim()))) {
-        console.log('⚠️ Incomplete response pattern detected, appending notice');
+        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Incomplete response pattern detected, appending notice', undefined, sessionId);
         finalContent += '\n\n*[Vastaus jäi kesken. Pyydä jatkoa kirjoittamalla "jatka"]*';
       }
       
@@ -912,7 +692,7 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       const midSentenceEndings = [',', ':', '-', '(', '[', '{'];
       if (midSentenceEndings.includes(lastChar) || 
           (finalContent.length > 100 && !['!', '.', '?', '```'].some(end => finalContent.trim().endsWith(end)))) {
-        console.log('⚠️ Response appears to be cut off mid-sentence');
+        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Response appears to be cut off mid-sentence', undefined, sessionId);
         finalContent += '\n\n*[Vastaus saattoi jäädä kesken. Kirjoita "jatka" jos haluat lisää tietoa]*';
       }
       
@@ -924,15 +704,15 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         functionCalls: functionCalls.length > 0 ? functionCalls : undefined
       };
       
-      console.log('✅ Message processing complete:', {
+      logger.info('GeminiChatService', 'sendMessage', '✅ Message processing complete', {
         messageId: chatMessage.id,
         contentLength: chatMessage.content.length,
         functionCallsCount: functionCalls.length
-      });
+      }, sessionId);
       
       return chatMessage;
     } catch (error) {
-      console.error('❌ sendMessage failed:', error);
+      logger.error('GeminiChatService', 'sendMessage', '❌ sendMessage failed', error, sessionId);
       throw new Error(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

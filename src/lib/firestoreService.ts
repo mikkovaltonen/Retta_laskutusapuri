@@ -1,6 +1,7 @@
 import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, FieldValue, deleteDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
+import { logger, ChatSessionLog } from './loggingService';
 
 // Workspace types - simplified to only invoicer
 export type WorkspaceType = 'invoicer';
@@ -369,40 +370,20 @@ export const loadPrompt = async (userId: string): Promise<string | null> => {
 };
 
 // Continuous Improvement Functions
+// Legacy function - replaced by chat_logs system
 export const createContinuousImprovementSession = async (
   promptKey: string,
   chatSessionKey: string,
   userId: string,
   workspace: WorkspaceType = 'invoicer'
 ): Promise<string> => {
-  try {
-    if (!db) {
-      console.warn('Firebase not initialized, cannot create continuous improvement session');
-      return 'local_session_' + Date.now();
-    }
-
-    const session: Omit<ContinuousImprovementSession, 'id'> = {
-      promptKey,
-      chatSessionKey,
-      userId,
-      userFeedback: null,
-      technicalLogs: [],
-      createdDate: new Date(),
-      lastUpdated: new Date()
-    };
-
-    const docRef = await addDoc(collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)), {
-      ...session,
-      createdDate: serverTimestamp(),
-      lastUpdated: serverTimestamp()
-    });
-
-    console.log(`[ContinuousImprovement] Created session with ID: ${docRef.id}`);
-    return docRef.id;
-  } catch (error) {
-    console.error('Error creating continuous improvement session:', error);
-    return 'error_session_' + Date.now();
-  }
+  // Return the chatSessionKey as-is since we now use it directly
+  // The actual logging happens via saveChatSessionLog when user gives feedback
+  logger.debug('FirestoreService', 'createContinuousImprovementSession', 'Legacy function called - using chatSessionKey', {
+    chatSessionKey,
+    userId
+  });
+  return chatSessionKey;
 };
 
 export const addTechnicalLog = async (
@@ -442,144 +423,121 @@ export const addTechnicalLog = async (
   }
 };
 
+// Get chat logs for a user
+export const getChatLogs = async (
+  userId?: string,
+  workspace: WorkspaceType = 'invoicer'
+): Promise<ChatSessionLog[]> => {
+  try {
+    if (!db) {
+      logger.warn('FirestoreService', 'getChatLogs', 'Firebase not initialized');
+      return [];
+    }
+
+    let q = query(
+      collection(db, getWorkspaceCollectionName('chat_logs', workspace))
+    );
+
+    if (userId) {
+      q = query(q, where('userId', '==', userId));
+    }
+
+    const querySnapshot = await getDocs(q);
+    
+    const logs = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as ChatSessionLog[];
+
+    return logs.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
+  } catch (error) {
+    logger.error('FirestoreService', 'getChatLogs', 'Failed to get chat logs', { error });
+    return [];
+  }
+};
+
+export const saveChatSessionLog = async (
+  sessionLog: ChatSessionLog,
+  workspace: WorkspaceType = 'invoicer'
+): Promise<string | null> => {
+  try {
+    if (!db) {
+      logger.warn('FirestoreService', 'saveChatSessionLog', 'Firebase not initialized');
+      return null;
+    }
+
+    // Sanitoitiedot - poista undefined-arvot
+    const sanitizedLog = JSON.parse(JSON.stringify(sessionLog, (_, value) => 
+      value === undefined ? null : value
+    ));
+
+    // Luo dokumentti chat_logs -kokoelmaan
+    const docRef = await addDoc(
+      collection(db, getWorkspaceCollectionName('chat_logs', workspace)),
+      {
+        ...sanitizedLog,
+        savedAt: serverTimestamp(),
+        // Varmista että päivämäärät tallentuvat oikein
+        startTime: sanitizedLog.startTime,
+        endTime: sanitizedLog.endTime,
+        'userFeedback.timestamp': sanitizedLog.userFeedback?.timestamp || null
+      }
+    );
+
+    logger.info('FirestoreService', 'saveChatSessionLog', 'Chat session log saved', {
+      docId: docRef.id,
+      sessionId: sessionLog.sessionId,
+      rating: sessionLog.userFeedback?.rating,
+      messageCount: sessionLog.messages.length,
+      logCount: sessionLog.logs.length
+    });
+
+    return docRef.id;
+  } catch (error) {
+    logger.error('FirestoreService', 'saveChatSessionLog', 'Failed to save chat session log', { error });
+    return null;
+  }
+};
+
+// Legacy function - kept for backward compatibility but not used with new chat_logs system
 export const setUserFeedback = async (
   sessionId: string,
   feedback: 'thumbs_up' | 'thumbs_down',
   comment?: string,
   workspace: WorkspaceType = 'invoicer'
 ): Promise<void> => {
-  try {
-    if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
-      console.warn('Firebase not initialized or invalid session, skipping feedback');
-      return;
-    }
-
-    // For negative feedback, create a structured error report
-    if (feedback === 'thumbs_down' && comment) {
-      try {
-        // Try to parse comprehensive data from comment
-        const comprehensiveData = JSON.parse(comment);
-        
-        // Create a properly structured error report document
-        const errorReport: Omit<ErrorReport, 'id'> = {
-          // Header-level information
-          userId: comprehensiveData.userId || auth?.currentUser?.uid || 'unknown',
-          userEmail: comprehensiveData.userEmail || auth?.currentUser?.email || undefined,
-          reportDate: new Date(),
-          userComment: comprehensiveData.userComment || '',
-          sessionId: comprehensiveData.sessionId || sessionId,
-          sessionKey: comprehensiveData.currentSessionKey || sessionId,
-          systemPrompt: comprehensiveData.systemPrompt || '',
-          
-          // Line-level information
-          chatHistory: comprehensiveData.messages || [],
-          functionCalls: comprehensiveData.functionCalls || [],
-          
-          // Additional metadata
-          uploadedFileName: comprehensiveData.uploadedFileName,
-          ostolaskuDataSample: comprehensiveData.ostolaskuDataSample,
-          messageCount: comprehensiveData.messageCount || 0,
-          functionCallCount: comprehensiveData.functionCallCount || 0,
-          
-          // Status tracking
-          issueStatus: 'pending',
-          feedback: 'thumbs_down'
-        };
-        
-        // Save as a single document
-        const docRef = await addDoc(
-          collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)), 
-          {
-            ...errorReport,
-            reportDate: serverTimestamp()
-          }
-        );
-        
-        console.log(`[ErrorReport] Created structured error report: ${docRef.id}`);
-        console.log(`[ErrorReport] User comment: ${errorReport.userComment}`);
-        console.log(`[ErrorReport] Chat history length: ${errorReport.chatHistory.length}`);
-        console.log(`[ErrorReport] Function calls: ${errorReport.functionCallCount}`);
-        return;
-        
-      } catch (parseError) {
-        // If parsing fails, save as simple feedback
-        console.warn('Could not parse comprehensive data, saving as simple feedback:', parseError);
-      }
-    }
-
-    // For positive feedback or simple negative feedback
-    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
-    const updateData: {
-      userFeedback: 'thumbs_up' | 'thumbs_down';
-      lastUpdated: FieldValue;
-      userComment?: string;
-    } = {
-      userFeedback: feedback,
-      lastUpdated: serverTimestamp()
-    };
-
-    if (comment !== undefined && feedback === 'thumbs_down') {
-      updateData.userComment = comment;
-    }
-
-    await setDoc(sessionRef, updateData, { merge: true });
-
-    console.log(`[ContinuousImprovement] Set feedback for session ${sessionId}: ${feedback}${comment ? ' with comment' : ''}`);
-  } catch (error) {
-    console.error('Error setting user feedback:', error);
-  }
+  logger.info('FirestoreService', 'setUserFeedback', 'Legacy feedback function called - use saveChatSessionLog instead', {
+    sessionId,
+    feedback,
+    hasComment: !!comment
+  });
+  // This function is deprecated - new feedback is saved via saveChatSessionLog
 };
 
+// Legacy function - use getChatLogs instead
 export const getContinuousImprovementSessions = async (
   userId: string,
   promptKey?: string,
   workspace: WorkspaceType = 'invoicer'
 ): Promise<ContinuousImprovementSession[]> => {
-  try {
-    if (!db) {
-      console.warn('Firebase not initialized, cannot get sessions');
-      return [];
-    }
-
-    let q = query(
-      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
-      where('userId', '==', userId)
-    );
-
-    if (promptKey) {
-      q = query(q, where('promptKey', '==', promptKey));
-    }
-
-    const querySnapshot = await getDocs(q);
-    
-    const sessions = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdDate: doc.data().createdDate?.toDate() || new Date(),
-      lastUpdated: doc.data().lastUpdated?.toDate() || new Date()
-    })) as ContinuousImprovementSession[];
-
-    return sessions.sort((a, b) => b.lastUpdated.getTime() - a.lastUpdated.getTime());
-  } catch (error) {
-    console.error('Error getting continuous improvement sessions:', error);
-    return [];
-  }
+  logger.warn('FirestoreService', 'getContinuousImprovementSessions', 'Legacy function called - use getChatLogs instead');
+  return [];
 };
 
-// Get negative feedback sessions (for issue reporting)
+// Get negative feedback sessions from chat_logs
 export const getNegativeFeedbackSessions = async (
   userId?: string, // If not provided, get all users' feedback
   workspace: WorkspaceType = 'invoicer'
-): Promise<ContinuousImprovementSession[]> => {
+): Promise<ChatSessionLog[]> => {
   try {
     if (!db) {
-      console.warn('Firebase not initialized, cannot get negative feedback');
+      logger.warn('FirestoreService', 'getNegativeFeedbackSessions', 'Firebase not initialized');
       return [];
     }
 
     let q = query(
-      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
-      where('userFeedback', '==', 'thumbs_down')
+      collection(db, getWorkspaceCollectionName('chat_logs', workspace)),
+      where('userFeedback.rating', '==', 'thumbs_down')
     );
 
     if (userId) {
@@ -589,20 +547,18 @@ export const getNegativeFeedbackSessions = async (
     const querySnapshot = await getDocs(q);
     
     const sessions = querySnapshot.docs.map(doc => ({
-      id: doc.id,
       ...doc.data(),
-      createdDate: doc.data().createdDate?.toDate() || new Date(),
-      lastUpdated: doc.data().lastUpdated?.toDate() || new Date()
-    })) as ContinuousImprovementSession[];
+      id: doc.id
+    })) as ChatSessionLog[];
 
-    return sessions.sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
+    return sessions.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
   } catch (error) {
-    console.error('Error getting negative feedback sessions:', error);
+    logger.error('FirestoreService', 'getNegativeFeedbackSessions', 'Failed to get feedback', { error });
     return [];
   }
 };
 
-// Update issue status for negative feedback
+// Update issue status for negative feedback in chat_logs
 export const updateIssueStatus = async (
   sessionId: string,
   status: 'fixed' | 'not_fixed',
@@ -610,36 +566,36 @@ export const updateIssueStatus = async (
 ): Promise<void> => {
   try {
     if (!db) {
-      console.warn('Firebase not initialized, cannot update issue status');
+      logger.warn('FirestoreService', 'updateIssueStatus', 'Firebase not initialized');
       return;
     }
 
-    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
+    const sessionRef = doc(db, getWorkspaceCollectionName('chat_logs', workspace), sessionId);
     await setDoc(sessionRef, {
       issueStatus: status,
-      lastUpdated: serverTimestamp()
+      issueUpdatedAt: serverTimestamp()
     }, { merge: true });
 
-    console.log(`[ContinuousImprovement] Updated issue status for session ${sessionId}: ${status}`);
+    logger.info('FirestoreService', 'updateIssueStatus', 'Issue status updated', { sessionId, status });
   } catch (error) {
-    console.error('Error updating issue status:', error);
+    logger.error('FirestoreService', 'updateIssueStatus', 'Failed to update status', { error, sessionId });
   }
 };
 
-// Get error reports (new structured format)
+// Get error reports from chat_logs
 export const getErrorReports = async (
   userId?: string,
   workspace: WorkspaceType = 'invoicer'
-): Promise<ErrorReport[]> => {
+): Promise<ChatSessionLog[]> => {
   try {
     if (!db) {
-      console.warn('Firebase not initialized, cannot get error reports');
+      logger.warn('FirestoreService', 'getErrorReports', 'Firebase not initialized');
       return [];
     }
 
     let q = query(
-      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
-      where('feedback', '==', 'thumbs_down')
+      collection(db, getWorkspaceCollectionName('chat_logs', workspace)),
+      where('userFeedback.rating', '==', 'thumbs_down')
     );
 
     if (userId) {
@@ -651,19 +607,17 @@ export const getErrorReports = async (
     const reports = querySnapshot.docs
       .map(doc => ({
         id: doc.id,
-        ...doc.data(),
-        reportDate: doc.data().reportDate?.toDate() || new Date()
-      }))
-      .filter(doc => doc.chatHistory && Array.isArray(doc.chatHistory)) as ErrorReport[]; // Only get new format reports
+        ...doc.data()
+      })) as ChatSessionLog[];
 
-    return reports.sort((a, b) => b.reportDate.getTime() - a.reportDate.getTime());
+    return reports.sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime());
   } catch (error) {
-    console.error('Error getting error reports:', error);
+    logger.error('FirestoreService', 'getErrorReports', 'Failed to get error reports', { error });
     return [];
   }
 };
 
-// Update error report status
+// Update error report status in chat_logs
 export const updateErrorReportStatus = async (
   reportId: string,
   status: 'pending' | 'investigating' | 'fixed' | 'wont_fix',
@@ -671,19 +625,19 @@ export const updateErrorReportStatus = async (
 ): Promise<void> => {
   try {
     if (!db) {
-      console.warn('Firebase not initialized, cannot update error report status');
+      logger.warn('FirestoreService', 'updateErrorReportStatus', 'Firebase not initialized');
       return;
     }
 
-    const reportRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), reportId);
+    const reportRef = doc(db, getWorkspaceCollectionName('chat_logs', workspace), reportId);
     await setDoc(reportRef, {
       issueStatus: status,
-      lastUpdated: serverTimestamp()
+      issueUpdatedAt: serverTimestamp()
     }, { merge: true });
 
-    console.log(`[ErrorReport] Updated status for report ${reportId}: ${status}`);
+    logger.info('FirestoreService', 'updateErrorReportStatus', 'Report status updated', { reportId, status });
   } catch (error) {
-    console.error('Error updating error report status:', error);
+    logger.error('FirestoreService', 'updateErrorReportStatus', 'Failed to update status', { error, reportId });
   }
 };
 
