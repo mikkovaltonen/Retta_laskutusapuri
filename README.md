@@ -60,83 +60,116 @@ The low temperature (0.1) ensures:
 - Reduces AI "hallucinations" in numerical data
 - Ensures predictable function calling patterns
 
-## Excel Data Flow Architecture
+## End-User Workflow Architecture
 
-### 📊 ERP Data Processing Pipeline
+### 📊 Invoicing Data Processing Pipeline
 
-Propertius processes Excel files through a sophisticated data conversion and storage system:
-
-#### **1. Excel File Upload**
 ```
-User uploads .xlsx/.xls file → storageService.uploadERPDocument()
+┌─────────────────────────────────────────────────────────────────────┐
+│                    LOPPUKÄYTTÄJÄN TYÖNKULKU                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+     (1) OSTOLASKU LATAUS
+     ┌─────────────────┐
+     │ Excel Upload    │
+     │ ─────────────── │
+     │ • Koontilasku   │ ──→ storageService.uploadERPDocument()
+     │ • Taloyhtiö-    │
+     │   kohtainen     │
+     └─────────────────┘
+             ↓
+     
+     (2) TEKOÄLY ANALYYSI
+     ┌──────────────────────────┐
+     │ AI Tunnistus & Tarkistus │
+     │ ───────────────────────  │
+     │ • Tuotekuvaukset         │ ──→ Match by ProductName
+     │ • Ostohinta validointi   │ ──→ BuyPrice verification
+     │ • Myyntihinta haku       │ ──→ SalePrice from hinnasto
+     │ • Tilaus tiedot          │ ──→ searchTilaus(Code)
+     └──────────────────────────┘
+             ↓
+     ┌─────────────────┐
+     │   AI RAPORTTI   │
+     │ ─────────────── │
+     │ ✓ Tuotteet OK?  │
+     │ ✓ Hinnat OK?    │
+     │ ✓ Tilaukset OK? │
+     │ ⚠ Puutteet?     │
+     └─────────────────┘
+             ↓
+             
+     (3) KÄYTTÄJÄN HYVÄKSYNTÄ
+     ┌─────────────────┐
+     │ User Review     │
+     │ ─────────────── │
+     │ [Hyväksy]       │ ──→ "Luo MyyntiExcel"
+     │ [Korjaa]        │
+     └─────────────────┘
+             ↓
+             
+     (4) MYYNTIEXCEL GENEROINTI
+     ┌──────────────────────────┐
+     │   AI Laskun Luonti       │
+     │ ───────────────────────  │
+     │ • Tuote → ProductName    │ ──→ Match product
+     │ • Ostohinta validointi   │ ──→ Verify BuyPrice
+     │ • Myyntihinta haku       │ ──→ Use SalePrice
+     │ • Tilaus tiedot          │ ──→ createLasku()
+     └──────────────────────────┘
+             ↓
+     ┌─────────────────┐
+     │ MYYNTIEXCEL     │
+     │ ─────────────── │
+     │ JSON/Excel      │ ──→ Download/Save
+     └─────────────────┘
 ```
-- **File Types**: Excel (.xlsx, .xls) purchase orders and invoices
+
+### 📋 Data Processing Details
+
+#### **1. Ostolasku Upload (Purchase Invoice Upload)**
+- **File Types**: Excel (.xlsx, .xls) ostolaskut (purchase invoices)
+- **Invoice Types**: 
+  - Koontilaskut (consolidated invoices)
+  - Taloyhtiökohtaiset laskut (property-specific invoices)
 - **Size Limit**: 1MB per file (Firestore document limit)
 - **Validation**: File type and structure checking
 
-#### **2. Excel → Firestore Conversion**
-```
-Excel File → XLSX.js Processing → Firebase Firestore Document
-```
+#### **2. AI Analysis & Verification**
+**Automatic Detection:**
+- **Product Description Matching**: AI matches invoice product descriptions ("Tuote" field) with price list ProductName
+- **Purchase Price Validation**: Verifies invoice price matches price list BuyPrice
+- **Sales Price Retrieval**: Gets SalePrice from price list for matched products
+- **Order Data**: Retrieves customer and order details from database
 
-**Data Transformation:**
-- **Raw Excel**: Binary .xlsx file data
-- **Sheet Parsing**: `XLSX.utils.sheet_to_json()` converts to array of arrays
-- **CSV Conversion**: `XLSX.utils.sheet_to_csv()` for search-friendly format
-- **JSON Storage**: Arrays converted to JSON strings for Firestore compatibility
+**Verification Report:**
+- ✅ All products found in price list
+- ⚠️ Missing products identified
+- ✅ Order data matched and validated
+- 📊 Summary of findings for user review
 
-**Firestore Document Structure:**
-```json
-{
-  "name": "Purchase_Orders_2024.xlsx",
-  "originalFormat": "xlsx", 
-  "content": "Order Number,Supplier Name,Description,Qty...", // CSV format
-  "rawDataJson": "[[\"PO-001\",\"Supplier A\",\"Product X\",5]]", // JSON array string
-  "headersJson": "[\"Order Number\",\"Supplier Name\",\"Description\"]", // Headers as JSON
-  "sheetsJson": "[\"Sheet1\"]", // Sheet names
-  "rowCount": 25,
-  "columnCount": 8,
-  "uploadedAt": "2024-06-18T10:30:00Z",
-  "userId": "user123",
-  "type": "erp-integration"
-}
-```
+#### **3. User Approval Process**
+- Review AI analysis report
+- Confirm all data is correct
+- Request sales invoice generation
+- Option to correct any issues first
 
-#### **3. AI Function Call Data Access**
-```
-Chatbot Request → searchRecords() → Firestore Query → Combined Data Processing
-```
+#### **4. Sales Invoice Generation**
+**Matching Logic:**
+1. **Product Matching**: Uses "Tuote" field from purchase invoice to find matching ProductName in price list
+2. **Price Validation**: Confirms purchase price (ahinta) matches price list BuyPrice
+3. **Sales Price**: Retrieves SalePrice from matched price list item
+4. **Error Handling**: Fails if product not found or prices don't match
 
-**Function Call Pipeline:**
-1. **AI Triggers**: `search_purchase_orders` or `create_purchase_order`
-2. **Data Retrieval**: `getUserERPDocuments()` fetches all user's documents
-3. **Data Combination**: All documents merged into single dataset
-4. **CSV Processing**: Search and filter operations on combined CSV data
-5. **Results**: Structured JSON response to AI
+**Data Sources:**
+- **Hinnasto (Price List)**: Official sales and purchase prices for products
+- **Tilaus Data (Order Data)**: Customer information and order details
 
-#### **4. Multi-Document Search**
-```
-Document 1 + Document 2 + Document 3 → Combined Dataset → Search Results
-```
-
-**How Multiple Documents Work:**
-- **Header Unification**: First document's headers used for consistency
-- **Data Merging**: All rows from all documents combined
-- **Search Scope**: AI can find data across all uploaded Excel files
-- **Real-time**: No pre-processing required, combined on-demand
-
-#### **5. AI-Generated Purchase Orders**
-```
-AI creates new Purchase Order → Excel generation → Firestore storage → Download link
-```
-
-**Creation Flow:**
-1. **AI Function**: `create_purchase_order` with order details
-2. **Excel Generation**: XLSX.js creates new .xlsx file in memory
-3. **Dual Output**:
-   - **Download Link**: `URL.createObjectURL()` for immediate download
-   - **Firestore Storage**: Same conversion process as uploaded files
-4. **Search Integration**: New orders immediately searchable via API
+**Output:**
+- Complete sales invoice with all line items
+- Proper customer information from orders
+- Calculated totals and VAT
+- Export as JSON or Excel format
 
 ### 🔍 **Key Advantages**
 
@@ -176,11 +209,14 @@ The application uses two distinct messaging systems:
 - **Location**: `PropertyManagerChat.tsx` lines 154-158
 
 #### Function Calling System
-- **Purchase Orders**: `search_purchase_orders` function for ERP data access (available in both workspaces)
-- **Sales Invoices**: `search_invoices` function for billing data access (invoicing workspace only)
-- **Dual API Access**: Invoicing workspace gets both purchase order and invoice APIs for comprehensive analysis
-- **Real-time Data**: Direct access to Excel-based purchase order and sales invoice information
-- **Structured Results**: Supplier details, pricing, contact information, delivery dates, payment status
+- **Price List Search**: `searchHinnasto` function for product pricing data
+- **Order Search**: `searchTilaus` function searches by tampuurinumero (Code field) only
+- **Purchase Invoice Search**: `searchOstolasku` function for uploaded invoice data
+- **Invoice Creation**: `createLasku` function for generating sales invoices
+- **Real-time Data**: Direct access to Excel-based pricing and order information
+- **Structured Results**: Product details, pricing, customer information, order references
+
+**Note**: The `searchTilaus` function now searches exclusively by the Code field (tampuurinumero), matching the UI's single search field implementation
 
 ## Architecture: Function Declarations
 
@@ -189,26 +225,29 @@ The application uses two distinct messaging systems:
 Propertius uses a **hybrid architecture** for AI function calling:
 
 #### **📝 What's Hardcoded:**
-- **Function Declarations** (`searchERPFunction` in `PropertyManagerChat.tsx`)
+- **Function Declarations** (in chat components)
 - **Parameter Definitions** and validation schemas
 - **Gemini Model Configuration** 
 - **API Integration Logic**
 
 #### **🔥 What's in Firebase:**
-- **System Prompts** (workspace-specific: `invoicer_systemPromptVersions`)
+- **System Prompts** (invoicing-specific configurations)
 - **Chat History** and continuous improvement data
+- **Price Lists** (`hinnasto` collection)
+- **Order Data** (`tilaus_data` collection)
+- **Sales Invoices** (`myyntiExcel` collection)
 
 #### **💡 Why This Design:**
 ```javascript
-// Example: Hardcoded function declaration in PropertyManagerChat.tsx
-const searchERPFunction = {
-  name: "search_purchase_orders", 
-  description: "Search and DISPLAY purchase order data for property management...",
+// Example: Hardcoded function declaration
+const searchHinnastoFunction = {
+  name: "searchHinnasto", 
+  description: "Search price list data by product code or name...",
   parameters: {
     type: "object",
     properties: {
-      supplierName: { type: "string", description: "Supplier/contractor name..." },
-      productDescription: { type: "string", description: "Service description..." },
+      tuotetunnus: { type: "string", description: "Product code..." },
+      tuote: { type: "string", description: "Product name..." },
       // ... other parameters
     }
   }
@@ -285,9 +324,9 @@ The application will start at `http://localhost:5173`
    - AI provides initial overview and insights
 
 3. **Structured Data Extraction**:
-   - **Extract Suppliers**: Get structured supplier information
-   - **Extract Pricing**: Analyze pricing data and trends
-   - **Extract Contracts**: Identify contract terms and conditions
+   - **Extract Products**: Get structured product and pricing information
+   - **Extract Orders**: Analyze customer order data
+   - **Extract Invoices**: Process purchase invoice details
 
 4. **Interactive Analysis**:
    - Ask natural language questions about your documents
@@ -303,10 +342,10 @@ The application will start at `http://localhost:5173`
 ### Quick Actions
 
 The application provides pre-built analysis prompts for:
-- Supplier capability assessment
-- Pricing optimization opportunities
-- Contract risk analysis
-- Process improvement recommendations
+- Purchase invoice analysis and verification
+- Sales invoice generation from purchase data
+- Price list verification and margin calculation
+- Order data matching and validation
 
 ## Project Structure
 
@@ -366,11 +405,11 @@ npm run lint
 
 This tool is perfect for demonstrating:
 
-1. **Document Processing**: Upload real procurement documents to see AI extraction capabilities
-2. **Data Structuring**: Transform unorganized data into structured formats
-3. **Natural Language Querying**: Ask complex questions about procurement data
-4. **Export Integration**: Show how AI-extracted data can integrate with existing systems
-5. **Process Automation**: Demonstrate potential for procurement workflow automation
+1. **Invoice Processing**: Upload purchase invoices to see AI extraction and analysis
+2. **Data Verification**: Automatic validation against price lists and order data
+3. **Sales Invoice Generation**: Transform purchase invoices into profitable sales invoices
+4. **Margin Optimization**: Apply intelligent pricing with configurable margins
+5. **Process Automation**: Streamline the entire re-invoicing workflow
 
 ## System Requirements
 

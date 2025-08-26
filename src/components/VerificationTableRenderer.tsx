@@ -104,7 +104,7 @@ function processTableContent(lines: string[]) {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Ostohinta</div>
                   <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
                     <div className="font-semibold text-gray-900">{ostohinta}</div>
-                    <div className="text-xs text-gray-500">Ostolasku</div>
+                    <div className="text-xs text-gray-500">OstolaskuExcel</div>
                   </div>
                   <div className="bg-gray-50 rounded-md p-2 border border-gray-200">
                     <div className="font-semibold text-gray-900">{ostohintaHinnasto}</div>
@@ -117,7 +117,7 @@ function processTableContent(lines: string[]) {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Asiakashinta</div>
                   <div className="bg-blue-50 rounded-md p-2 border border-blue-200">
                     <div className="font-semibold text-blue-900">{asiakashinta}</div>
-                    <div className="text-xs text-blue-600">Ostolasku</div>
+                    <div className="text-xs text-blue-600">OstolaskuExcel</div>
                   </div>
                 </div>
                 

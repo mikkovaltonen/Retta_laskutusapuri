@@ -19,7 +19,7 @@ export interface ChatContext {
   userId: string;
   systemPrompt: string;
   sessionId: string;
-  ostolaskuData?: any[];
+  ostolaskuExcelData?: any[];
 }
 
 class GeminiChatService {
@@ -41,7 +41,7 @@ class GeminiChatService {
           functionDeclarations: [
             {
               name: 'searchHinnasto',
-              description: 'Search price list data by product name. Returns product details including ProductNumber, ProductName, SalePrice, and BuyPrice.',
+              description: 'Search price list data by product name, price list name, or supplier. Can search by any combination of these fields. Returns product details including ProductNumber, ProductName, PriceListSupplier, PriceListName, BuyPrice, SalePrice, and SalePriceVat.',
               parameters: {
                 type: 'object',
                 properties: {
@@ -49,17 +49,25 @@ class GeminiChatService {
                     type: 'string',
                     description: 'Product name to search for (checks fields: ProductName, Tuote, etc. - partial match supported)'
                   },
+                  priceListName: {
+                    type: 'string',
+                    description: 'Price list name to search for (partial match supported)'
+                  },
+                  priceListSupplier: {
+                    type: 'string',
+                    description: 'Price list supplier to search for (partial match supported)'
+                  },
                   limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default 10)'
+                    description: 'Maximum number of results to return (default 10 for product search, 50 for price list search)'
                   }
                 },
-                required: ['productName']
+                required: []  // All parameters are optional - at least one search parameter should be provided
               }
             },
             {
               name: 'searchTilaus',
-              description: 'Search order data by Tampuuri code. Returns order details including OrderNumber, ProductName, TotalSellPrice, TotalBuyPrice, Supplier, and customer Name.',
+              description: 'Search order data by Tampuuri code OR RP-number. Returns order details including OrderNumber, Code, Name, ProductName, TotalSellPrice, and PriceListName.',
               parameters: {
                 type: 'object',
                 properties: {
@@ -67,12 +75,16 @@ class GeminiChatService {
                     type: 'string',
                     description: 'Tampuuri code to search for (Code field - partial match supported)'
                   },
+                  orderNumber: {
+                    type: 'string',
+                    description: 'RP-number to search for (OrderNumber field - partial match supported)'
+                  },
                   limit: {
                     type: 'number',
                     description: 'Maximum number of results to return (default 10)'
                   }
                 },
-                required: ['tampuuriCode']
+                required: []  // Neither is required - can search by either one
               }
             },
             {
@@ -144,46 +156,29 @@ class GeminiChatService {
       
       let records = querySnapshot.docs.map(doc => {
         const data = doc.data();
-        // Return only the fields needed for pricing verification
+        // Return all seven fields needed for pricing verification and product identification
         return {
           id: doc.id,
-          ProductName: data.ProductName || '',
-          SalePrice: data.SalePrice || 0,
-          BuyPrice: data.BuyPrice || 0
+          ProductNumber: data.ProductNumber || data.Tuotetunnus || data.tuotetunnus || 
+                        data['Product Number'] || data.product_number || '',
+          ProductName: data.ProductName || data.Tuote || data.tuote || 
+                      data['Product Name'] || data.product_name || '',
+          PriceListSupplier: data.PriceListSupplier || data.Hintalistan_toimittaja || data.hintalistan_toimittaja || 
+                            data['Price List Supplier'] || data.price_list_supplier || '',
+          PriceListName: data.PriceListName || data.Hintalista || data.hintalista || 
+                        data['Price List Name'] || data.price_list_name || '',
+          BuyPrice: data.BuyPrice || data.Ostohinta || data.ostohinta || 
+                   data['Buy Price'] || data.buy_price || 0,
+          SalePrice: data.SalePrice || data.Myyntihinta || data.myyntihinta || 
+                    data['Sale Price'] || data.sale_price || 0,
+          SalePriceVat: data.SalePriceVat || data.Myyntihinta_alv || data.myyntihinta_alv || 
+                       data['Sale Price VAT'] || data.sale_price_vat || 0
         };
       });
 
-      // Apply filter - search by ProductName field only
-      if (params.productName) {
-        console.log('🔎 Filtering by productName:', params.productName);
-        const beforeFilter = records.length;
-        const searchTerm = params.productName.toLowerCase();
-        
-        records = records.filter(record => {
-          // Check various possible field names for product name
-          const productName = 
-            record['ProductName'] || 
-            record['Tuote'] || 
-            record['tuote'] || 
-            record['Product Name'] ||
-            record['product_name'] ||
-            '';
-          return String(productName).toLowerCase().includes(searchTerm);
-        });
-        
-        console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
-        if (records.length > 0) {
-          console.log('🔍 Sample matching records:', 
-            records.slice(0, 3).map(r => ({
-              ProductNumber: r['ProductNumber'] || r['Tuotetunnus'],
-              ProductName: r['ProductName'] || r['Tuote'],
-              SalePrice: r['SalePrice'],
-              BuyPrice: r['BuyPrice']
-            })));
-        }
-      } else {
-        // productName is now required
-        console.warn('⚠️ searchHinnasto called without productName - returning empty result');
+      // Check if at least one search parameter is provided
+      if (!params.productName && !params.priceListName && !params.priceListSupplier) {
+        console.warn('⚠️ searchHinnasto called without any search parameters - returning empty result');
         return {
           success: true,
           data: [],
@@ -191,9 +186,48 @@ class GeminiChatService {
         };
       }
 
+      // Apply filters based on provided parameters (OR logic)
+      const beforeFilter = records.length;
+      
+      // Filter by ProductName (partial match)
+      if (params.productName) {
+        console.log('🔎 Filtering by productName:', params.productName);
+        const searchTerm = params.productName.toLowerCase();
+        
+        records = records.filter(record => {
+          const productName = String(record.ProductName).toLowerCase();
+          return productName.includes(searchTerm);
+        });
+      }
+      
+      // Filter by PriceListName (partial match)
+      if (params.priceListName) {
+        console.log('🔎 Filtering by priceListName:', params.priceListName);
+        const searchTerm = params.priceListName.toLowerCase();
+        records = records.filter(record => {
+          const priceListName = String(record.PriceListName).toLowerCase();
+          return priceListName.includes(searchTerm);
+        });
+      }
+      
+      // Filter by PriceListSupplier (partial match)
+      if (params.priceListSupplier) {
+        console.log('🔎 Filtering by priceListSupplier:', params.priceListSupplier);
+        const searchTerm = params.priceListSupplier.toLowerCase();
+        records = records.filter(record => {
+          const priceListSupplier = String(record.PriceListSupplier).toLowerCase();
+          return priceListSupplier.includes(searchTerm);
+        });
+      }
+      
+      console.log(`📊 Filtered from ${beforeFilter} to ${records.length} records`);
+      
+      // Determine default limit based on search type
+      const defaultLimit = params.priceListName || params.priceListSupplier ? 50 : 10;
+      
       const result = {
         success: true,
-        data: records.slice(0, params.limit || 10),
+        data: records.slice(0, params.limit || defaultLimit),
         count: records.length
       };
       
@@ -488,7 +522,7 @@ class GeminiChatService {
         if (rivi.ahinta && Math.abs(hinnastoBuyPrice - inputBuyPrice) > 0.01) {
           return {
             success: false,
-            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, Ostolaskulla: ${inputBuyPrice}€`
+            error: `Laskurivi ${i + 1}: Ostohinta ei täsmää! Hinnastossa: ${hinnastoBuyPrice}€, OstolaskuExcelissä: ${inputBuyPrice}€`
           };
         }
         
@@ -621,9 +655,9 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
         kokonaissumma: processedLaskurivit.reduce((sum, rivi) => sum + (Number(rivi.määrä) * Number(rivi.ahinta)), 0)
       };
 
-      // Save to Firestore 'myyntilaskut' collection
-      console.log('💾 Saving invoice to myyntilaskut collection...');
-      const docRef = await addDoc(collection(db, 'myyntilaskut'), laskuDocument);
+      // Save to Firestore 'myyntiExcel' collection
+      console.log('💾 Saving invoice to myyntiExcel collection...');
+      const docRef = await addDoc(collection(db, 'myyntiExcel'), laskuDocument);
       
       console.log('✅ Invoice saved successfully with ID:', docRef.id);
 
@@ -652,16 +686,16 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
       sessionId: context.sessionId,
       userId: context.userId,
       promptLength: context.systemPrompt.length,
-      hasOstolaskuData: !!context.ostolaskuData
+      hasOstolaskuExcelData: !!context.ostolaskuExcelData
     });
     
     try {
-      // Build the system prompt with ostolasku data if available
+      // Build the system prompt with OstolaskuExcel data if available
       let fullSystemPrompt = context.systemPrompt;
       
-      if (context.ostolaskuData && context.ostolaskuData.length > 0) {
-        const ostolaskuJson = JSON.stringify(context.ostolaskuData, null, 2);
-        fullSystemPrompt += `\n\n=== LADATTU OSTOLASKU DATA ===\nSeuraava ostolasku on ladattu ja analyysiä varten:\n\`\`\`json\n${ostolaskuJson}\n\`\`\`\n\nTämä data on nyt käytettävissä suoraan. Et tarvitse searchOstolasku funktiota - voit viitata suoraan tähän dataan vastauksissa.`;
+      if (context.ostolaskuExcelData && context.ostolaskuExcelData.length > 0) {
+        const ostolaskuExcelJson = JSON.stringify(context.ostolaskuExcelData, null, 2);
+        fullSystemPrompt += `\n\n=== LADATTU OSTOLASKUEXCEL DATA ===\nSeuraava OstolaskuExcel on ladattu ja analyysiä varten:\n\`\`\`json\n${ostolaskuExcelJson}\n\`\`\`\n\nTämä data on nyt käytettävissä suoraan. Et tarvitse searchOstolaskuExcel funktiota - voit viitata suoraan tähän dataan vastauksissa.`;
       }
       
       const chat = this.model.startChat({
@@ -687,15 +721,15 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
     }
   }
 
-  async sendMessage(sessionId: string, message: string, userId: string, ostolaskuData: any[] = []): Promise<ChatMessage> {
+  async sendMessage(sessionId: string, message: string, userId: string, ostolaskuExcelData: any[] = []): Promise<ChatMessage> {
     // Reduce logging for production
     if (process.env.NODE_ENV === 'development') {
       console.log('💬 sendMessage called:', { 
         sessionId, 
         message: message.substring(0, 100) + '...', 
         userId,
-        hasOstolaskuData: ostolaskuData.length > 0,
-        ostolaskuRowCount: ostolaskuData.length
+        hasOstolaskuExcelData: ostolaskuExcelData.length > 0,
+        ostolaskuExcelRowCount: ostolaskuExcelData.length
       });
     }
     
@@ -706,18 +740,18 @@ Vastaa pelkästään Markdown-muotoisella selvityksellä ilman johdantoa.`;
     }
 
     try {
-      // Note: Ostolasku data was already provided during session initialization
+      // Note: OstolaskuExcel data was already provided during session initialization
       // We only need to inform the AI about the current availability status
       let contextNote = '';
       
-      if (ostolaskuData && ostolaskuData.length > 0) {
-        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä ostolasku data ${ostolaskuData.length} rivillä session-kontekstissa]`;
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä OstolaskuExcel data ${ostolaskuExcelData.length} rivillä session-kontekstissa]`;
         if (process.env.NODE_ENV === 'development') {
-          console.log(`ℹ️ Ostolasku data available: ${ostolaskuData.length} rows`);
+          console.log(`ℹ️ OstolaskuExcel data available: ${ostolaskuExcelData.length} rows`);
         }
       } else {
-        contextNote = '\n\n[MUISTUTUS: Ei ostolaskudataa saatavilla tässä sessiossa]';
-        console.log('ℹ️ No ostolasku data available');
+        contextNote = '\n\n[MUISTUTUS: Ei OstolaskuExcel-dataa saatavilla tässä sessiossa]';
+        console.log('ℹ️ No OstolaskuExcel data available');
       }
       
       const fullMessage = message + contextNote;

@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Index from "./pages/Index";
 import Workbench from "./pages/Workbench";
 import Admin from "./pages/Admin";
-import IssueReportPage from "./pages/IssueReport";
 import LoginForm from "./components/LoginForm";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { WorkspaceProvider } from "./components/WorkspaceProvider";
@@ -30,18 +29,6 @@ const AppRoutes = () => {
                 <Route path="/admin" element={<WorkspaceAdmin />} />
                 <Route path="*" element={<Navigate to="/workspace/invoicer" replace />} />
               </Routes>
-            </WorkspaceProvider>
-          </ProtectedRoute>
-        }
-      />
-      
-      {/* Shared routes */}
-      <Route 
-        path="/issues" 
-        element={
-          <ProtectedRoute>
-            <WorkspaceProvider>
-              <IssueReportPage />
             </WorkspaceProvider>
           </ProtectedRoute>
         }

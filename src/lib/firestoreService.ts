@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, FieldValue } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, FieldValue, deleteDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase';
 
@@ -32,6 +32,45 @@ export interface ContinuousImprovementSession {
   technicalLogs: TechnicalLog[];
   createdDate: Date;
   lastUpdated: Date;
+}
+
+// New interface for structured error reports
+export interface ErrorReport {
+  id?: string;
+  // Header-level information
+  userId: string;
+  userEmail?: string;
+  reportDate: Date;
+  userComment: string; // User's description of the problem
+  sessionId: string;
+  sessionKey: string;
+  systemPrompt: string;
+  
+  // Line-level information: chat history and function calls
+  chatHistory: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp?: Date;
+  }>;
+  
+  functionCalls: Array<{
+    functionName: string;
+    inputs: Record<string, unknown>;
+    outputs: Record<string, unknown>;
+    timestamp?: Date;
+    aiRequestId?: string;
+  }>;
+  
+  // Additional metadata
+  uploadedFileName?: string;
+  ostolaskuDataSample?: any[];
+  messageCount: number;
+  functionCallCount: number;
+  
+  // Status tracking
+  issueStatus: 'pending' | 'investigating' | 'fixed' | 'wont_fix';
+  feedback: 'thumbs_down';
 }
 
 export interface TechnicalLog {
@@ -415,6 +454,60 @@ export const setUserFeedback = async (
       return;
     }
 
+    // For negative feedback, create a structured error report
+    if (feedback === 'thumbs_down' && comment) {
+      try {
+        // Try to parse comprehensive data from comment
+        const comprehensiveData = JSON.parse(comment);
+        
+        // Create a properly structured error report document
+        const errorReport: Omit<ErrorReport, 'id'> = {
+          // Header-level information
+          userId: comprehensiveData.userId || auth?.currentUser?.uid || 'unknown',
+          userEmail: comprehensiveData.userEmail || auth?.currentUser?.email || undefined,
+          reportDate: new Date(),
+          userComment: comprehensiveData.userComment || '',
+          sessionId: comprehensiveData.sessionId || sessionId,
+          sessionKey: comprehensiveData.currentSessionKey || sessionId,
+          systemPrompt: comprehensiveData.systemPrompt || '',
+          
+          // Line-level information
+          chatHistory: comprehensiveData.messages || [],
+          functionCalls: comprehensiveData.functionCalls || [],
+          
+          // Additional metadata
+          uploadedFileName: comprehensiveData.uploadedFileName,
+          ostolaskuDataSample: comprehensiveData.ostolaskuDataSample,
+          messageCount: comprehensiveData.messageCount || 0,
+          functionCallCount: comprehensiveData.functionCallCount || 0,
+          
+          // Status tracking
+          issueStatus: 'pending',
+          feedback: 'thumbs_down'
+        };
+        
+        // Save as a single document
+        const docRef = await addDoc(
+          collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)), 
+          {
+            ...errorReport,
+            reportDate: serverTimestamp()
+          }
+        );
+        
+        console.log(`[ErrorReport] Created structured error report: ${docRef.id}`);
+        console.log(`[ErrorReport] User comment: ${errorReport.userComment}`);
+        console.log(`[ErrorReport] Chat history length: ${errorReport.chatHistory.length}`);
+        console.log(`[ErrorReport] Function calls: ${errorReport.functionCallCount}`);
+        return;
+        
+      } catch (parseError) {
+        // If parsing fails, save as simple feedback
+        console.warn('Could not parse comprehensive data, saving as simple feedback:', parseError);
+      }
+    }
+
+    // For positive feedback or simple negative feedback
     const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
     const updateData: {
       userFeedback: 'thumbs_up' | 'thumbs_down';
@@ -425,7 +518,7 @@ export const setUserFeedback = async (
       lastUpdated: serverTimestamp()
     };
 
-    if (comment !== undefined) {
+    if (comment !== undefined && feedback === 'thumbs_down') {
       updateData.userComment = comment;
     }
 
@@ -532,3 +625,65 @@ export const updateIssueStatus = async (
     console.error('Error updating issue status:', error);
   }
 };
+
+// Get error reports (new structured format)
+export const getErrorReports = async (
+  userId?: string,
+  workspace: WorkspaceType = 'invoicer'
+): Promise<ErrorReport[]> => {
+  try {
+    if (!db) {
+      console.warn('Firebase not initialized, cannot get error reports');
+      return [];
+    }
+
+    let q = query(
+      collection(db, getWorkspaceCollectionName('continuous_improvement', workspace)),
+      where('feedback', '==', 'thumbs_down')
+    );
+
+    if (userId) {
+      q = query(q, where('userId', '==', userId));
+    }
+
+    const querySnapshot = await getDocs(q);
+    
+    const reports = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        reportDate: doc.data().reportDate?.toDate() || new Date()
+      }))
+      .filter(doc => doc.chatHistory && Array.isArray(doc.chatHistory)) as ErrorReport[]; // Only get new format reports
+
+    return reports.sort((a, b) => b.reportDate.getTime() - a.reportDate.getTime());
+  } catch (error) {
+    console.error('Error getting error reports:', error);
+    return [];
+  }
+};
+
+// Update error report status
+export const updateErrorReportStatus = async (
+  reportId: string,
+  status: 'pending' | 'investigating' | 'fixed' | 'wont_fix',
+  workspace: WorkspaceType = 'invoicer'
+): Promise<void> => {
+  try {
+    if (!db) {
+      console.warn('Firebase not initialized, cannot update error report status');
+      return;
+    }
+
+    const reportRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), reportId);
+    await setDoc(reportRef, {
+      issueStatus: status,
+      lastUpdated: serverTimestamp()
+    }, { merge: true });
+
+    console.log(`[ErrorReport] Updated status for report ${reportId}: ${status}`);
+  } catch (error) {
+    console.error('Error updating error report status:', error);
+  }
+};
+

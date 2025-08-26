@@ -34,3 +34,8 @@ Thumbs.db
 
 .vercel
 genai-456910-9dfd3b277f28.json
+
+# Scripts with sensitive data
+scripts/
+*.key
+*.pem

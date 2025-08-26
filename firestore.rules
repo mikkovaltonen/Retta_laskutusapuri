@@ -24,8 +24,8 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     
-    // Myyntilaskut (Sales Invoices) - User-specific
-    match /myyntilaskut/{document=**} {
+    // MyyntiExcel (Sales Invoices) - User-specific
+    match /myyntiExcel/{document=**} {
       allow read: if isAuthenticated() && 
         (resource.data.userId == request.auth.uid || 
          !("userId" in resource.data));

@@ -1,0 +1,35 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "hinnasto",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uploadDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tilaus_data",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uploadDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "myyntiExcel",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

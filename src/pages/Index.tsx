@@ -139,9 +139,9 @@ const Index = () => {
               variant="outline"
               className="px-10 py-4 rounded-full text-lg font-light shadow-lg transition-all duration-300 hover:bg-green-50"
               style={{borderColor: '#003d3b', color: '#003d3b'}}
-              onClick={() => window.open('https://github.com/mikkovaltonen/professional_buyer', '_blank', 'noopener,noreferrer')}
+              onClick={() => window.location.href = 'mailto:mikko@zealsourcing.fi'}
             >
-              Katso Täydellinen Ratkaisu →
+              Ole yhteydessä kehittäjään →
             </Button>
           </div>
         </section>
