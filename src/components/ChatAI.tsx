@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { geminiChatService, ChatMessage, ChatContext } from '../lib/geminiChatService';
-import { loadLatestPrompt, setUserFeedback, createContinuousImprovementSession } from '../lib/firestoreService';
+import { loadLatestPrompt, setUserFeedback, saveChatSessionLog, createContinuousImprovementSession } from '../lib/firestoreService';
+import { logger } from '../lib/loggingService';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -12,6 +13,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Textarea } from './ui/textarea';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as XLSX from 'xlsx';
@@ -42,31 +44,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   const [showNegativeFeedbackDialog, setShowNegativeFeedbackDialog] = useState(false);
   const [selectedMessageForFeedback, setSelectedMessageForFeedback] = useState<string>('');
   const [feedbackComment, setFeedbackComment] = useState<string>('');
+  const [quickActionUsed, setQuickActionUsed] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Enhanced error logging utility
+  // Legacy error logging utility - redirects to logger service
   const logError = (context: string, error: unknown, additionalInfo?: Record<string, any>) => {
-    const errorDetails = {
-      context,
-      timestamp: new Date().toISOString(),
-      userId: user?.uid,
-      sessionId,
-      error: {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        name: error instanceof Error ? error.name : 'Unknown'
-      },
-      ...additionalInfo
-    };
-    
-    console.error(`❌ [${context}]`, errorDetails);
-    
-    // Optional: Send to monitoring service in production
-    // if (process.env.NODE_ENV === 'production') {
-    //   // Send to analytics/monitoring service
-    // }
+    logger.error('ChatAI', context, error instanceof Error ? error.message : String(error), {
+      ...additionalInfo,
+      error: error instanceof Error ? {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      } : { message: String(error) }
+    }, sessionId);
   };
 
   const scrollToBottom = () => {
@@ -141,7 +133,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
   const initializeChat = async () => {
     if (!user || isInitialized) {
-      console.log('🔄 Skipping chat initialization:', { 
+      logger.debug('ChatAI', 'initializeChat', 'Skipping initialization', { 
         hasUser: !!user, 
         isInitialized 
       });
@@ -150,17 +142,19 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
     // Don't initialize if no system prompt
     if (!systemPrompt) {
-      console.log('❌ No system prompt configured - cannot initialize chat');
+      logger.warn('ChatAI', 'initializeChat', 'No system prompt configured');
       return;
     }
 
-    console.log('🚀 Initializing chat for user:', user.uid);
+    const newSessionId = `session_${user.uid}_${Date.now()}`;
+    logger.info('ChatAI', 'initializeChat', 'Starting chat initialization', { userId: user.uid, sessionId: newSessionId });
+    
+    // Start logging session
+    logger.startSession(newSessionId);
 
     try {
       setLoading(true);
       setError(null);
-
-      const newSessionId = `session_${user.uid}_${Date.now()}`;
       
       const context: ChatContext = {
         userId: user.uid,
@@ -169,21 +163,21 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         ostolaskuExcelData: ostolaskuExcelData.length > 0 ? ostolaskuExcelData : undefined
       };
 
-      console.log('📡 Calling geminiChatService.initializeSession...');
+      logger.debug('ChatAI', 'initializeChat', 'Calling geminiChatService', null, newSessionId);
       await geminiChatService.initializeSession(context);
       setSessionId(newSessionId);
       setIsInitialized(true);
-      console.log('✅ Chat session initialized successfully');
+      logger.info('ChatAI', 'initializeChat', 'Chat session initialized', null, newSessionId);
 
       // Create continuous improvement session
-      console.log('📝 Creating continuous improvement session...');
+      logger.debug('ChatAI', 'initializeChat', 'Creating improvement session', null, newSessionId);
       const sessionKey = await createContinuousImprovementSession(
         `prompt_${user.uid}_${Date.now()}`,
         newSessionId,
         user.uid
       );
       setCurrentSessionKey(sessionKey);
-      console.log('✅ Continuous improvement session created');
+      logger.info('ChatAI', 'initializeChat', 'Improvement session created', { sessionKey }, newSessionId);
 
       // Add welcome message with OstolaskuExcel status
       const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 
@@ -226,6 +220,37 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
   // Removed useEffect to prevent double loading
 
+  const handleQuickAction = async (message: string) => {
+    if (!message || loading || !sessionId || !user) return;
+    
+    // Mark quick action as used
+    setQuickActionUsed(true);
+    
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+
+    logger.debug('ChatAI', 'handleQuickAction', 'Quick action used', { message }, sessionId);
+    setMessages(prev => [...prev, userMessage]);
+    setLoading(true);
+    setError(null);
+
+    try {
+      logger.debug('ChatAI', 'handleQuickAction', 'Sending to Gemini', null, sessionId);
+      const response = await geminiChatService.sendMessage(sessionId, message, user.uid, ostolaskuExcelData);
+      logger.debug('ChatAI', 'handleQuickAction', 'Response received', { responseLength: response.content.length }, sessionId);
+      setMessages(prev => [...prev, response]);
+    } catch (err) {
+      logError('QuickActionSend', err, { message });
+      setError(err instanceof Error ? err.message : 'Failed to send message');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || !sessionId || !user || loading) return;
 
@@ -236,16 +261,26 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       timestamp: new Date()
     };
 
-    console.log('🎯 User message:', userMessage);
+    // Only log if message is very short (potential issue)
+    if (userMessage.content.trim().length < 5) {
+      logger.warn('ChatAI', 'sendMessage', 'Very short user message', { message: userMessage.content }, sessionId);
+    }
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setLoading(true);
     setError(null);
 
     try {
-      console.log('📨 Sending message to geminiChatService...');
       const response = await geminiChatService.sendMessage(sessionId, inputMessage, user.uid, ostolaskuExcelData);
-      console.log('✅ Received response from geminiChatService:', response);
+      
+      // Log if response is empty or very short (critical issue)
+      if (!response.content || response.content.trim().length < 10) {
+        logger.error('ChatAI', 'sendMessage', 'Empty or very short response received', { 
+          responseLength: response.content?.length || 0,
+          content: response.content,
+          messageId: response.id
+        }, sessionId);
+      }
       setMessages(prev => [...prev, response]);
     } catch (err) {
       logError('SendMessage', err, { 
@@ -270,6 +305,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     setError(null);
     setMessageFeedback({});
     setCurrentSessionKey('');
+    setQuickActionUsed(false); // Reset quick action state
     
     // Clear OstolaskuExcel data
     setOstolaskuExcelData([]);
@@ -299,8 +335,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   };
 
   const handleFeedback = async (messageId: string, feedback: 'thumbs_up' | 'thumbs_down') => {
-    if (!currentSessionKey) {
-      console.warn('No session key available for feedback');
+    if (!sessionId) {
+      logger.warn('ChatAI', 'handleFeedback', 'No session available for feedback');
       return;
     }
 
@@ -319,16 +355,34 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         [messageId]: feedback
       }));
 
-      // Save feedback to database
-      await setUserFeedback(currentSessionKey, feedback, undefined, 'invoicer');
+      // Prepare and save complete session log
+      const sessionLog = logger.prepareChatSessionLog(
+        sessionId,
+        messages,
+        systemPrompt,
+        uploadedFileName,
+        ostolaskuExcelData
+      );
+
+      // Add user feedback
+      const logWithFeedback = logger.addUserFeedback(sessionLog, feedback);
+
+      // Save to database
+      const docId = await saveChatSessionLog(logWithFeedback, 'invoicer');
       
-      console.log(`✅ Feedback saved: ${feedback} for message ${messageId}`);
+      if (docId) {
+        logger.info('ChatAI', 'handleFeedback', 'Positive feedback saved', { 
+          messageId, 
+          docId 
+        }, sessionId);
+        toast.success('Kiitos palautteesta! 👍');
+      }
     } catch (error) {
-      logError('FeedbackSave', error, { 
+      logger.error('ChatAI', 'handleFeedback', 'Failed to save feedback', { 
         messageId, 
-        feedback, 
-        sessionKey: currentSessionKey 
-      });
+        feedback,
+        error 
+      }, sessionId);
       
       // Revert local state on error
       setMessageFeedback(prev => {
@@ -342,7 +396,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   };
 
   const handleNegativeFeedbackSubmit = async () => {
-    if (!selectedMessageForFeedback || !currentSessionKey) {
+    if (!selectedMessageForFeedback || !sessionId) {
       return;
     }
 
@@ -353,53 +407,34 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         [selectedMessageForFeedback]: 'thumbs_down'
       }));
 
-      // Extract function calls from messages
-      const functionCalls = messages
-        .filter(m => m.metadata?.functionCall)
-        .map(m => ({
-          functionName: m.metadata.functionCall.name,
-          inputs: m.metadata.functionCall.inputs || {},
-          outputs: m.metadata.functionCall.outputs || {},
-          timestamp: m.timestamp,
-          aiRequestId: m.metadata.aiRequestId
-        }));
-
-      // Collect comprehensive session data
-      const comprehensiveData = {
-        messageId: selectedMessageForFeedback,
-        userComment: feedbackComment,
-        sessionId: sessionId,
-        currentSessionKey: currentSessionKey,
-        systemPrompt: systemPrompt,
-        messages: messages.map(m => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp
-        })),
-        functionCalls: functionCalls,
-        ostolaskuExcelDataSample: ostolaskuExcelData.slice(0, 5), // Only first 5 rows as sample
-        uploadedFileName: uploadedFileName,
-        timestamp: new Date().toISOString(),
-        userId: user?.uid,
-        userEmail: user?.email,
-        messageCount: messages.length,
-        functionCallCount: functionCalls.length
-      };
-
-      // Save detailed negative feedback to invoicer_continuous_improvement collection
-      await setUserFeedback(
-        currentSessionKey, 
-        'thumbs_down', 
-        JSON.stringify(comprehensiveData), 
-        'invoicer'
+      // Prepare complete session log with all data
+      const sessionLog = logger.prepareChatSessionLog(
+        sessionId,
+        messages,
+        systemPrompt,
+        uploadedFileName,
+        ostolaskuExcelData
       );
 
-      console.log('✅ Comprehensive negative feedback saved:', {
-        messageId: selectedMessageForFeedback,
-        commentLength: feedbackComment.length,
-        dataSize: JSON.stringify(comprehensiveData).length
-      });
+      // Add user feedback with comment
+      const logWithFeedback = logger.addUserFeedback(
+        sessionLog, 
+        'thumbs_down', 
+        feedbackComment
+      );
+
+      // Save comprehensive log to database
+      const docId = await saveChatSessionLog(logWithFeedback, 'invoicer');
+
+      if (docId) {
+        logger.info('ChatAI', 'handleNegativeFeedbackSubmit', 'Negative feedback saved with comment', {
+          messageId: selectedMessageForFeedback,
+          commentLength: feedbackComment.length,
+          docId
+        }, sessionId);
+        
+        toast.success('Palaute tallennettu. Kiitos arvokkaasta palautteesta! 🙏');
+      }
 
       // Close dialog and reset state
       setShowNegativeFeedbackDialog(false);
@@ -407,11 +442,11 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       setFeedbackComment('');
 
     } catch (error) {
-      logError('NegativeFeedbackSave', error, { 
+      logger.error('ChatAI', 'handleNegativeFeedbackSubmit', 'Failed to save negative feedback', {
         messageId: selectedMessageForFeedback,
         commentLength: feedbackComment.length,
-        sessionKey: currentSessionKey 
-      });
+        error
+      }, sessionId);
       
       // Revert local state on error
       setMessageFeedback(prev => {
@@ -633,7 +668,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
 
   return (
-    <div className={`flex flex-col h-full ${className}`}>
+    <div className={`flex flex-col h-full overflow-hidden ${className}`}>
       {/* Header */}
       <div className="flex justify-between items-center p-4 border-b">
         <div className="flex items-center gap-2">
@@ -708,14 +743,14 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4 w-full">
+      <ScrollArea className="flex-1 p-2" style={{ maxWidth: '100%', overflow: 'hidden' }}>
+        <div className="space-y-4 w-full" style={{ maxWidth: '100%' }}>
           {messages.map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex gap-3 ${message.role === 'user' ? 'max-w-[80%] flex-row-reverse' : 'w-full'}`}>
+              <div className={`flex gap-3 ${message.role === 'user' ? 'max-w-[80%] flex-row-reverse' : 'w-full'}`} style={{ maxWidth: message.role === 'assistant' ? 'calc(100% - 2rem)' : undefined }}>
                 {/* Avatar */}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   message.role === 'user' 
@@ -726,37 +761,34 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                 </div>
                 
                 {/* Message Content */}
-                <div className={`rounded-lg p-3 min-w-0 ${
+                <div className={`rounded-lg p-3 min-w-0 overflow-hidden ${
                   message.role === 'user'
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-900'
-                }`} style={{ maxWidth: message.role === 'assistant' ? 'calc(100vw - 4rem)' : '80%' }}>
+                }`} style={{ maxWidth: message.role === 'assistant' ? 'min(calc(100vw - 8rem), 100%)' : '80%' }}>
                   <div className="text-sm">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        // Always use InteractiveTable for all tables
-                        p: ({ children }) => {
-                          const content = String(children);
-                          // Check if this is any table content
-                          if (content.includes('|') && content.split('|').length > 3) {
-                            return <InteractiveTable content={content} />;
-                          }
-                          return <p>{children}</p>;
-                        },
-                        // Always use InteractiveTable for all tables
-                        table: ({ children, node }) => {
-                          const fullContent = message.content;
-                          // Always use InteractiveTable for all tables
-                          return <InteractiveTable content={fullContent} />;
-                        },
+                        // Wrap tables in scrollable container with smaller font
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto -mx-3 max-w-full">
+                            <div className="inline-block min-w-full align-middle">
+                              <div className="overflow-hidden">
+                                <table className="min-w-full divide-y divide-gray-200" style={{ fontSize: '0.6rem', lineHeight: '0.85rem' }}>
+                                  {children}
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        ),
                         thead: ({ children }) => (
                           <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                             {children}
                           </thead>
                         ),
                         th: ({ children }) => (
-                          <th className="border-r border-blue-400 px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap">
+                          <th className="border-r border-blue-400 text-left font-semibold uppercase tracking-wide whitespace-nowrap" style={{ fontSize: '0.55rem', padding: '0.15rem 0.25rem' }}>
                             {children}
                           </th>
                         ),
@@ -766,9 +798,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                           const isNumber = /^\d+([.,]\d+)?$/.test(content);
                           
                           return (
-                            <td className={`border-r border-b border-gray-200 px-3 py-2 text-xs whitespace-nowrap ${
+                            <td className={`border-r border-b border-gray-200 whitespace-nowrap ${
                               isNumber ? 'text-right font-medium' : 'text-left'
-                            }`}>
+                            }`} style={{ fontSize: '0.6rem', padding: '0.15rem 0.25rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {children}
                             </td>
                           );
@@ -783,8 +815,15 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                             {children}
                           </tbody>
                         ),
-                        // Preserve other styling
-                        p: ({ children }) => <p className="mb-2">{children}</p>,
+                        // Preserve paragraph styling
+                        p: ({ children }) => {
+                          const content = String(children);
+                          // Don't wrap tables in p tags
+                          if (content.includes('|') && content.split('|').length > 3) {
+                            return null;
+                          }
+                          return <p className="mb-2">{children}</p>;
+                        },
                         ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
                         li: ({ children }) => <li className="mb-1">{children}</li>,
                         strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
@@ -1087,6 +1126,22 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
       {/* Input */}
       <div className="p-4 border-t">
+        {/* Quick Action Button */}
+        {!quickActionUsed && ostolaskuExcelData.length > 0 && messages.length <= 1 && (
+          <div className="mb-3">
+            <Button
+              onClick={() => handleQuickAction('Tarkista hinnat ja tilaukset')}
+              disabled={loading || !isInitialized}
+              variant="outline"
+              size="sm"
+              className="text-xs bg-blue-50 hover:bg-blue-100 border-blue-200"
+            >
+              <span className="mr-1">⚡</span>
+              Tarkista hinnat ja tilaukset
+            </Button>
+          </div>
+        )}
+        
         <div className="flex gap-2">
           <Input
             value={inputMessage}
