@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { geminiChatService, ChatMessage, ChatContext } from '../lib/geminiChatService';
-import { loadLatestPrompt, setUserFeedback, saveChatSessionLog, createContinuousImprovementSession } from '../lib/firestoreService';
+import { loadLatestPrompt, saveChatSessionLog } from '../lib/firestoreService';
 import { logger } from '../lib/loggingService';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -169,15 +169,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       setIsInitialized(true);
       logger.info('ChatAI', 'initializeChat', 'Chat session initialized', null, newSessionId);
 
-      // Create continuous improvement session
-      logger.debug('ChatAI', 'initializeChat', 'Creating improvement session', null, newSessionId);
-      const sessionKey = await createContinuousImprovementSession(
-        `prompt_${user.uid}_${Date.now()}`,
-        newSessionId,
-        user.uid
-      );
-      setCurrentSessionKey(sessionKey);
-      logger.info('ChatAI', 'initializeChat', 'Improvement session created', { sessionKey }, newSessionId);
+      // Use session ID as session key directly
+      setCurrentSessionKey(newSessionId);
+      logger.info('ChatAI', 'initializeChat', 'Session key set', { sessionKey: newSessionId }, newSessionId);
 
       // Add welcome message with OstolaskuExcel status
       const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 

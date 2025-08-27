@@ -2,7 +2,6 @@ import { GoogleGenerativeAI, GenerativeModel, ChatSession } from '@google/genera
 import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { storageService } from './storageService';
-import { addTechnicalLog } from './firestoreService';
 import { logger } from './loggingService';
 
 // Initialize Gemini 2.5 Pro
