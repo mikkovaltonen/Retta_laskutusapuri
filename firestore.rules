@@ -43,12 +43,6 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     
-    // Continuous Improvement Sessions - User-specific
-    match /invoicer_continuous_improvement/{document=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
     // Default deny for all other collections
     match /{document=**} {
       allow read, write: if false;

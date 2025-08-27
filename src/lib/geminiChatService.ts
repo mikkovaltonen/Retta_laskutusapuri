@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, GenerativeModel, ChatSession } from '@google/generative-ai';
-import { collection, query, where, getDocs, limit, addDoc } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import { storageService } from './storageService';
 import { addTechnicalLog } from './firestoreService';
@@ -86,44 +86,6 @@ class GeminiChatService {
                   }
                 },
                 required: []  // Neither is required - can search by either one
-              }
-            },
-            {
-              name: 'createLasku',
-              description: 'Save MyyntiExcel invoice to database. LLM must calculate prices according to invoicing_prompt.md decision tree BEFORE calling this. This function only saves data 1:1 without any logic.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  asiakasnumero: { 
-                    type: 'string', 
-                    description: 'Tampuuri number from OstolaskuExcel' 
-                  },
-                  Tilausnumero: {
-                    type: 'string',
-                    description: 'RP-number from OstolaskuExcel'
-                  },
-                  Laskutusselvitys: {
-                    type: 'string',
-                    description: 'Detailed explanation of why this product should be invoiced at this price, including data sources used (e.g., "Price from hinnasto: Yleishinnasto 2024, product matched by name similarity", "Applied 15% margin according to pricing table", etc.)'
-                  },
-                  rivit: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        määrä: { type: 'number', description: 'Quantity' },
-                        ahinta: { type: 'number', description: 'Sales price (calculated by LLM using decision tree)' },
-                        Yhteensä: { type: 'number', description: 'Total (määrä × ahinta)' },
-                        kuvaus: { type: 'string', description: 'Description from OstolaskuExcel' },
-                        yksikkö: { type: 'string', description: 'Unit from OstolaskuExcel' },
-                        alvkoodi: { type: 'string', description: 'VAT code from OstolaskuExcel' }
-                      },
-                      required: ['määrä', 'ahinta', 'Yhteensä', 'kuvaus']
-                    },
-                    description: 'Invoice rows with prices already calculated by LLM'
-                  }
-                },
-                required: ['asiakasnumero', 'rivit']
               }
             }
           ]
@@ -370,98 +332,6 @@ class GeminiChatService {
 
 
 
-  private async createLasku(userId: string, params: Record<string, any>) {
-    logger.info('GeminiChatService', 'createLasku', '💰 createLasku called with params', { userId, params });
-    
-    try {
-      const { asiakasnumero, Tilausnumero, Laskutusselvitys, rivit } = params;
-      
-      // Simple validation - just check required fields exist
-      if (!asiakasnumero) {
-        return {
-          success: false,
-          error: 'Asiakasnumero (Tampuuri) on pakollinen'
-        };
-      }
-      
-      if (!rivit || !Array.isArray(rivit) || rivit.length === 0) {
-        return {
-          success: false,
-          error: 'Rivit array on pakollinen ja ei saa olla tyhjä'
-        };
-      }
-
-      // Validate each row has required fields
-      for (let i = 0; i < rivit.length; i++) {
-        const rivi = rivit[i];
-        const requiredFields = ['määrä', 'ahinta', 'Yhteensä', 'kuvaus'];
-        
-        for (const field of requiredFields) {
-          if (rivi[field] === undefined || rivi[field] === null) {
-            return {
-              success: false,
-              error: `Rivi ${i + 1}: Pakollinen kenttä '${field}' puuttuu`
-            };
-          }
-        }
-        
-        // Basic numeric validation
-        if (isNaN(Number(rivi.määrä)) || Number(rivi.määrä) <= 0) {
-          return {
-            success: false,
-            error: `Rivi ${i + 1}: Määrä ei ole kelvollinen positiivinen numero`
-          };
-        }
-        
-        if (isNaN(Number(rivi.ahinta)) || Number(rivi.ahinta) <= 0) {
-          return {
-            success: false,
-            error: `Rivi ${i + 1}: Ahinta ei ole kelvollinen positiivinen numero`
-          };
-        }
-      }
-
-      // Prepare document - pass through LLM data 1:1 with only minimal additions
-      const laskuDocument = {
-        userId,
-        // Header fields - pass through what LLM sends
-        asiakasnumero,
-        Tilausnumero: Tilausnumero || '',
-        Laskutusselvitys: Laskutusselvitys || '', // Add billing explanation
-        reskontra: 'MK', // Add fixed value
-        // Row data - pass through exactly what LLM sends
-        rivit: rivit.map(rivi => ({
-          ...rivi,
-          tuotenimi: rivi.tuotenimi || '' // Ensure tuotenimi exists (empty by default)
-        })),
-        // Metadata
-        luontipaiva: new Date().toISOString(),
-        kokonaissumma: rivit.reduce((sum, rivi) => sum + Number(rivi.Yhteensä || 0), 0)
-      };
-
-      // Save to Firestore 'myyntiExcel' collection
-      logger.info('GeminiChatService', 'createLasku', '💾 Saving invoice to myyntiExcel collection...');
-      const docRef = await addDoc(collection(db, 'myyntiExcel'), laskuDocument);
-      
-      logger.info('GeminiChatService', 'createLasku', '✅ Invoice saved successfully', { invoiceId: docRef.id });
-
-      return {
-        success: true,
-        data: {
-          laskuId: docRef.id,
-          message: `Lasku tallennettu: ${laskuDocument.rivit.length} riviä, yhteensä ${laskuDocument.kokonaissumma.toFixed(2)}€`
-        }
-      };
-
-    } catch (error) {
-      logger.error('GeminiChatService', 'createLasku', '❌ createLasku failed', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Laskun luonti epäonnistui'
-      };
-    }
-  }
-
   async initializeSession(context: ChatContext): Promise<string> {
     logger.info('GeminiChatService', 'initializeSession', '🚀 Initializing chat session', {
       sessionId: context.sessionId,
@@ -487,7 +357,7 @@ class GeminiChatService {
           },
           {
             role: 'model',
-            parts: [{ text: 'Ymmärsin. Olen valmis auttamaan hinnasto- ja tilausdatan kanssa. Voin hakea tietoja, laskea yhteissummia ja analysoida dataa. Miten voin auttaa?' }]
+            parts: [{ text: 'Ymmärsin.' }]
           }
         ]
       });
@@ -516,17 +386,8 @@ class GeminiChatService {
     }
 
     try {
-      // Note: OstolaskuExcel data was already provided during session initialization
-      // We only need to inform the AI about the current availability status
-      let contextNote = '';
-      
-      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
-        contextNote = `\n\n[MUISTUTUS: Sinulla on käytettävissä OstolaskuExcel data ${ostolaskuExcelData.length} rivillä session-kontekstissa]`;
-      } else {
-        contextNote = '\n\n[MUISTUTUS: Ei OstolaskuExcel-dataa saatavilla tässä sessiossa]';
-      }
-      
-      const fullMessage = message + contextNote;
+      // OstolaskuExcel data was already provided during session initialization
+      const fullMessage = message;
       
       // Retry logic for initial message
       let result;
@@ -541,6 +402,15 @@ class GeminiChatService {
           
           // Validate initial response
           if (response) {
+            // Tallenna LLM-interaktio
+            const responseText = response.text();
+            logger.logLLMInteraction(
+              sessionId,
+              fullMessage,
+              responseText,
+              'gemini-1.5-flash',
+              response.functionCalls()
+            );
             break;
           }
           
@@ -580,10 +450,6 @@ class GeminiChatService {
           const functionName = call.name;
           const args = call.args;
           
-          // Only log critical functions
-          if (functionName === 'createLasku') {
-            logger.info('GeminiChatService', 'sendMessage', `🔧 Executing critical function: ${functionName}`, { functionName, args }, sessionId);
-          }
           
           let functionResult;
           switch (functionName) {
@@ -592,9 +458,6 @@ class GeminiChatService {
               break;
             case 'searchTilaus':
               functionResult = await this.searchTilaus(userId, args, sessionId);
-              break;
-            case 'createLasku':
-              functionResult = await this.createLasku(userId, args);
               break;
             default:
               logger.error('GeminiChatService', 'sendMessage', '❌ Unknown function called', { functionName }, sessionId);
@@ -644,13 +507,8 @@ class GeminiChatService {
         }
         
         if (!finalContent || finalContent.trim() === '') {
-          logger.warn('GeminiChatService', 'sendMessage', '⚠️ All retries exhausted, generating detailed fallback', undefined, sessionId);
-          // Generate more detailed fallback based on function results
-          if (functionCalls.length > 0) {
-            finalContent = `Käsittelin ${functionCalls.length} funktiokutsua. Tarkista taulukko tuloksista yllä. Voin auttaa lisää tarvittaessa.`;
-          } else {
-            finalContent = 'Anteeksi, vastaukseni jäi kesken. Voisitko toistaa kysymyksen?';
-          }
+          logger.error('GeminiChatService', 'sendMessage', '❌ Empty response after function calls', { functionCallsCount: functionCalls.length }, sessionId);
+          throw new Error('Empty response from AI model after function calls');
         }
       } else {
         // No function calls, use the original response
@@ -662,38 +520,10 @@ class GeminiChatService {
         }
       }
       
-      // Final validation and safety check
+      // Final validation - only check if truly empty
       if (!finalContent || finalContent.trim() === '') {
-        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Empty response detected after all attempts, using fallback message', undefined, sessionId);
-        // More specific error message based on context
-        if (message.toLowerCase().includes('lasku') || message.toLowerCase().includes('luo')) {
-          finalContent = 'Yritän luoda laskuja... Jos tämä viesti näkyy, yritä uudelleen sanomalla "Luo MyyntiExcel kaikille paitsi siirtyneille asiakkaille".';
-        } else {
-          finalContent = 'Anteeksi, tekninen ongelma esti vastauksen. Yritä uudelleen hetken kuluttua.';
-        }
-      }
-      
-      // Check for incomplete responses (common patterns)
-      const incompletePatterns = [
-        /^\*\*$/,  // Just asterisks
-        /^#{1,6}\s*$/,  // Just markdown headers
-        /^\|\s*$/,  // Just table start
-        /^```$/,  // Just code block start
-        /^-\s*$/,  // Just list item start
-      ];
-      
-      if (incompletePatterns.some(pattern => pattern.test(finalContent.trim()))) {
-        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Incomplete response pattern detected, appending notice', undefined, sessionId);
-        finalContent += '\n\n*[Vastaus jäi kesken. Pyydä jatkoa kirjoittamalla "jatka"]*';
-      }
-      
-      // Check if response seems cut off (ends mid-sentence)
-      const lastChar = finalContent.trim().slice(-1);
-      const midSentenceEndings = [',', ':', '-', '(', '[', '{'];
-      if (midSentenceEndings.includes(lastChar) || 
-          (finalContent.length > 100 && !['!', '.', '?', '```'].some(end => finalContent.trim().endsWith(end)))) {
-        logger.warn('GeminiChatService', 'sendMessage', '⚠️ Response appears to be cut off mid-sentence', undefined, sessionId);
-        finalContent += '\n\n*[Vastaus saattoi jäädä kesken. Kirjoita "jatka" jos haluat lisää tietoa]*';
+        logger.error('GeminiChatService', 'sendMessage', '❌ Empty response from Gemini', undefined, sessionId);
+        throw new Error('Empty response from AI model');
       }
       
       const chatMessage = {

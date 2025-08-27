@@ -35,7 +35,20 @@ export interface ChatSessionLog {
     systemPrompt?: string;
     uploadedFileName?: string;
     ostolaskuDataSample?: any;
+    contextUsage?: {
+      systemPromptTokens: number;
+      messagesTokens: number;
+      ostolaskuDataTokens: number;
+      totalTokens: number;
+    };
   };
+  llmInteractions?: Array<{
+    input: string;
+    output: string;
+    timestamp: Date;
+    model?: string;
+    functionCalls?: any[];
+  }>;
   userFeedback?: {
     rating: 'thumbs_up' | 'thumbs_down';
     comment?: string;
@@ -48,6 +61,7 @@ class LoggingService {
   private logBuffer: LogEntry[] = [];
   private maxBufferSize = 500; // Säilytä viimeiset 500 lokia muistissa
   private sessionLogs: Map<string, LogEntry[]> = new Map();
+  private llmInteractions: Map<string, Array<{input: string; output: string; timestamp: Date; model?: string; functionCalls?: any[]}>> = new Map();
   private isProduction = import.meta.env.PROD;
   private debugMode = localStorage.getItem('debugMode') === 'true';
   private focusedLogging = true; // Focus on empty responses and UI issues
@@ -216,6 +230,9 @@ class LoggingService {
     const ostolaskuDataSample = ostolaskuData && ostolaskuData.length > 0
       ? ostolaskuData.slice(0, 3)
       : null;
+    
+    // Laske kontekstin käyttö
+    const contextUsage = this.calculateContextUsage(systemPrompt, messages, ostolaskuData);
 
     return {
       sessionId,
@@ -235,8 +252,10 @@ class LoggingService {
         totalErrors: errorCount,
         systemPrompt,
         uploadedFileName,
-        ostolaskuDataSample
-      }
+        ostolaskuDataSample,
+        contextUsage
+      },
+      llmInteractions: this.getLLMInteractions(sessionId)
     };
   }
 
@@ -348,6 +367,96 @@ class LoggingService {
     }
   }
 
+  /**
+   * Laske kontekstin käyttö (arvio token-määrästä)
+   */
+  private calculateContextUsage(
+    systemPrompt?: string,
+    messages?: Array<any>,
+    ostolaskuData?: any[]
+  ): {
+    systemPromptTokens: number;
+    messagesTokens: number;
+    ostolaskuDataTokens: number;
+    totalTokens: number;
+  } {
+    // Arvio: 1 token ≈ 4 merkkiä
+    const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
+    
+    const systemPromptTokens = systemPrompt ? estimateTokens(systemPrompt) : 0;
+    const messagesTokens = messages 
+      ? messages.reduce((acc, m) => acc + estimateTokens(JSON.stringify(m)), 0)
+      : 0;
+    const ostolaskuDataTokens = ostolaskuData 
+      ? estimateTokens(JSON.stringify(ostolaskuData))
+      : 0;
+    
+    const usage = {
+      systemPromptTokens,
+      messagesTokens,
+      ostolaskuDataTokens,
+      totalTokens: systemPromptTokens + messagesTokens + ostolaskuDataTokens
+    };
+    
+    // Lokita konsoliin jos kontekstin käyttö on suuri
+    if (usage.totalTokens > 50000) {
+      console.warn('⚠️ Large context usage:', usage);
+    }
+    
+    return usage;
+  }
+
+  /**
+   * Tallenna LLM input/output pari
+   */
+  logLLMInteraction(
+    sessionId: string,
+    input: string,
+    output: string,
+    model?: string,
+    functionCalls?: any[]
+  ): void {
+    const interaction = {
+      input,
+      output,
+      timestamp: new Date(),
+      model,
+      functionCalls
+    };
+    
+    // Tallenna session-kohtaiseen puskuriin
+    if (!this.llmInteractions.has(sessionId)) {
+      this.llmInteractions.set(sessionId, []);
+    }
+    this.llmInteractions.get(sessionId)?.push(interaction);
+    
+    // Lokita konsoliin debug-tilassa
+    if (this.debugMode) {
+      console.log('🤖 LLM Interaction:', {
+        sessionId,
+        model,
+        inputLength: input.length,
+        outputLength: output.length,
+        hasFunctionCalls: !!functionCalls?.length,
+        timestamp: interaction.timestamp
+      });
+    }
+  }
+
+  /**
+   * Hae LLM-interaktiot sessiolta
+   */
+  getLLMInteractions(sessionId: string): Array<{input: string; output: string; timestamp: Date; model?: string; functionCalls?: any[]}> {
+    return this.llmInteractions.get(sessionId) || [];
+  }
+
+  /**
+   * Tyhjennä LLM-interaktiot sessiolta
+   */
+  clearLLMInteractions(sessionId: string): void {
+    this.llmInteractions.delete(sessionId);
+  }
+
   private isCriticalLog(level: LogLevel, action: string, message?: string): boolean {
     // Always log errors and warnings
     if (level === 'ERROR' || level === 'WARN') return true;
@@ -358,7 +467,6 @@ class LoggingService {
       'Incomplete response',
       'Table overflow',
       'UI overflow',
-      'createLasku',
       'sendMessage', // Only if it has issues
       'initializeSession',
       'endSession',
