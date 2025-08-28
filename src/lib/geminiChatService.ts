@@ -579,12 +579,13 @@ class GeminiChatService {
           if (response) {
             // Tallenna LLM-interaktio
             const responseText = response.text();
+            const functionCalls = response.functionCalls && typeof response.functionCalls === 'function' ? response.functionCalls() : null;
             logger.logLLMInteraction(
               sessionId,
               fullMessage,
               responseText,
               'gemini-1.5-flash',
-              response.functionCalls()
+              functionCalls
             );
             break;
           }
@@ -594,9 +595,16 @@ class GeminiChatService {
           if (initialRetries <= maxInitialRetries) {
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
-        } catch (error) {
+        } catch (error: any) {
           initialRetries++;
-          logger.error('GeminiChatService', 'sendMessage', '❌ Initial request failed, retry', { retryCount: initialRetries, maxRetries: maxInitialRetries, error }, sessionId);
+          const errorDetails = {
+            retryCount: initialRetries,
+            maxRetries: maxInitialRetries,
+            errorMessage: error?.message || 'Unknown error',
+            errorName: error?.name || 'Unknown',
+            errorStack: error?.stack?.substring(0, 500)
+          };
+          logger.error('GeminiChatService', 'sendMessage', '❌ Initial request failed, retry', errorDetails, sessionId);
           if (initialRetries > maxInitialRetries) {
             throw error;
           }

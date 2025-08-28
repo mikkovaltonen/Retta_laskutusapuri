@@ -1,3 +1,4 @@
+
 # MyyntiExcel-generointi - Toiminnallinen määrittely
 
 ## Yleiskuvaus

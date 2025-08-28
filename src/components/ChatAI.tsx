@@ -40,6 +40,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   const [uploadedWorkbook, setUploadedWorkbook] = useState<any>(null);
   const [showSheetSelector, setShowSheetSelector] = useState(false);
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showNegativeFeedbackDialog, setShowNegativeFeedbackDialog] = useState(false);
   const [selectedMessageForFeedback, setSelectedMessageForFeedback] = useState<string>('');
@@ -255,9 +256,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       timestamp: new Date()
     };
 
-    // Only log if message is very short (potential issue)
+    // Log debug info for very short messages
     if (userMessage.content.trim().length < 5) {
-      logger.warn('ChatAI', 'sendMessage', 'Very short user message', { message: userMessage.content }, sessionId);
+      logger.debug('ChatAI', 'sendMessage', 'Short user message', { message: userMessage.content }, sessionId);
     }
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
@@ -662,82 +663,98 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const isJson = file.name.endsWith('.json');
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
     
-    if (!isJson && !isExcel) {
-      setError('Vain JSON- ja Excel-tiedostot ovat sallittuja');
-      return;
-    }
+    // Support multiple files
+    const allData: any[] = [];
+    const fileNames: string[] = [];
 
     try {
-      let jsonData: any[];
-      
-      if (isJson) {
-        // Handle JSON file
-        const text = await file.text();
-        jsonData = JSON.parse(text);
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         
-        // Validate it's an array
-        if (!Array.isArray(jsonData)) {
-          setError('JSON-tiedoston tulee olla taulukko (array)');
-          return;
+        // Validate file type - only Excel allowed
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+        
+        if (!isExcel) {
+          toast.error(`Tiedosto ${file.name} ohitettu - vain Excel-tiedostot sallittuja`);
+          continue;
         }
-      } else {
+        
+        fileNames.push(file.name);
+        let jsonData: any[];
         // Handle Excel file
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         if (workbook.SheetNames.length === 0) {
-          setError('Excel-tiedostossa ei ole yhtään välilehteä');
-          return;
+          toast.error(`${file.name}: Excel-tiedostossa ei ole yhtään välilehteä`);
+          continue;
         }
         
-        // If multiple sheets, show selector
-        if (workbook.SheetNames.length > 1) {
+        // If multiple sheets, show selector (only for single file mode)
+        if (workbook.SheetNames.length > 1 && files.length === 1) {
           setUploadedWorkbook(workbook);
           setAvailableSheets(workbook.SheetNames);
           setUploadedFileName(file.name);
+          setSelectedSheets([]); // Reset selected sheets
           setShowSheetSelector(true);
           return;
         }
         
-        // Single sheet - process directly
+        // Single sheet or multiple files mode - process first sheet directly
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         jsonData = XLSX.utils.sheet_to_json(worksheet);
         
         if (jsonData.length === 0) {
-          setError('Excel-tiedosto on tyhjä');
-          return;
+          toast.warn(`${file.name}: Tyhjä tiedosto ohitettu`);
+          continue;
         }
         
-        toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
-      }
+        toast.success(`Ladattu ${jsonData.length} riviä: ${file.name} (${sheetName})`);
+      
+      // Add to combined data
+      allData.push(...jsonData);
+    } // End of for loop
 
-      setOstolaskuExcelData(jsonData);
-      setUploadedFileName(file.name);
+      // Check if we got any data
+      if (allData.length === 0) {
+        setError('Ei ladattavia tietoja valituissa tiedostoissa');
+        return;
+      }
+      
+      // Calculate final combined data
+      let finalData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        finalData = [...ostolaskuExcelData, ...allData];
+        toast.info(`Lisätty ${allData.length} riviä (yhteensä ${finalData.length} riviä)`);
+      } else {
+        finalData = allData;
+      }
+      
+      // Update state with combined data
+      setOstolaskuExcelData(finalData);
+      setUploadedFileName(fileNames.join(', '));
       setError(null);
       
       console.log('✅ OstolaskuExcel uploaded:', {
-        fileName: file.name,
-        recordCount: jsonData.length,
-        fileType: isJson ? 'JSON' : 'Excel'
+        fileNames: fileNames,
+        totalRecords: finalData.length,
+        fileCount: fileNames.length
       });
 
       // Add a success message and re-initialize session with OstolaskuExcel data
-      if (user && systemPrompt) {
+      if (user && systemPrompt && finalData.length > 0) {
         console.log('🔄 Re-initializing chat with OstolaskuExcel data...');
         
         // Add a success message about loaded OstolaskuExcel
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedostot: ${fileNames.length} kpl\n📊 Rivejä yhteensä: ${finalData.length}\n📁 Ladatut: ${fileNames.join(', ')}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -750,7 +767,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuExcelData: jsonData
+          ostolaskuExcelData: finalData
         };
 
         try {
@@ -777,6 +794,107 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     fileInputRef.current?.click();
   };
 
+  const handleMultipleSheetsSelection = async () => {
+    if (!uploadedWorkbook || selectedSheets.length === 0) return;
+
+    try {
+      const allData: any[] = [];
+      
+      // Process each selected sheet
+      for (const sheetName of selectedSheets) {
+        const worksheet = uploadedWorkbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        if (jsonData.length > 0) {
+          allData.push(...jsonData);
+          toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+          
+          // Log verification table fields for first row of each sheet
+          const firstRow = jsonData[0];
+          console.log(`📊 Välilehti "${sheetName}" kentät:`, {
+            tampuuri: firstRow['tampuuri'] || firstRow['Tampuurinumero'] || 'EI LÖYDY',
+            rpNumero: firstRow['RP-numero'] || firstRow['OrderNumber'] || 'EI LÖYDY',
+            availableFields: Object.keys(firstRow).slice(0, 10)
+          });
+        } else {
+          toast.warn(`Välilehti "${sheetName}" on tyhjä, ohitettu`);
+        }
+      }
+      
+      if (allData.length === 0) {
+        setError('Valituissa välilehdissä ei ole dataa');
+        return;
+      }
+      
+      // Calculate combined data with existing data
+      let combinedData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        combinedData = [...ostolaskuExcelData, ...allData];
+        toast.info(`Lisätty yhteensä ${allData.length} riviä ${selectedSheets.length} välilehdeltä (kokonaismäärä: ${combinedData.length} riviä)`);
+      } else {
+        combinedData = allData;
+        toast.success(`Ladattu yhteensä ${allData.length} riviä ${selectedSheets.length} välilehdeltä`);
+      }
+      
+      // Update state
+      setOstolaskuExcelData(combinedData);
+      setUploadedFileName(`${uploadedFileName} (${selectedSheets.length} välilehteä)`);
+      
+      // Notify parent component
+      if (onOstolaskuExcelDataChange) {
+        onOstolaskuExcelDataChange(combinedData);
+      }
+      
+      setError(null);
+      setShowSheetSelector(false);
+      setSelectedSheets([]);
+      
+      console.log('✅ Multiple sheets loaded:', {
+        fileName: uploadedFileName,
+        sheetsLoaded: selectedSheets,
+        totalRecords: combinedData.length
+      });
+      
+      // Re-initialize chat session with combined data
+      if (user && systemPrompt && combinedData.length > 0) {
+        console.log('🔄 Re-initializing chat with combined Excel data...');
+        
+        const successMessage: ChatMessage = {
+          id: `OstolaskuExcel-loaded-${Date.now()}`,
+          role: 'assistant',
+          content: `✅ **Excel-välilehdet ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName}"\n📊 Välilehdet: ${selectedSheets.join(', ')}\n📈 Rivejä yhteensä: ${combinedData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuExcelData: combinedData
+        };
+        
+        try {
+          await geminiChatService.initializeSession(context);
+          setSessionId(newSessionId);
+          console.log('✅ Chat re-initialized with multi-sheet data');
+        } catch (err) {
+          console.error('❌ Failed to re-initialize chat:', err);
+        }
+      }
+      
+    } catch (err) {
+      console.error('❌ Multi-sheet processing failed:', err);
+      setError('Välilehtien käsittely epäonnistui');
+    } finally {
+      // Clean up
+      setUploadedWorkbook(null);
+      setAvailableSheets([]);
+    }
+  };
+
   const handleSheetSelection = async (sheetName: string) => {
     if (!uploadedWorkbook) return;
 
@@ -789,17 +907,28 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         return;
       }
 
-      setOstolaskuExcelData(jsonData);
+      // Calculate combined data
+      let combinedData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        combinedData = [...ostolaskuExcelData, ...jsonData];
+        toast.info(`Välilehti lisätty: ${jsonData.length} riviä (yhteensä ${combinedData.length} riviä)`);
+      } else {
+        combinedData = jsonData;
+        toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      }
+      
+      // Update state with combined data
+      setOstolaskuExcelData(combinedData);
       
       // Notify parent component about data change
       if (onOstolaskuExcelDataChange) {
-        onOstolaskuExcelDataChange(jsonData);
+        onOstolaskuExcelDataChange(combinedData);
       }
       
       setError(null);
       setShowSheetSelector(false);
       
-      toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      // Success toast moved to setOstolaskuExcelData callback
       
       console.log('✅ OstolaskuExcel sheet selected:', {
         fileName: uploadedFileName,
@@ -830,7 +959,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          content: `✅ **OstolaskuExcel-välilehti lisätty!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📈 Välilehti: "${sheetName}"\n📊 Lisätty ${jsonData.length} riviä\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -839,11 +968,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         // Re-initialize session with OstolaskuExcel data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
+        // Use the combined data we just calculated
         const context: ChatContext = {
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuExcelData: jsonData
+          ostolaskuExcelData: combinedData && combinedData.length > 0 ? combinedData : undefined
         };
 
         try {
@@ -1099,8 +1229,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       <input
         ref={fileInputRef}
         type="file"
-        accept=".json,.xlsx,.xls"
+        accept=".xlsx,.xls"
         onChange={handleFileUpload}
+        multiple
         style={{ display: 'none' }}
       />
 
@@ -1162,39 +1293,86 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       <Dialog open={showSheetSelector} onOpenChange={setShowSheetSelector}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Valitse Excel välilehti</DialogTitle>
+            <DialogTitle>Valitse Excel välilehdet</DialogTitle>
             <DialogDescription>
-              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää OstolaskuExcel-datan.
+              Excel-tiedostossa on useita välilehtiä. Valitse yksi tai useampi välilehti ladattavaksi.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-4">
+          <div className="grid gap-3 py-4 max-h-[400px] overflow-y-auto">
             {availableSheets.map((sheetName) => (
-              <Button
+              <div
                 key={sheetName}
-                variant="outline"
-                onClick={() => handleSheetSelection(sheetName)}
-                className="justify-start h-auto p-4"
+                className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50"
               >
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">{sheetName}</div>
-                  <div className="text-xs text-gray-500">Excel välilehti</div>
-                </div>
-              </Button>
+                <input
+                  type="checkbox"
+                  id={`sheet-${sheetName}`}
+                  checked={selectedSheets.includes(sheetName)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedSheets([...selectedSheets, sheetName]);
+                    } else {
+                      setSelectedSheets(selectedSheets.filter(s => s !== sheetName));
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor={`sheet-${sheetName}`}
+                  className="flex-1 cursor-pointer"
+                >
+                  <div className="flex items-center">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    <div>
+                      <div className="font-medium">{sheetName}</div>
+                      <div className="text-xs text-gray-500">Excel välilehti</div>
+                    </div>
+                  </div>
+                </label>
+              </div>
             ))}
           </div>
-          <div className="flex justify-end">
-            <Button 
-              variant="ghost" 
-              onClick={() => {
-                setShowSheetSelector(false);
-                setUploadedWorkbook(null);
-                setAvailableSheets([]);
-                setUploadedFileName('');
-              }}
-            >
-              Peruuta
-            </Button>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (selectedSheets.length === availableSheets.length) {
+                    setSelectedSheets([]);
+                  } else {
+                    setSelectedSheets(availableSheets);
+                  }
+                }}
+              >
+                {selectedSheets.length === availableSheets.length ? 'Poista kaikki valinnat' : 'Valitse kaikki'}
+              </Button>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                {selectedSheets.length} / {availableSheets.length} välilehteä valittu
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    setShowSheetSelector(false);
+                    setUploadedWorkbook(null);
+                    setAvailableSheets([]);
+                    setSelectedSheets([]);
+                    setUploadedFileName('');
+                  }}
+                >
+                  Peruuta
+                </Button>
+                <Button
+                  onClick={handleMultipleSheetsSelection}
+                  disabled={selectedSheets.length === 0}
+                >
+                  Lataa valitut ({selectedSheets.length})
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
