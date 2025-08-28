@@ -53,12 +53,7 @@ export const WorkspaceNavigation: React.FC<WorkspaceNavigationProps> = ({ onLogo
             </Button>
           </div>
 
-          {/* Workspace Name - No selector needed since there's only one option */}
-          {isWorkbenchPage && (
-            <div className="text-gray-700 font-medium">
-              {workspaceConfig[currentWorkspace].name}
-            </div>
-          )}
+          {/* Workspace Name - Removed to reduce redundancy */}
 
           {/* Tab Navigation */}
           {isWorkbenchPage && (

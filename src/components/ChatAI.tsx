@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info } from 'lucide-react';
+import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info, CheckCircle, Download } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
@@ -99,7 +99,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     
     // Create updated welcome message with current OstolaskuExcel status
     const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 
-      ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
+      ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Seuraava vaihe:**\n👉 Paina **"Tarkasta"** -nappia alapalkista tarkistaaksesi hinnat ja tilaukset\n\n*Botti luo TARKASTUSTAULUKON ja ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
       : '\n\n❌ **Ei OstolaskuExceldataa**: Lataa ensin OstolaskuExcel (JSON/Excel) painikkeesta yllä';
       
     const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuExcelStatus}\n\nMiten voin auttaa?`;
@@ -175,7 +175,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
 
       // Add welcome message with OstolaskuExcel status
       const ostolaskuExcelStatus = ostolaskuExcelData.length > 0 
-        ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Vaihe 1 - Tarkasta tiedot:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Botti ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
+        ? `\n\n✅ **OstolaskuExceldata ladattu**: ${ostolaskuExcelData.length} riviä tiedostosta "${uploadedFileName}"\n\n**Seuraava vaihe:**\n👉 Paina **"Tarkasta"** -nappia alapalkista tarkistaaksesi hinnat ja tilaukset\n\n*Botti luo TARKASTUSTAULUKON ja ehdottaa MyyntiExcelin luomista kun tiedot on tarkastettu.*`
         : '\n\n❌ **Ei OstolaskuExceldataa**: Lataa ensin OstolaskuExcel (JSON/Excel) painikkeesta yllä';
         
       const welcomeContent = `👋 Hei! Olen Retta-laskutusavustajasi.${ostolaskuExcelStatus}\n\nMiten voin auttaa?`;
@@ -245,13 +245,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     }
   };
 
-  const sendMessage = async () => {
-    if (!inputMessage.trim() || !sessionId || !user || loading) return;
+  const sendMessageWithText = async (messageText: string) => {
+    if (!messageText.trim() || !sessionId || !user || loading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputMessage,
+      content: messageText,
       timestamp: new Date()
     };
 
@@ -265,7 +265,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     setError(null);
 
     try {
-      const response = await geminiChatService.sendMessage(sessionId, inputMessage, user.uid, ostolaskuExcelData);
+      const response = await geminiChatService.sendMessage(sessionId, messageText, user.uid, ostolaskuExcelData);
       
       // Log if response is empty or very short (critical issue)
       if (!response.content || response.content.trim().length < 10) {
@@ -278,7 +278,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       setMessages(prev => [...prev, response]);
     } catch (err) {
       logError('SendMessage', err, { 
-        messageLength: inputMessage.length,
+        messageLength: messageText.length,
         hasOstolaskuExcelData: ostolaskuExcelData.length > 0,
         sessionId 
       });
@@ -286,6 +286,11 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     } finally {
       setLoading(false);
     }
+  };
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return;
+    await sendMessageWithText(inputMessage);
   };
 
   const resetChat = () => {
@@ -460,6 +465,202 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     }
   };
 
+  const generateMyyntiExcelFromTarkastustaulukko = async () => {
+    console.log('🔍 Scanning chat history for TARKASTUSTAULUKKO...');
+    
+    // Find messages containing TARKASTUSTAULUKKO (case insensitive)
+    let tarkastustaulukkoData: any[] = [];
+    
+    for (const message of messages) {
+      if (message.role === 'assistant' && message.content.toLowerCase().includes('tarkastustaulukko')) {
+        console.log('✅ Found TARKASTUSTAULUKKO in message:', message.id);
+        
+        // Find the table after "Tarkastustaulukko" heading
+        const tarkastusIndex = message.content.toLowerCase().indexOf('tarkastustaulukko');
+        const contentAfterHeading = message.content.substring(tarkastusIndex);
+        
+        // Extract all table rows
+        const tableLines = contentAfterHeading.split('\n').filter(line => line.includes('|'));
+        
+        if (tableLines.length > 2) {
+          console.log(`📊 Found ${tableLines.length} table lines`);
+          
+          // TARKASTUSTAULUKKO has a fixed column structure:
+          // | Tampuuri | RP-numero | Tuote | O.hinta (o) | O.hinta (h) | M.hinta (o) | M.hinta (h) | M.hinta (t) | Tarkastus | A-hinta | Määrä | Yksikkö | ALV-koodi |
+          // Columns:  0     1           2        3            4              5             6             7             8           9         10      11        12         13
+          // Note: Column 0 is empty due to leading |, so actual data starts at index 1
+          const tampuuriIdx = 1;  // Tampuuri → Asiakasnumero
+          const rpNumeroIdx = 2;  // RP-numero → Tilausnumero
+          const tuoteIdx = 3;     // Tuote → Kuvaus
+          const aHintaIdx = 10;   // A-hinta → ahinta
+          const maaraIdx = 11;    // Määrä → määrä
+          const yksikkoIdx = 12;  // Yksikkö → yksikkö
+          const alvKoodiIdx = 13; // ALV-koodi → alvkoodi
+          
+          console.log('Using fixed column indices for TARKASTUSTAULUKKO:', {
+            tampuuri: tampuuriIdx,
+            rpNumero: rpNumeroIdx,
+            tuote: tuoteIdx,
+            aHinta: aHintaIdx,
+            maara: maaraIdx,
+            yksikko: yksikkoIdx,
+            alvKoodi: alvKoodiIdx
+          });
+          
+          // Skip header and separator lines, process data lines
+          let skippedRows = 0;
+          let processedRows = 0;
+          
+          for (let i = 2; i < tableLines.length; i++) {
+            const line = tableLines[i];
+            if (!line.trim() || line.includes('|:---')) {
+              console.log(`Skipping row ${i}: separator line`);
+              skippedRows++;
+              continue;
+            }
+            
+            const cells = line.split('|').map(cell => cell.trim());
+            
+            // Skip if not enough cells
+            if (cells.length < Math.max(tampuuriIdx, rpNumeroIdx, tuoteIdx, aHintaIdx, maaraIdx, yksikkoIdx, alvKoodiIdx)) {
+              console.log(`Skipping row ${i}: not enough cells (${cells.length})`);
+              skippedRows++;
+              continue;
+            }
+            
+            // Extract data based on column positions
+            const tampuuri = cells[tampuuriIdx] || '';
+            let rpNumero = cells[rpNumeroIdx] || '';
+            // Clean up RP-numero - replace dashes with empty string
+            if (rpNumero.includes('---')) {
+              rpNumero = '';
+            }
+            const tuote = cells[tuoteIdx] || '';
+            const aHintaStr = cells[aHintaIdx] || '0';
+            const maaraStr = cells[maaraIdx] || '1';
+            const yksikko = cells[yksikkoIdx] || 'kpl';
+            const alvKoodi = cells[alvKoodiIdx] || '24';
+            
+            // Parse numbers
+            const aHinta = parseFloat(aHintaStr.replace(',', '.').replace('€', '').trim()) || 0;
+            const maara = parseFloat(maaraStr.replace(',', '.')) || 1;
+            
+            // Skip rows with no valid data (must have tampuuri and valid price)
+            if (!tampuuri || aHinta === 0) {
+              console.log(`Skipping row ${i}: Missing tampuuri="${tampuuri}" or price="${aHinta}"`);
+              skippedRows++;
+              continue;
+            }
+            
+            // Map TARKASTUSTAULUKKO fields to MyyntiExcel format
+            const row = {
+              asiakasnumero: tampuuri, // Tampuuri as Asiakasnumero
+              reskontra: 'MK', // Fixed value
+              tuotekoodi: '', // Empty as specified
+              määrä: maara,
+              ahinta: aHinta,
+              yhteensä: maara * aHinta, // Calculate total
+              kuvaus: tuote, // Product description
+              yksikkö: yksikko,
+              tuotenimi: '', // Empty as specified
+              alvkoodi: alvKoodi.replace('%', '').trim(), // Remove % sign if present
+              isännöitsijä: '', // Empty
+              kustannuspaikka: '', // Empty
+              tilausnumero: rpNumero // RP-numero
+            };
+            
+            tarkastustaulukkoData.push(row);
+            processedRows++;
+            console.log(`Row ${i-1}: Tampuuri=${tampuuri}, Tuote=${tuote.substring(0,30)}..., A-hinta=${aHinta}, Määrä=${maara}`);
+          }
+          
+          console.log(`📊 Processing summary: ${processedRows} processed, ${skippedRows} skipped out of ${tableLines.length-2} data lines`);
+          
+          // Only use the first table found
+          break;
+        }
+      }
+    }
+    
+    if (tarkastustaulukkoData.length === 0) {
+      toast.error('TARKASTUSTAULUKKOA ei löytynyt keskusteluhistoriasta');
+      return;
+    }
+    
+    console.log(`📊 Extracted ${tarkastustaulukkoData.length} rows from TARKASTUSTAULUKKO`);
+    
+    // Create Excel workbook
+    const wb = XLSX.utils.book_new();
+    
+    // Convert data to worksheet format
+    const wsData = [
+      // Header row
+      ['Asiakasnumero', 'Reskontra', 'Tuotekoodi', 'Määrä', 'A-hinta', 'Yhteensä', 'Kuvaus', 'Yksikkö', 'Tuotenimi', 'ALV-koodi', 'Isännöitsijä', 'Kustannuspaikka', 'Tilausnumero'],
+      // Data rows
+      ...tarkastustaulukkoData.map(row => [
+        row.asiakasnumero,
+        row.reskontra,
+        row.tuotekoodi,
+        row.määrä,
+        row.ahinta,
+        row.yhteensä,
+        row.kuvaus,
+        row.yksikkö,
+        row.tuotenimi,
+        row.alvkoodi,
+        row.isännöitsijä,
+        row.kustannuspaikka,
+        row.tilausnumero
+      ])
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'MyyntiExcel');
+    
+    // Generate Excel file
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const filename = `MyyntiExcel_${timestamp}.xlsx`;
+    
+    // Try to use File System Access API if available (Chrome, Edge)
+    if ('showSaveFilePicker' in window) {
+      try {
+        // Show save dialog where user can choose location
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: filename,
+          types: [{
+            description: 'Excel Files',
+            accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] }
+          }]
+        });
+        
+        // Write file to chosen location
+        const writable = await handle.createWritable();
+        const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        await writable.write(buffer);
+        await writable.close();
+        
+        toast.success(`MyyntiExcel tallennettu: ${tarkastustaulukkoData.length} riviä`);
+        console.log(`✅ MyyntiExcel saved to chosen location: ${filename}`);
+      } catch (err) {
+        // User cancelled or error occurred, fall back to regular download
+        if ((err as any)?.name !== 'AbortError') {
+          console.error('Save dialog error:', err);
+        }
+        // Fall back to regular download
+        XLSX.writeFile(wb, filename);
+        toast.success(`MyyntiExcel ladattu: ${tarkastustaulukkoData.length} riviä`);
+      }
+    } else {
+      // Browser doesn't support File System Access API, use regular download
+      XLSX.writeFile(wb, filename);
+      toast.info(`MyyntiExcel ladattu Downloads-kansioon: ${tarkastustaulukkoData.length} riviä`);
+    }
+    
+    console.log(`✅ MyyntiExcel processed: ${filename}`);
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -536,7 +737,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan MyyntiExcelin luomista.*`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -629,7 +830,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Vaihe 1 - Pyydä tietojen tarkastus:**\n• "Tarkista hinnat ja tilaukset"\n• "Onko meillä hinnat hinnastossa ja tilaus tilausrekisterissä?"\n\n*Tarkistan tiedot ja ehdotan MyyntiExcelin luomista.*`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -1145,6 +1346,24 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
             disabled={loading || !isInitialized}
             className="flex-1"
           />
+          <Button
+            onClick={() => sendMessageWithText('Tarkista hinnat ja tilaukset')}
+            disabled={loading || !isInitialized}
+            variant="outline"
+            title="Tarkista hinnat ja tilaukset"
+          >
+            <CheckCircle className="w-4 h-4 mr-1" />
+            Tarkasta
+          </Button>
+          <Button
+            onClick={generateMyyntiExcelFromTarkastustaulukko}
+            disabled={loading}
+            variant="outline"
+            title="Lataa MyyntiExcel TARKASTUSTAULUKOSTA"
+          >
+            <Download className="w-4 h-4 mr-1" />
+            MyyntiExcel
+          </Button>
           <Button
             onClick={sendMessage}
             disabled={loading || !isInitialized || !inputMessage.trim()}
