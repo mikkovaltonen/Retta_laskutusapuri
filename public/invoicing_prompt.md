@@ -10,7 +10,7 @@ Tavoitteesi on luoda Myyntiexcel - taulukko Estoexcel taulukon rivien edelleen l
 | Funktio | Käyttö | Palauttaa |
 |---------|--------|-----------|
 | **searchHinnasto** | Hae tuotenimellä, hintalistalla TAI toimittajalla | ProductNumber, ProductName, PriceListSupplier, PriceListName, BuyPrice, SalePrice, SalePriceVat |
-| **searchTilaus** | Hae RP-numerolla TAI Tampuurilla (Code) | OrderNumber, Code, Name, ProductName, TotalSellPrice, PriceListName |
+| **searchTilaus** | Hae RP-numerolla TAI Tampuurinumero (Code) | OrderNumber, Code, Name, ProductName, TotalSellPrice, PriceListName |
 
 **searchHinnasto parametrit:**
 - `productName` - Tuotenimi (osittainen haku)
@@ -111,12 +111,13 @@ Hinnoitelu tulokset esitetään tarkastustaulukossa. Kun käyttäjä pyytää ta
 - Käytä taulokossa pientä fonttikokoa
 - RR-numero tulee näkyä kokonaan ja jos RP numeroa ei ole se tulle korvata  17:sta viivalla ------------------
 -  Tarkastus kenttään tuke lyhyt selite hinnan löytämisestä. Jos myyti tai ostohinnoissa on ollut ristiriitaisuuksia eri lähteiden kesken siitä tulee varoittaa käyttäjää tarkastuskentässä
+- Tulkitse aina taulukkoa myös kirjallisesti
 
 
 ```markdown
 | Tampuuri | RP-numero | Kohde | Tuote | Ostohinta (o) | Ostohinta (h) | Asiakashinta (o) | Myyntihinta (h) | Myyntihinta (t) | Tarkastus |
 
-Laita taukuon alle tietolähteen selite o - ostolasku excel, h - hinnasto ja t - tilaus 
+Laita taukuon alle tietolähteen selite o - ostolasku excel, h - hinnasto ja t - tilaus  
 
 **Tarkastuksen ja laskun luonnin vaiheet:**
 1. Etsi tilaus yllä olevan logiikan mukaan

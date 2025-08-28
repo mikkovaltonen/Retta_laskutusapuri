@@ -26,6 +26,62 @@ class GeminiChatService {
   private model: GenerativeModel;
   private activeSessions: Map<string, ChatSession> = new Map();
 
+  // Helper function to parse string arrays from Gemini
+  private parseStringArray(value: any, fieldName: string, sessionId?: string): string[] {
+    if (!value) {
+      logger.debug('GeminiChatService', 'parseStringArray', `${fieldName} is empty/null`, null, sessionId);
+      return [];
+    }
+    
+    logger.debug('GeminiChatService', 'parseStringArray', `Parsing ${fieldName}`, {
+      type: typeof value,
+      isArray: Array.isArray(value),
+      length: typeof value === 'string' ? value.length : 'N/A',
+      preview: typeof value === 'string' ? value.substring(0, 50) : JSON.stringify(value).substring(0, 50)
+    }, sessionId);
+    
+    if (Array.isArray(value)) {
+      const result = value.map((v: any) => String(v).trim());
+      logger.info('GeminiChatService', 'parseStringArray', `✅ ${fieldName} is already array`, { count: result.length }, sessionId);
+      return result;
+    }
+    
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      // Check if it looks like a JSON array
+      if (trimmed.startsWith('[') || trimmed.startsWith('"[')) {
+        try {
+          // Remove wrapper quotes if present
+          const cleanString = trimmed.startsWith('"') && trimmed.endsWith('"') 
+            ? trimmed.slice(1, -1).replace(/\\"/g, '"')
+            : trimmed;
+          const parsed = JSON.parse(cleanString);
+          if (Array.isArray(parsed)) {
+            logger.info('GeminiChatService', 'parseStringArray', `✅ Parsed ${fieldName} string array`, { count: parsed.length }, sessionId);
+            return parsed.map((v: any) => String(v).trim());
+          } else {
+            logger.warn('GeminiChatService', 'parseStringArray', `${fieldName} parsed but not array`, { 
+              parsedType: typeof parsed,
+              parsed: JSON.stringify(parsed).substring(0, 100)
+            }, sessionId);
+          }
+        } catch (e) {
+          logger.warn('GeminiChatService', 'parseStringArray', `❌ Failed to parse ${fieldName}`, { 
+            error: e instanceof Error ? e.message : String(e), 
+            originalValue: value.substring(0, 100) 
+          }, sessionId);
+        }
+      } else {
+        // Single string value
+        logger.debug('GeminiChatService', 'parseStringArray', `${fieldName} is single string value`, null, sessionId);
+        return [value.trim()];
+      }
+    }
+    
+    logger.warn('GeminiChatService', 'parseStringArray', `${fieldName} has unexpected type`, { type: typeof value }, sessionId);
+    return [];
+  }
+
   constructor() {
     // Initialize Gemini 2.5 Pro with function calling
     this.model = genAI.getGenerativeModel({
@@ -41,25 +97,40 @@ class GeminiChatService {
           functionDeclarations: [
             {
               name: 'searchHinnasto',
-              description: 'Search price list data by product name, price list name, or supplier. Can search by any combination of these fields. Returns product details including ProductNumber, ProductName, PriceListSupplier, PriceListName, BuyPrice, SalePrice, and SalePriceVat.',
+              description: 'Search price list data by product names, price list names, or suppliers. IMPORTANT: This function handles up to 200 products efficiently in a single call. For OstolaskuExcel with 200+ unique products, process ALL in ONE call: searchHinnasto({productNames: ["product1","product2",...]}). Returns UNION of all matches. The function is optimized for large batches.',
               parameters: {
                 type: 'object',
                 properties: {
+                  productNames: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Array of product names to search for (partial match supported). Example: ["Kuntotutkimus", "PTS"]'
+                  },
+                  priceListNames: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Array of price list names to search for (partial match supported)'
+                  },
+                  priceListSuppliers: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Array of price list suppliers to search for (partial match supported)'
+                  },
                   productName: {
                     type: 'string',
-                    description: 'Product name to search for (checks fields: ProductName, Tuote, etc. - partial match supported)'
+                    description: 'Single product name to search for (legacy parameter - use productNames instead)'
                   },
                   priceListName: {
                     type: 'string',
-                    description: 'Price list name to search for (partial match supported)'
+                    description: 'Single price list name to search for (legacy parameter - use priceListNames instead)'
                   },
                   priceListSupplier: {
                     type: 'string',
-                    description: 'Price list supplier to search for (partial match supported)'
+                    description: 'Single price list supplier to search for (legacy parameter - use priceListSuppliers instead)'
                   },
                   limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default 10 for product search, 50 for price list search)'
+                    description: 'Maximum number of results to return per search value (default 10 for product search, 50 for price list search)'
                   }
                 },
                 required: []  // All parameters are optional - at least one search parameter should be provided
@@ -67,21 +138,31 @@ class GeminiChatService {
             },
             {
               name: 'searchTilaus',
-              description: 'Search order data by Tampuuri code OR RP-number. Returns order details including OrderNumber, Code, Name, ProductName, TotalSellPrice, and PriceListName.',
+              description: 'Search order data by Tampuuri codes AND/OR RP-numbers. Returns OrderNumber, Code, Name, ProductName, SalePrice (without VAT), TotalSellPrice (with VAT), and PriceListName. IMPORTANT: This function handles up to 200 values efficiently in a single call. For OstolaskuExcel with 200+ rows, the function will process ALL values - no need to split calls. Use arrays for batch searching: searchTilaus({tampuuriCodes: ["1","2",...], orderNumbers: ["RP-1","RP-2",...]}). Returns UNION of all matches.',
               parameters: {
                 type: 'object',
                 properties: {
+                  tampuuriCodes: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Array of Tampuuri codes to search for (Code field - partial match supported). Example: ["12345", "67890"]'
+                  },
+                  orderNumbers: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Array of RP-numbers to search for (OrderNumber field - partial match supported). Example: ["RP-0201251024330417", "RP-0201251024330418"]'
+                  },
                   tampuuriCode: {
                     type: 'string',
-                    description: 'Tampuuri code to search for (Code field - partial match supported)'
+                    description: 'Single Tampuuri code to search for (legacy parameter - use tampuuriCodes instead)'
                   },
                   orderNumber: {
                     type: 'string',
-                    description: 'RP-number to search for (OrderNumber field - partial match supported)'
+                    description: 'Single RP-number to search for (legacy parameter - use orderNumbers instead)'
                   },
                   limit: {
                     type: 'number',
-                    description: 'Maximum number of results to return (default 10)'
+                    description: 'Maximum number of results to return per search value (default 10)'
                   }
                 },
                 required: []  // Neither is required - can search by either one
@@ -95,16 +176,19 @@ class GeminiChatService {
 
   // Function implementations for Gemini to call
   private async searchHinnasto(userId: string, params: Record<string, any>, sessionId?: string) {
-    // Reduced logging - only log errors
-    
-    // Log to continuous improvement
-    if (sessionId) {
-      await addTechnicalLog(sessionId, {
-        event: 'function_call_triggered',
-        functionName: 'searchHinnasto',
-        functionInputs: params
-      });
-    }
+    // Log incoming parameters for debugging with types
+    logger.info('GeminiChatService', 'searchHinnasto', '🔍 searchHinnasto called with params', {
+      productNames: params.productNames,
+      productNamesType: typeof params.productNames,
+      priceListNames: params.priceListNames,
+      priceListNamesType: typeof params.priceListNames,
+      priceListSuppliers: params.priceListSuppliers,
+      priceListSuppliersType: typeof params.priceListSuppliers,
+      productName: params.productName,
+      priceListName: params.priceListName,
+      priceListSupplier: params.priceListSupplier,
+      limit: params.limit
+    }, sessionId);
     
     try {
       // Query ALL hinnasto records without limit to match UI behavior
@@ -137,83 +221,121 @@ class GeminiChatService {
         };
       });
 
+      // Collect all search values (support both array and single value formats)
+      const productNamesToSearch: string[] = [
+        ...this.parseStringArray(params.productNames, 'productNames', sessionId).map(s => s.toLowerCase()),
+        ...(params.productName ? [String(params.productName).toLowerCase().trim()] : [])
+      ];
+      
+      const priceListNamesToSearch: string[] = [
+        ...this.parseStringArray(params.priceListNames, 'priceListNames', sessionId).map(s => s.toLowerCase()),
+        ...(params.priceListName ? [String(params.priceListName).toLowerCase().trim()] : [])
+      ];
+      
+      const priceListSuppliersToSearch: string[] = [
+        ...this.parseStringArray(params.priceListSuppliers, 'priceListSuppliers', sessionId).map(s => s.toLowerCase()),
+        ...(params.priceListSupplier ? [String(params.priceListSupplier).toLowerCase().trim()] : [])
+      ];
+      
       // Check if at least one search parameter is provided
-      if (!params.productName && !params.priceListName && !params.priceListSupplier) {
-        logger.warn('GeminiChatService', 'searchHinnasto', '⚠️ searchHinnasto called without any search parameters - returning empty result', undefined, sessionId);
+      if (productNamesToSearch.length === 0 && priceListNamesToSearch.length === 0 && priceListSuppliersToSearch.length === 0) {
+        logger.warn('GeminiChatService', 'searchHinnasto', '⚠️ searchHinnasto called without search parameters - returning empty result', undefined, sessionId);
         return {
           success: true,
           data: [],
           count: 0
         };
       }
-
-      // Apply filters based on provided parameters (OR logic)
-      const beforeFilter = records.length;
       
-      // Filter by ProductName (partial match)
-      if (params.productName) {
-        const searchTerm = params.productName.toLowerCase();
+      // Log if we have a lot of search values
+      const totalSearchValues = productNamesToSearch.length + priceListNamesToSearch.length + priceListSuppliersToSearch.length;
+      if (totalSearchValues > 50) {
+        logger.info('GeminiChatService', 'searchHinnasto', `📊 Large batch search: ${totalSearchValues} values`, {
+          productCount: productNamesToSearch.length,
+          priceListCount: priceListNamesToSearch.length,
+          supplierCount: priceListSuppliersToSearch.length
+        }, sessionId);
+      }
+      
+      // Filter records - match ANY of the provided search values (UNION)
+      // Using Set to track unique record IDs and avoid duplicates
+      const matchedRecordIds = new Set<string>();
+      const filteredRecords: any[] = [];
+      
+      for (const record of records) {
+        let isMatch = false;
         
-        records = records.filter(record => {
-          const productName = String(record.ProductName).toLowerCase();
-          return productName.includes(searchTerm);
-        });
+        // Check against product names
+        if (productNamesToSearch.length > 0) {
+          const recordProductName = String(record.ProductName).toLowerCase();
+          for (const searchName of productNamesToSearch) {
+            if (recordProductName.includes(searchName)) {
+              isMatch = true;
+              break;
+            }
+          }
+        }
+        
+        // Check against price list names (if not already matched)
+        if (!isMatch && priceListNamesToSearch.length > 0) {
+          const recordPriceListName = String(record.PriceListName).toLowerCase();
+          for (const searchList of priceListNamesToSearch) {
+            if (recordPriceListName.includes(searchList)) {
+              isMatch = true;
+              break;
+            }
+          }
+        }
+        
+        // Check against price list suppliers (if not already matched)
+        if (!isMatch && priceListSuppliersToSearch.length > 0) {
+          const recordPriceListSupplier = String(record.PriceListSupplier).toLowerCase();
+          for (const searchSupplier of priceListSuppliersToSearch) {
+            if (recordPriceListSupplier.includes(searchSupplier)) {
+              isMatch = true;
+              break;
+            }
+          }
+        }
+        
+        // Add to results if matched and not already added
+        if (isMatch && !matchedRecordIds.has(record.id)) {
+          matchedRecordIds.add(record.id);
+          filteredRecords.push(record);
+        }
       }
       
-      // Filter by PriceListName (partial match)
-      if (params.priceListName) {
-        const searchTerm = params.priceListName.toLowerCase();
-        records = records.filter(record => {
-          const priceListName = String(record.PriceListName).toLowerCase();
-          return priceListName.includes(searchTerm);
-        });
+      // Log search statistics
+      if (sessionId) {
+        const searchStats = {
+          productNamesSearched: productNamesToSearch.length,
+          productNames: productNamesToSearch,
+          priceListNamesSearched: priceListNamesToSearch.length,
+          priceListNames: priceListNamesToSearch,
+          priceListSuppliersSearched: priceListSuppliersToSearch.length,
+          priceListSuppliers: priceListSuppliersToSearch,
+          totalRecordsFound: filteredRecords.length,
+          batchSearch: (productNamesToSearch.length + priceListNamesToSearch.length + priceListSuppliersToSearch.length) > 1
+        };
+        logger.info('GeminiChatService', 'searchHinnasto', '📊 Batch search completed', searchStats, sessionId);
       }
       
-      // Filter by PriceListSupplier (partial match)
-      if (params.priceListSupplier) {
-        const searchTerm = params.priceListSupplier.toLowerCase();
-        records = records.filter(record => {
-          const priceListSupplier = String(record.PriceListSupplier).toLowerCase();
-          return priceListSupplier.includes(searchTerm);
-        });
-      }
-      
-      // Determine default limit based on search type
-      const defaultLimit = params.priceListName || params.priceListSupplier ? 50 : 10;
+      records = filteredRecords;
       
       const result = {
         success: true,
-        data: records.slice(0, params.limit || defaultLimit),
+        data: records, // Return ALL results, no limit
         count: records.length
       };
       
-      // Log result to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_result',
-          functionName: 'searchHinnasto',
-          result: {
-            success: result.success,
-            recordCount: result.data.length,
-            totalFound: result.count
-          },
-          timestamp: new Date()
-        });
-      }
+      // Log how many results we're returning
+      logger.info('GeminiChatService', 'searchHinnasto', `🎯 Returning ${records.length} results (ALL matches, no limit)`, null, sessionId);
       
       return result;
     } catch (error) {
       logger.error('GeminiChatService', 'searchHinnasto', '❌ searchHinnasto failed', error, sessionId);
       
-      // Log error to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_error',
-          functionName: 'searchHinnasto',
-          error: error instanceof Error ? error.message : 'Search failed',
-          timestamp: new Date()
-        });
-      }
+      // Logging removed - addTechnicalLog function not available
       
       return {
         success: false,
@@ -223,17 +345,16 @@ class GeminiChatService {
   }
 
   private async searchTilaus(userId: string, params: Record<string, any>, sessionId?: string) {
-    // Reduced logging - only log errors
-    
-    // Log to continuous improvement
-    if (sessionId) {
-      await addTechnicalLog(sessionId, {
-        eventType: 'function_call',
-        functionName: 'searchTilaus',
-        parameters: params,
-        timestamp: new Date()
-      });
-    }
+    // Log incoming parameters for debugging with types
+    logger.info('GeminiChatService', 'searchTilaus', '🔍 searchTilaus called with params', {
+      tampuuriCodes: params.tampuuriCodes,
+      tampuuriCodesType: typeof params.tampuuriCodes,
+      orderNumbers: params.orderNumbers,
+      orderNumbersType: typeof params.orderNumbers,
+      tampuuriCode: params.tampuuriCode,
+      orderNumber: params.orderNumber,
+      limit: params.limit
+    }, sessionId);
     
     try {
       // Query ALL tilaus_data records without limit to match UI behavior
@@ -244,82 +365,125 @@ class GeminiChatService {
 
       const querySnapshot = await getDocs(q);
       
-      let records = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Map to only essential fields to reduce response size
+      const allRecords = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          OrderNumber: data.OrderNumber || data['RP-numero'] || data['RP-tunnus'] || '',
+          Code: data.Code || data.Tampuurinumero || data.tampuurinumero || '',
+          Name: data.Name || data.Nimi || data.name || '',
+          ProductName: data.ProductName || data.Tuotenimi || data.tuotenimi || '',
+          SalePrice: data.SalePrice || data.Myyntihinta || data.myyntihinta || 0,
+          TotalSellPrice: data.TotalSellPrice || data.Myyntihinta_alv || data.SalePriceVat || data['Myyntihinta yhteensä'] || 0,
+          PriceListName: data.PriceListName || data.Hintalista || data.hintalista || ''
+        };
+      });
 
-      // Apply filter - search by Code (Tampuurinumero) OR OrderNumber (RP-numero)
-      if (params.tampuuriCode) {
-        const beforeFilter = records.length;
-        const searchCode = String(params.tampuuriCode).trim();
-        
-        records = records.filter(record => {
-          // Check Code field (Tampuurinumero) - exact match or starts with for longer codes
-          const code = String(record['Code'] || record['Tampuurinumero'] || '').trim();
-          
-          // For short search terms (1-3 chars), require exact match
-          if (searchCode.length <= 3) {
-            return code === searchCode;
-          }
-          
-          // For longer search terms, allow partial match (starts with or contains)
-          return code.startsWith(searchCode) || code.includes(searchCode);
-        });
-      } else if (params.orderNumber) {
-        const beforeFilter = records.length;
-        const searchOrder = String(params.orderNumber).trim();
-        
-        records = records.filter(record => {
-          // Check OrderNumber field (RP-numero)
-          const orderNum = String(record['OrderNumber'] || record['RP-numero'] || '').trim();
-          
-          // For RP numbers, always use contains/partial match since they are long
-          return orderNum.toLowerCase().includes(searchOrder.toLowerCase());
-        });
-      } else {
-        // Either tampuuriCode or orderNumber required
-        logger.warn('GeminiChatService', 'searchTilaus', '⚠️ searchTilaus called without tampuuriCode or orderNumber - returning empty result', undefined, sessionId);
+      // Collect all search values (support both array and single value formats)
+      const tampuuriCodesToSearch: string[] = [
+        ...this.parseStringArray(params.tampuuriCodes, 'tampuuriCodes', sessionId),
+        ...(params.tampuuriCode ? [String(params.tampuuriCode).trim()] : [])
+      ];
+      
+      const orderNumbersToSearch: string[] = [
+        ...this.parseStringArray(params.orderNumbers, 'orderNumbers', sessionId),
+        ...(params.orderNumber ? [String(params.orderNumber).trim()] : [])
+      ];
+      
+      // Check if any search values provided
+      if (tampuuriCodesToSearch.length === 0 && orderNumbersToSearch.length === 0) {
+        logger.warn('GeminiChatService', 'searchTilaus', '⚠️ searchTilaus called without search parameters - returning empty result', undefined, sessionId);
         return {
           success: true,
           data: [],
           count: 0
         };
       }
+      
+      // Log if we have a lot of search values
+      const totalSearchValues = tampuuriCodesToSearch.length + orderNumbersToSearch.length;
+      if (totalSearchValues > 100) {
+        logger.info('GeminiChatService', 'searchTilaus', `📊 Large batch search: ${totalSearchValues} values`, {
+          tampuuriCount: tampuuriCodesToSearch.length,
+          orderCount: orderNumbersToSearch.length
+        }, sessionId);
+      }
+      
+      // Filter records - match ANY of the provided search values (UNION)
+      // Using Set to track unique record IDs and avoid duplicates
+      const matchedRecordIds = new Set<string>();
+      const records: any[] = [];
+      
+      for (const record of allRecords) {
+        let isMatch = false;
+        
+        // Check against Tampuuri codes
+        if (tampuuriCodesToSearch.length > 0) {
+          const code = String(record['Code'] || record['Tampuurinumero'] || '').trim();
+          for (const searchCode of tampuuriCodesToSearch) {
+            // For short search terms (1-3 chars), require exact match
+            if (searchCode.length <= 3) {
+              if (code === searchCode) {
+                isMatch = true;
+                break;
+              }
+            } else {
+              // For longer search terms, allow partial match
+              if (code.startsWith(searchCode) || code.includes(searchCode)) {
+                isMatch = true;
+                break;
+              }
+            }
+          }
+        }
+        
+        // Check against Order numbers (if not already matched)
+        if (!isMatch && orderNumbersToSearch.length > 0) {
+          const orderNum = String(record['OrderNumber'] || record['RP-numero'] || '').trim();
+          for (const searchOrder of orderNumbersToSearch) {
+            // For RP numbers, always use contains/partial match
+            if (orderNum.toLowerCase().includes(searchOrder.toLowerCase())) {
+              isMatch = true;
+              break;
+            }
+          }
+        }
+        
+        // Add to results if matched and not already added
+        if (isMatch && !matchedRecordIds.has(record.id)) {
+          matchedRecordIds.add(record.id);
+          records.push(record);
+        }
+      }
+      
+      // Log search statistics
+      if (sessionId) {
+        const searchStats = {
+          tampuuriCodesSearched: tampuuriCodesToSearch.length,
+          tampuuriCodes: tampuuriCodesToSearch,
+          orderNumbersSearched: orderNumbersToSearch.length,
+          orderNumbers: orderNumbersToSearch,
+          totalRecordsFound: records.length,
+          batchSearch: (tampuuriCodesToSearch.length + orderNumbersToSearch.length) > 1
+        };
+        logger.info('GeminiChatService', 'searchTilaus', '📊 Batch search completed', searchStats, sessionId);
+      }
 
       const result = {
         success: true,
-        data: records.slice(0, params.limit || 10),
+        data: records, // Return ALL results, no limit
         count: records.length
       };
       
-      // Log result to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_result',
-          functionName: 'searchTilaus',
-          result: {
-            success: result.success,
-            recordCount: result.data.length,
-            totalFound: result.count
-          },
-          timestamp: new Date()
-        });
-      }
+      // Log how many results we're returning
+      logger.info('GeminiChatService', 'searchTilaus', `🎯 Returning ${records.length} results (ALL matches, no limit)`, null, sessionId);
       
       return result;
     } catch (error) {
       logger.error('GeminiChatService', 'searchTilaus', '❌ searchTilaus failed', error, sessionId);
       
-      // Log error to continuous improvement
-      if (sessionId) {
-        await addTechnicalLog(sessionId, {
-          eventType: 'function_error',
-          functionName: 'searchTilaus',
-          error: error instanceof Error ? error.message : 'Search failed',
-          timestamp: new Date()
-        });
-      }
+      // Logging removed - addTechnicalLog function not available
       
       return {
         success: false,
@@ -372,10 +536,12 @@ class GeminiChatService {
   }
 
   async sendMessage(sessionId: string, message: string, userId: string, ostolaskuExcelData: any[] = []): Promise<ChatMessage> {
-    // Only log if there's an issue or it's critical
-    logger.debug('GeminiChatService', 'sendMessage', '💬 Processing message', { 
+    // Log API input details
+    logger.info('GeminiChatService', 'sendMessage', '📤 Gemini API Input', { 
       messageLength: message.length,
-      hasData: ostolaskuExcelData.length > 0
+      messagePreview: message.substring(0, 200),
+      hasOstolaskuData: ostolaskuExcelData.length > 0,
+      ostolaskuRowCount: ostolaskuExcelData.length
     }, sessionId);
     
     let session = this.activeSessions.get(sessionId);
@@ -398,6 +564,16 @@ class GeminiChatService {
         try {
           result = await session.sendMessage(fullMessage);
           response = result.response;
+          
+          // Log API output
+          logger.info('GeminiChatService', 'sendMessage', '📥 Gemini API Raw Response', {
+            hasResponse: !!response,
+            hasText: response ? !!response.text() : false,
+            textLength: response ? response.text()?.length || 0 : 0,
+            textPreview: response ? response.text()?.substring(0, 200) : null,
+            hasFunctionCalls: response ? !!(response.functionCalls && typeof response.functionCalls === 'function') : false,
+            functionCallCount: response && response.functionCalls && typeof response.functionCalls === 'function' ? response.functionCalls().length : 0
+          }, sessionId);
           
           // Validate initial response
           if (response) {
@@ -445,12 +621,28 @@ class GeminiChatService {
         
         const functionResponses = [];
         
+        // Log all function calls for debugging with full details
+        logger.info('GeminiChatService', 'sendMessage', '🔧 Function calls received', {
+          count: functionCallsArray.length,
+          functions: functionCallsArray.map(call => ({
+            name: call.name,
+            args: JSON.stringify(call.args) // Stringify to see full content
+          }))
+        }, sessionId);
+        
+        // Also log each function call separately for clarity
+        functionCallsArray.forEach((call, index) => {
+          logger.info('GeminiChatService', 'sendMessage', `📞 Function call ${index + 1}/${functionCallsArray.length}: ${call.name}`, call.args, sessionId);
+        });
+        
         for (const call of functionCallsArray) {
           const functionName = call.name;
           const args = call.args;
           
           
           let functionResult;
+          logger.info('GeminiChatService', 'sendMessage', `🔄 Executing function: ${functionName}`, { args: JSON.stringify(args).substring(0, 200) }, sessionId);
+          
           switch (functionName) {
             case 'searchHinnasto':
               functionResult = await this.searchHinnasto(userId, args, sessionId);
@@ -462,6 +654,12 @@ class GeminiChatService {
               logger.error('GeminiChatService', 'sendMessage', '❌ Unknown function called', { functionName }, sessionId);
               functionResult = { success: false, error: 'Unknown function' };
           }
+          
+          logger.info('GeminiChatService', 'sendMessage', `✅ Function ${functionName} completed`, { 
+            success: functionResult?.success,
+            dataCount: functionResult?.data?.length || 0,
+            error: functionResult?.error
+          }, sessionId);
           
           functionCalls.push(`${functionName}(${JSON.stringify(args)})`);
           

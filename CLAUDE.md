@@ -138,7 +138,7 @@ The chatbot has access to the following Gemini AI functions:
 - `orderNumber` (string, optional) - RP-number to search for (OrderNumber field - partial match supported)
 - `limit` (number) - Maximum results to return (default 10)
 
-**Returns**: OrderNumber, Code, Name, ProductName, TotalSellPrice, PriceListName
+**Returns**: OrderNumber, Code, Name, ProductName, SalePrice (without VAT), TotalSellPrice (with VAT, calculated), PriceListName
 
 **Usage**: "Hae tilaus RP-0201251024330417" or "Hae tampuurinumero 12345" or "Näytä tilaus 567"
 
@@ -275,5 +275,6 @@ Miten voin auttaa?
 - When updating application branding or terminology
 
 **Related Files**:
-- System prompt configuration is managed through Admin panel or default prompt in same file (lines 54-108)
-- Chat initialization logic in same file (lines 116-172)
+- System prompt configuration is managed through Admin panel ONLY (stored in Firestore)
+- No default prompt - error shown if prompt is missing
+- Chat initialization logic in same file

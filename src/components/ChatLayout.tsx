@@ -24,16 +24,11 @@ interface DatabaseRecord {
 export const ChatLayout: React.FC = () => {
   const [hinnastoData, setHinnastoData] = useState<DatabaseRecord[]>([]);
   const [tilausData, setTilausData] = useState<DatabaseRecord[]>([]);
-  const [myyntiExcelData, setMyyntiExcelData] = useState<DatabaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus' | 'myyntiExcel'>('hinnasto');
+  const [activeDataTab, setActiveDataTab] = useState<'hinnasto' | 'tilaus'>('hinnasto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
-  const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
   const [productNameFilter, setProductNameFilter] = useState<string>('');  // Aligned with searchHinnasto function
   const [priceListNameFilter, setPriceListNameFilter] = useState<string>('');  // Aligned with searchHinnasto function
   const [priceListSupplierFilter, setPriceListSupplierFilter] = useState<string>('');  // Aligned with searchHinnasto function
@@ -134,110 +129,6 @@ export const ChatLayout: React.FC = () => {
       );
       setTilausData(tilausRecords); // Store all records, will filter in display
 
-      // Load myyntiExcel data in hierarchical format
-      const myyntiExcelDocuments = await storageService.getUserMyyntiExcelDocuments(user.uid);
-      
-      // Create a lookup map from tilaus data for joining
-      const tilausLookup = new Map();
-      const tilausProductLookup = new Map(); // For product matching
-      
-      tilausRecords.forEach(tilausRecord => {
-        // Try to find the company ID field - could be various names
-        const companyIdField = Object.keys(tilausRecord).find(key => 
-          key.includes('Yhtiön tunnus') || key.includes('yhtiön tunnus') || 
-          key.includes('Yhtiötunnus') || key.includes('yhtiötunnus') ||
-          key.toLowerCase().includes('company') && key.toLowerCase().includes('id')
-        );
-        
-        if (companyIdField && tilausRecord[companyIdField]) {
-          const companyId = String(tilausRecord[companyIdField]).trim();
-          
-          // Store header info
-          if (!tilausLookup.has(companyId)) {
-            tilausLookup.set(companyId, {
-              tilaustunnus: tilausRecord['Tilaustunnus'] || tilausRecord['tilaustunnus'] || tilausRecord['Order'] || '',
-              yhtiönNimi: tilausRecord['Yhtiön nimi'] || tilausRecord['yhtiön nimi'] || tilausRecord['Company'] || '',
-              tilaajanNimi: tilausRecord['Tilaajan nimi'] || tilausRecord['tilaajan nimi'] || tilausRecord['Orderer'] || ''
-            });
-          }
-          
-          // Store product info for matching
-          const tilattuTuote = tilausRecord['Tilattu tuote'] || tilausRecord['tilattu tuote'] || tilausRecord['Product'] || '';
-          if (tilattuTuote) {
-            if (!tilausProductLookup.has(companyId)) {
-              tilausProductLookup.set(companyId, []);
-            }
-            tilausProductLookup.get(companyId).push(String(tilattuTuote).trim());
-          }
-        }
-      });
-      
-      const invoiceHeaders = myyntiExcelDocuments.flatMap(doc => 
-        doc.jsonData?.map((lasku, laskuIndex) => {
-          // Look up tilaus data using asiakasnumero (which corresponds to Tampuurinumero)
-          const tilausInfo = tilausLookup.get(String(lasku.asiakasnumero || '').trim()) || {
-            tilaustunnus: '',
-            yhtiönNimi: '',
-            tilaajanNimi: ''
-          };
-          
-          // Handle both old structure (laskurivit) and new structure (rivit)
-          const rows = lasku.rivit || lasku.laskurivit || [];
-          
-          return {
-            id: `${doc.id}_${laskuIndex}`,
-            docId: doc.id,
-            firestoreDocId: lasku.id, // The real Firestore document ID
-            // Header fields from new structure
-            asiakasnumero: lasku.asiakasnumero,
-            Tilausnumero: lasku.Tilausnumero || lasku.tilausnumero || '',
-            Laskutusselvitys: lasku.Laskutusselvitys || '',
-            reskontra: lasku.reskontra || 'MK',
-            // Legacy fields for compatibility
-            laskuotsikko: lasku.laskuotsikko || 'Myyntilasku',
-            luontipaiva: lasku.luontipaiva,
-            kokonaissumma: lasku.kokonaissumma,
-            rivienMaara: rows.length,
-            // Add tilaus information
-            tilaustunnus: tilausInfo.tilaustunnus,
-            yhtiönNimi: tilausInfo.yhtiönNimi,
-            tilaajanNimi: tilausInfo.tilaajanNimi,
-            // Map rows with new structure
-            laskurivit: rows.map((rivi, riviIndex) => {
-              // Find matching "Tilattu tuote" based on description similarity
-              const customerProducts = tilausProductLookup.get(String(lasku.asiakasnumero || '').trim()) || [];
-              let tilattuTuote = '';
-              
-              if (customerProducts.length > 0 && rivi.kuvaus) {
-                const description = String(rivi.kuvaus).toLowerCase().trim();
-                // Find best match by checking if tilaus product name is contained in description
-                const bestMatch = customerProducts.find(product => 
-                  description.includes(String(product).toLowerCase().trim()) ||
-                  String(product).toLowerCase().trim().includes(description)
-                );
-                tilattuTuote = bestMatch || '';
-              }
-              
-              return {
-                id: `${doc.id}_${laskuIndex}_${riviIndex}`,
-                invoiceId: `${doc.id}_${laskuIndex}`,
-                tilattuTuote,
-                // New structure fields
-                määrä: rivi.määrä || 0,
-                ahinta: rivi.ahinta || 0,
-                Yhteensä: rivi.Yhteensä || (rivi.määrä * rivi.ahinta) || 0,
-                kuvaus: rivi.kuvaus || '',
-                yksikkö: rivi.yksikkö || '',
-                tuotenimi: rivi.tuotenimi || '',
-                alvkoodi: rivi.alvkoodi || '',
-                // Keep any other fields that might exist
-                ...rivi
-              };
-            })
-          };
-        }) || []
-      );
-      setMyyntiExcelData(invoiceHeaders.slice(0, 20)); // Show first 20 invoices
 
 
     } catch (err) {
@@ -262,49 +153,8 @@ export const ChatLayout: React.FC = () => {
   const downloadAsExcel = (data: DatabaseRecord[], filename: string) => {
     if (data.length === 0) return;
     
-    // Check if this is invoice data with line items
-    const isInvoiceData = filename === 'myyntiExcel' && data.some(item => item.laskurivit);
-    
-    let exportData: DatabaseRecord[] = [];
-    
-    if (isInvoiceData) {
-      // Flatten invoice data: one row per invoice line
-      data.forEach(invoice => {
-        const headerData = { ...invoice };
-        delete headerData.laskurivit; // Remove the nested array
-        
-        if (Array.isArray(invoice.laskurivit)) {
-          // Create a row for each invoice line
-          (invoice.laskurivit as DatabaseRecord[]).forEach(line => {
-            exportData.push({
-              // Header fields (new structure)
-              asiakasnumero: headerData.asiakasnumero,
-              Tilausnumero: headerData.Tilausnumero || '',
-              reskontra: headerData.reskontra || 'MK',
-              // Row fields (new structure)
-              määrä: line.määrä,
-              ahinta: line.ahinta,
-              Yhteensä: line.Yhteensä || (Number(line.määrä) * Number(line.ahinta)),
-              kuvaus: line.kuvaus,
-              yksikkö: line.yksikkö || '',
-              tuotenimi: line.tuotenimi || '',
-              alvkoodi: line.alvkoodi || '',
-              // Additional info for reference
-              luontipaiva: headerData.luontipaiva,
-              yhtiönNimi: headerData.yhtiönNimi || '',
-              docId: headerData.docId,
-              tilattuTuote: line.tilattuTuote
-            });
-          });
-        } else {
-          // If no line items, just add the header
-          exportData.push(headerData);
-        }
-      });
-    } else {
-      // For non-invoice data, use as-is
-      exportData = data;
-    }
+    // Use data as-is for export
+    const exportData = data;
     
     // Create a new workbook
     const workbook = XLSX.utils.book_new();
@@ -313,8 +163,7 @@ export const ChatLayout: React.FC = () => {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
     // Add worksheet to workbook
-    const sheetName = isInvoiceData ? 'MyyntiExcel' : filename;
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.utils.book_append_sheet(workbook, worksheet, filename);
     
     // Write workbook to buffer
     const buffer = XLSX.write(workbook, { 
@@ -408,349 +257,12 @@ export const ChatLayout: React.FC = () => {
     return String(value);
   };
 
-  const saveCell = async (rowId: string, field: string, value: string) => {
-    if (!user) return;
-    
-    try {
-      // Find the invoice and update the specific field
-      const updatedData = myyntiExcelData.map(invoice => {
-        if (invoice.id === rowId) {
-          return { ...invoice, [field]: value };
-        }
-        // Also check if it's a line item
-        if (invoice.laskurivit) {
-          const updatedLines = invoice.laskurivit.map(line => {
-            if (line.id === rowId) {
-              return { ...line, [field]: value };
-            }
-            return line;
-          });
-          if (updatedLines !== invoice.laskurivit) {
-            return { ...invoice, laskurivit: updatedLines };
-          }
-        }
-        return invoice;
-      });
-      
-      setMyyntiExcelData(updatedData);
-      // TODO: Save to Firestore
-      console.log('Saved:', { rowId, field, value });
-    } catch (error) {
-      console.error('Failed to save:', error);
-    }
-  };
 
-  const deleteInvoiceHeader = async (invoiceId: string) => {
-    if (!user || !confirm('Oletko varma että haluat poistaa laskun ja kaikki sen rivit?')) return;
-    
-    try {
-      // Find the invoice to get its firestoreDocId
-      const invoice = myyntiExcelData.find(inv => inv.id === invoiceId);
-      if (!invoice || !invoice.firestoreDocId) {
-        throw new Error('Invoice not found or missing Firestore document ID');
-      }
-      
-      console.log('Deleting invoice from Firestore:', { 
-        invoiceId, 
-        docId: invoice.docId, 
-        firestoreDocId: invoice.firestoreDocId 
-      });
-      
-      // Delete from Firestore using the real Firestore document ID
-      await deleteDoc(doc(db, 'myyntiExcel', invoice.firestoreDocId));
-      
-      // Update UI state
-      const updatedData = myyntiExcelData.filter(inv => inv.id !== invoiceId);
-      setMyyntiExcelData(updatedData);
-      if (selectedInvoiceId === invoiceId) {
-        setSelectedInvoiceId(null);
-      }
-      
-      console.log('✅ Invoice deleted successfully:', invoiceId);
-    } catch (error) {
-      console.error('❌ Failed to delete invoice:', error);
-      setError(error instanceof Error ? error.message : 'Failed to delete invoice');
-    }
-  };
 
-  const deleteInvoiceLine = async (invoiceId: string, lineId: string) => {
-    if (!user || !confirm('Oletko varma että haluat poistaa tämän laskurivin?')) return;
-    
-    try {
-      const updatedData = myyntiExcelData.map(invoice => {
-        if (invoice.id === invoiceId && invoice.laskurivit) {
-          const updatedLines = invoice.laskurivit.filter(line => line.id !== lineId);
-          return { ...invoice, laskurivit: updatedLines, rivienMaara: updatedLines.length };
-        }
-        return invoice;
-      });
-      setMyyntiExcelData(updatedData);
-      // TODO: Save to Firestore
-      console.log('Deleted line:', lineId);
-    } catch (error) {
-      console.error('Failed to delete line:', error);
-    }
-  };
 
-  const handleCellEdit = (rowId: string, field: string, currentValue: string) => {
-    setEditingCell({ rowId, field });
-    setEditValue(currentValue);
-  };
 
-  const handleCellSave = () => {
-    if (editingCell) {
-      saveCell(editingCell.rowId, editingCell.field, editValue);
-    }
-    setEditingCell(null);
-    setEditValue('');
-  };
 
-  const handleCellCancel = () => {
-    setEditingCell(null);
-    setEditValue('');
-  };
 
-  const renderInvoiceEditor = () => {
-    if (myyntiExcelData.length === 0) {
-      return (
-        <div className="text-center py-8 text-gray-500">
-          <Database className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-          <p>Ei myyntilaskuja saatavilla</p>
-          <p className="text-sm">Luo myyntilasku pyytämällä AI:ta</p>
-        </div>
-      );
-    }
-
-    const selectedInvoice = myyntiExcelData.find(inv => inv.id === selectedInvoiceId);
-
-    return (
-      <div className="space-y-4">
-        {/* Invoice Headers List */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <Badge variant="secondary">{myyntiExcelData.length} laskua</Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadAsExcel(myyntiExcelData, 'myyntiExcel')}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Excel
-            </Button>
-          </div>
-          
-          <div className="max-h-40 overflow-y-auto border rounded">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-100 sticky top-0">
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Valitse</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Tampuuri</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">RP-numero</th>
-                  <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myyntiExcelData.map((invoice, index) => (
-                  <tr 
-                    key={invoice.id} 
-                    className={`cursor-pointer hover:bg-gray-50 ${selectedInvoiceId === invoice.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                    onClick={() => setSelectedInvoiceId(invoice.id)}
-                  >
-                    <td className="border-b px-1 py-1">
-                      <input 
-                        type="radio" 
-                        checked={selectedInvoiceId === invoice.id}
-                        onChange={() => setSelectedInvoiceId(invoice.id)}
-                        className="w-3 h-3"
-                      />
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs">
-                      {invoice.asiakasnumero || '-'}
-                    </td>
-                    <td className="border-b px-1 py-1 text-xs truncate max-w-[120px]" title={invoice.Tilausnumero}>
-                      {invoice.Tilausnumero || '-'}
-                    </td>
-                    <td className="border-b px-1 py-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteInvoice(invoice.id);
-                        }}
-                        className="h-6 w-6 p-0 text-red-600 hover:text-red-800"
-                      >
-                        🗑️
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Invoice-level Laskutusselvitys */}
-        {selectedInvoice && selectedInvoice.Laskutusselvitys && (
-          <div className="space-y-2 mb-4">
-            <h4 className="font-medium text-sm">Laskutusselvitys</h4>
-            <div className="border rounded p-3 bg-gray-50 max-h-40 overflow-y-auto">
-              <div className="text-sm prose prose-sm max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {selectedInvoice.Laskutusselvitys}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Selected Invoice Line Items */}
-        {selectedInvoice && selectedInvoice.laskurivit && selectedInvoice.laskurivit.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="font-medium text-sm">Laskurivit: {selectedInvoice.laskuotsikko || 'Myyntilasku'}</h4>
-            <div className="max-h-60 overflow-y-auto border rounded">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-gray-100 sticky top-0">
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Määrä</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">á-hinta</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Yhteensä</th>
-                    <th className="border-b px-2 py-1 text-left font-medium text-xs min-w-[150px]">Kuvaus</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Yksikkö</th>
-                    <th className="border-b px-1 py-1 text-left font-medium text-xs">Toiminnot</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedInvoice.laskurivit.map((line, index) => (
-                    <tr 
-                      key={line.id} 
-                      className={`cursor-pointer ${selectedLineId === line.id ? 'bg-blue-100' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}
-                      onClick={() => setSelectedLineId(selectedLineId === line.id ? null : line.id)}
-                    >
-                      <td className="border-b px-1 py-1 text-xs">
-                        {editingCell?.rowId === line.id && editingCell?.field === 'määrä' ? (
-                          <div className="flex gap-1">
-                            <input
-                              type="number"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-16 px-1 text-xs border rounded"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave();
-                                if (e.key === 'Escape') handleCellCancel();
-                              }}
-                              autoFocus
-                            />
-                            <Button size="sm" onClick={handleCellSave} className="h-5 w-5 p-0 text-xs">✓</Button>
-                            <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-5 w-5 p-0 text-xs">✕</Button>
-                          </div>
-                        ) : (
-                          <span 
-                            className="cursor-pointer hover:bg-gray-200 px-1 rounded"
-                            onClick={() => handleCellEdit(line.id, 'määrä', String(line.määrä || ''))}
-                          >
-                            {line.määrä || '-'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="border-b px-1 py-1 text-xs">
-                        {editingCell?.rowId === line.id && editingCell?.field === 'ahinta' ? (
-                          <div className="flex gap-1">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-20 px-1 text-xs border rounded"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave();
-                                if (e.key === 'Escape') handleCellCancel();
-                              }}
-                              autoFocus
-                            />
-                            <Button size="sm" onClick={handleCellSave} className="h-5 w-5 p-0 text-xs">✓</Button>
-                            <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-5 w-5 p-0 text-xs">✕</Button>
-                          </div>
-                        ) : (
-                          <span 
-                            className="cursor-pointer hover:bg-gray-200 px-1 rounded"
-                            onClick={() => handleCellEdit(line.id, 'ahinta', String(line.ahinta || ''))}
-                          >
-                            {line.ahinta ? `${line.ahinta}€` : '-'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="border-b px-1 py-1 text-xs">
-                        {line.Yhteensä ? `${line.Yhteensä.toFixed(2)}€` : '-'}
-                      </td>
-                      <td className="border-b px-2 py-1 text-xs min-w-[150px] max-w-[250px]">
-                        {editingCell?.rowId === line.id && editingCell?.field === 'kuvaus' ? (
-                          <div className="flex gap-1">
-                            <input
-                              type="text"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full px-1 text-xs border rounded"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave();
-                                if (e.key === 'Escape') handleCellCancel();
-                              }}
-                              autoFocus
-                            />
-                            <Button size="sm" onClick={handleCellSave} className="h-5 w-5 p-0 text-xs">✓</Button>
-                            <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-5 w-5 p-0 text-xs">✕</Button>
-                          </div>
-                        ) : (
-                          <div className="group relative">
-                            <span 
-                              className="cursor-pointer hover:bg-gray-200 px-1 rounded block break-words whitespace-normal"
-                              onClick={() => handleCellEdit(line.id, 'kuvaus', String(line.kuvaus || ''))}
-                            >
-                              {line.kuvaus || '-'}
-                            </span>
-                            {line.kuvaus && line.kuvaus.length > 50 && (
-                              <div className="absolute z-10 hidden group-hover:block bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 max-w-md">
-                                <span className="text-xs">{line.kuvaus}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="border-b px-1 py-1 text-xs">
-                        {line.yksikkö || '-'}
-                      </td>
-                      <td className="border-b px-1 py-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteInvoiceLine(selectedInvoice.id, line.id)}
-                          className="h-5 w-5 p-0 text-red-600 hover:text-red-800"
-                        >
-                          🗑️
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {selectedInvoice && (!selectedInvoice.laskurivit || selectedInvoice.laskurivit.length === 0) && (
-          <div className="text-center py-4 text-gray-500">
-            <p className="text-sm">Valitulla laskulla ei ole laskurivejä</p>
-          </div>
-        )}
-
-        {!selectedInvoice && (
-          <div className="text-center py-4 text-gray-500">
-            <p className="text-sm">Valitse lasku nähdäksesi sen rivit</p>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const renderDataTable = useCallback((data: DatabaseRecord[], title: string) => {
     
@@ -930,7 +442,7 @@ export const ChatLayout: React.FC = () => {
             <div className="space-y-2">
               <Alert className="bg-blue-50 border-blue-200">
                 <AlertDescription className="text-sm text-blue-700">
-                  searchTilaus: Hae RP-numerolla TAI Tampuurilla (OR-logiikka) | Tulokset: OrderNumber, Code, Name, ProductName, TotalSellPrice, PriceListName
+                  searchTilaus: Hae RP-numerolla TAI Tampuurilla (OR-logiikka) | Tulokset: OrderNumber, Code, Name, ProductName, SalePrice, VAT, PriceListName
                 </AlertDescription>
               </Alert>
               <div className="flex gap-2">
@@ -1193,7 +705,8 @@ export const ChatLayout: React.FC = () => {
                     <th className="border border-gray-300 px-2 py-1 text-left font-medium text-xs">Code</th>
                     <th className="border border-gray-300 px-2 py-1 text-left font-medium text-xs">Name</th>
                     <th className="border border-gray-300 px-2 py-1 text-left font-medium text-xs min-w-[200px]">ProductName</th>
-                    <th className="border border-gray-300 px-2 py-1 text-right font-medium text-xs">TotalSellPrice</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right font-medium text-xs">SalePrice</th>
+                    <th className="border border-gray-300 px-2 py-1 text-right font-medium text-xs">VAT</th>
                     <th className="border border-gray-300 px-2 py-1 text-left font-medium text-xs">PriceListName</th>
                   </>
                 ) : displayHeaders.map(header => {
@@ -1258,7 +771,21 @@ export const ChatLayout: React.FC = () => {
                         {record['ProductName'] || record['Tuote'] || record['Tuotenimi'] || '-'}
                       </td>
                       <td className="border border-gray-300 px-2 py-1 text-xs text-right">
-                        {record['TotalSellPrice'] !== undefined ? `${record['TotalSellPrice']}€` : (record['Myyntihinta yhteensä'] || '-')}
+                        {(() => {
+                          const salePrice = record['SalePrice'] || record['Myyntihinta'] || record['myyntihinta'] || 0;
+                          return salePrice !== 0 ? `${salePrice}€` : '-';
+                        })()}
+                      </td>
+                      <td className="border border-gray-300 px-2 py-1 text-xs text-right">
+                        {(() => {
+                          const salePrice = parseFloat(record['SalePrice'] || record['Myyntihinta'] || record['myyntihinta'] || '0');
+                          const totalSellPrice = parseFloat(record['TotalSellPrice'] || record['Myyntihinta yhteensä'] || record['SalePriceVat'] || record['Myyntihinta_alv'] || '0');
+                          if (salePrice > 0 && totalSellPrice > 0) {
+                            const vatPercentage = ((totalSellPrice - salePrice) / salePrice * 100).toFixed(0);
+                            return `${vatPercentage}%`;
+                          }
+                          return '-';
+                        })()}
                       </td>
                       <td className="border border-gray-300 px-2 py-1 text-xs">
                         {record['PriceListName'] || record['Hintalista'] || '-'}
@@ -1310,7 +837,7 @@ export const ChatLayout: React.FC = () => {
         </div>
       </div>
     );
-  }, [productNameFilter, priceListNameFilter, priceListSupplierFilter, tampuuriCodeFilter, orderRPFilter, editingCell, columnOffset]);
+  }, [productNameFilter, priceListNameFilter, priceListSupplierFilter, tampuuriCodeFilter, orderRPFilter, columnOffset]);
 
   return (
     <div id="chat-layout-container" className="h-full flex gap-2 relative">
@@ -1403,11 +930,10 @@ export const ChatLayout: React.FC = () => {
               </Alert>
             )}
             
-            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus' | 'myyntiExcel')} className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-3 flex-shrink-0 sticky top-0 bg-white z-10">
+            <Tabs value={activeDataTab} onValueChange={(value) => setActiveDataTab(value as 'hinnasto' | 'tilaus')} className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-2 flex-shrink-0 sticky top-0 bg-white z-10">
                 <TabsTrigger value="hinnasto">searchHinnasto</TabsTrigger>
                 <TabsTrigger value="tilaus">searchTilaus</TabsTrigger>
-                <TabsTrigger value="myyntiExcel">MyyntiExcel</TabsTrigger>
               </TabsList>
               
               <TabsContent value="hinnasto" className="mt-4 flex-1 overflow-auto">
@@ -1418,10 +944,6 @@ export const ChatLayout: React.FC = () => {
                 {renderDataTable(tilausData, 'Tilaus')}
               </TabsContent>
               
-              
-              <TabsContent value="myyntiExcel" className="mt-4 flex-1 overflow-auto">
-                {renderInvoiceEditor()}
-              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
