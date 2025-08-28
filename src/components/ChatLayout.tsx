@@ -35,7 +35,7 @@ export const ChatLayout: React.FC = () => {
   const [tampuuriCodeFilter, setTampuuriCodeFilter] = useState<string>('');  // Aligned with searchTilaus function
   const [orderRPFilter, setOrderRPFilter] = useState<string>('');
   const [columnOffset, setColumnOffset] = useState<Record<string, number>>({});
-  const [isLeftPanelVisible, setIsLeftPanelVisible] = useState(true);
+  const [isLeftPanelVisible, setIsLeftPanelVisible] = useState(false);
   const [isRightPanelVisible, setIsRightPanelVisible] = useState(true);
   const { user } = useAuth();
 
