@@ -22,19 +22,6 @@ export interface SystemPromptVersion {
   technicalKey?: string; // New: username + version number
 }
 
-export interface ContinuousImprovementSession {
-  id?: string;
-  promptKey: string; // References SystemPromptVersion.technicalKey
-  chatSessionKey: string; // Unique identifier for this chat session
-  userId: string;
-  userFeedback?: 'thumbs_up' | 'thumbs_down' | null;
-  userComment?: string; // Optional comment from user
-  issueStatus?: 'fixed' | 'not_fixed'; // Status for negative feedback issues
-  technicalLogs: TechnicalLog[];
-  createdDate: Date;
-  lastUpdated: Date;
-}
-
 // New interface for structured error reports
 export interface ErrorReport {
   id?: string;
@@ -74,48 +61,6 @@ export interface ErrorReport {
   feedback: 'thumbs_down';
 }
 
-export interface TechnicalLog {
-  timestamp: Date;
-  event: 'function_call_triggered' | 'function_call_success' | 'function_call_error' | 'ai_response' | 'user_message';
-  userMessage?: string;
-  functionName?: string;
-  functionInputs?: Record<string, unknown>;
-  functionOutputs?: Record<string, unknown>;
-  aiResponse?: string;
-  errorMessage?: string;
-  aiRequestId?: string;
-}
-
-// LocalStorage fallback functions
-const getLocalStorageKey = (userId: string) => `promptVersions_${userId}`;
-
-const saveToLocalStorage = (userId: string, promptVersion: SystemPromptVersion): void => {
-  const key = getLocalStorageKey(userId);
-  const existing = JSON.parse(localStorage.getItem(key) || '[]');
-  existing.push({
-    ...promptVersion,
-    id: `local_${Date.now()}`,
-    savedDate: new Date().toISOString()
-  });
-  localStorage.setItem(key, JSON.stringify(existing));
-};
-
-const getFromLocalStorage = (userId: string): SystemPromptVersion[] => {
-  const key = getLocalStorageKey(userId);
-  const data = localStorage.getItem(key);
-  if (!data) return [];
-  
-  return JSON.parse(data).map((item: SystemPromptVersion) => ({
-    ...item,
-    savedDate: new Date(item.savedDate)
-  }));
-};
-
-const getNextLocalVersion = (userId: string): number => {
-  const existing = getFromLocalStorage(userId);
-  if (existing.length === 0) return 1;
-  return Math.max(...existing.map(v => v.version)) + 1;
-};
 
 // Generate technical key from user email and version
 const generateTechnicalKey = (userEmail: string, version: number): string => {
@@ -132,26 +77,12 @@ export const savePromptVersion = async (
   userEmail?: string,
   workspace: WorkspaceType = 'invoicer'
 ): Promise<number> => {
-  try {
-    if (!db) {
-      console.warn('Firebase not initialized, using localStorage fallback');
-      const nextVersion = getNextLocalVersion('shared');
-      const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `shared_v${nextVersion}`;
-      const promptVersion: SystemPromptVersion = {
-        version: nextVersion,
-        systemPrompt: promptText,
-        evaluation: evaluation,
-        savedDate: new Date(),
-        aiModel: aiModel,
-        userId: userId,
-        technicalKey: technicalKey
-      };
-      saveToLocalStorage('shared', promptVersion);
-      console.log(`[LocalStorage] Saved shared prompt version ${nextVersion} with key ${technicalKey}`);
-      return nextVersion;
-    }
+  if (!db) {
+    throw new Error('Firebase not initialized');
+  }
 
-    // Try Firebase first - get next version from shared prompts
+  try {
+    // Get next version from shared prompts
     const nextVersion = await getNextVersionNumber('shared', workspace);
     const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `shared_v${nextVersion}`;
     
@@ -173,21 +104,8 @@ export const savePromptVersion = async (
     console.log(`[FirestoreService] Saved prompt version ${nextVersion} with ID: ${docRef.id} and key: ${technicalKey}`);
     return nextVersion;
   } catch (error) {
-    console.warn('Firebase save failed, falling back to localStorage:', error);
-    const nextVersion = getNextLocalVersion(userId);
-    const technicalKey = userEmail ? generateTechnicalKey(userEmail, nextVersion) : `user_${userId.substring(0, 8)}_v${nextVersion}`;
-    const promptVersion: SystemPromptVersion = {
-      version: nextVersion,
-      systemPrompt: promptText,
-      evaluation: evaluation,
-      savedDate: new Date(),
-      aiModel: aiModel,
-      userId: userId,
-      technicalKey: technicalKey
-    };
-    saveToLocalStorage(userId, promptVersion);
-    console.log(`[LocalStorage] Saved prompt version ${nextVersion} with key ${technicalKey} (fallback)`);
-    return nextVersion;
+    console.error('Firebase save failed:', error);
+    throw error;
   }
 };
 
@@ -216,16 +134,12 @@ const getNextVersionNumber = async (sharedKey: string, workspace: WorkspaceType 
 
 // Load the latest version of system prompt (shared across all users)
 export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType = 'invoicer'): Promise<string | null> => {
+  if (!db) {
+    throw new Error('Firebase not initialized');
+  }
+
   try {
     console.log('🔍 Loading latest shared prompt, workspace:', workspace);
-    
-    if (!db) {
-      console.warn('Firebase not initialized, using localStorage fallback');
-      const versions = getFromLocalStorage('shared');
-      if (versions.length === 0) return null;
-      const latest = versions.sort((a, b) => b.version - a.version)[0];
-      return latest.systemPrompt || null;
-    }
 
     // Query all prompts (no user filter)
     const q = query(
@@ -259,23 +173,19 @@ export const loadLatestPrompt = async (userId: string, workspace: WorkspaceType 
     
     return latestPrompt;
   } catch (error) {
-    console.warn('Firebase load failed, falling back to localStorage:', error);
-    const versions = getFromLocalStorage(userId);
-    if (versions.length === 0) return null;
-    const latest = versions.sort((a, b) => b.version - a.version)[0];
-    return latest.systemPrompt || null;
+    console.error('Firebase load failed:', error);
+    throw error;
   }
 };
 
 // Get all versions (shared history for all users)
 export const getPromptHistory = async (userId: string, workspace: WorkspaceType = 'invoicer'): Promise<SystemPromptVersion[]> => {
+  if (!db) {
+    throw new Error('Firebase not initialized');
+  }
+
   try {
     console.log('📚 Loading shared prompt history, workspace:', workspace);
-    
-    if (!db) {
-      console.warn('Firebase not initialized, using localStorage fallback');
-      return getFromLocalStorage('shared').sort((a, b) => b.version - a.version);
-    }
 
     // Query all prompts (no user filter)
     const q = query(
@@ -300,19 +210,18 @@ export const getPromptHistory = async (userId: string, workspace: WorkspaceType 
     
     return sortedHistory;
   } catch (error) {
-    console.warn('Firebase history load failed, falling back to localStorage:', error);
-    return getFromLocalStorage(userId).sort((a, b) => b.version - a.version);
+    console.error('Firebase history load failed:', error);
+    throw error;
   }
 };
 
 // Get specific version
 export const getPromptVersion = async (versionId: string): Promise<SystemPromptVersion | null> => {
+  if (!db) {
+    throw new Error('Firebase not initialized');
+  }
+
   try {
-    if (!db) {
-      console.warn('Firebase not initialized, using localStorage fallback');
-      const allVersions = getFromLocalStorage('evaluator'); // Using default user for localStorage
-      return allVersions.find(v => v.id === versionId) || null;
-    }
 
     const docRef = doc(db, 'systemPromptVersions', versionId);
     const docSnap = await getDoc(docRef);
@@ -327,36 +236,24 @@ export const getPromptVersion = async (versionId: string): Promise<SystemPromptV
     
     return null;
   } catch (error) {
-    console.warn('Firebase version load failed, falling back to localStorage:', error);
-    const allVersions = getFromLocalStorage('evaluator');
-    return allVersions.find(v => v.id === versionId) || null;
+    console.error('Firebase version load failed:', error);
+    throw error;
   }
 };
 
 // Update evaluation for a specific version
 export const updatePromptEvaluation = async (versionId: string, evaluation: string): Promise<void> => {
+  if (!db) {
+    throw new Error('Firebase not initialized');
+  }
+
   try {
-    if (!db) {
-      console.warn('Firebase not initialized, updating localStorage fallback');
-      const key = getLocalStorageKey('evaluator');
-      const versions = JSON.parse(localStorage.getItem(key) || '[]');
-      const updated = versions.map((v: SystemPromptVersion) => 
-        v.id === versionId ? { ...v, evaluation } : v
-      );
-      localStorage.setItem(key, JSON.stringify(updated));
-      return;
-    }
 
     const docRef = doc(db, 'systemPromptVersions', versionId);
     await setDoc(docRef, { evaluation }, { merge: true });
   } catch (error) {
-    console.warn('Firebase evaluation update failed, falling back to localStorage:', error);
-    const key = getLocalStorageKey('evaluator');
-    const versions = JSON.parse(localStorage.getItem(key) || '[]');
-    const updated = versions.map((v: SystemPromptVersion) => 
-      v.id === versionId ? { ...v, evaluation } : v
-    );
-    localStorage.setItem(key, JSON.stringify(updated));
+    console.error('Firebase evaluation update failed:', error);
+    throw error;
   }
 };
 
@@ -367,60 +264,6 @@ export const savePrompt = async (userId: string, promptText: string): Promise<vo
 
 export const loadPrompt = async (userId: string): Promise<string | null> => {
   return await loadLatestPrompt(userId);
-};
-
-// Continuous Improvement Functions
-// Legacy function - replaced by chat_logs system
-export const createContinuousImprovementSession = async (
-  promptKey: string,
-  chatSessionKey: string,
-  userId: string,
-  workspace: WorkspaceType = 'invoicer'
-): Promise<string> => {
-  // Return the chatSessionKey as-is since we now use it directly
-  // The actual logging happens via saveChatSessionLog when user gives feedback
-  logger.debug('FirestoreService', 'createContinuousImprovementSession', 'Legacy function called - using chatSessionKey', {
-    chatSessionKey,
-    userId
-  });
-  return chatSessionKey;
-};
-
-export const addTechnicalLog = async (
-  sessionId: string,
-  logEntry: Omit<TechnicalLog, 'timestamp'>,
-  workspace: WorkspaceType = 'invoicer'
-): Promise<void> => {
-  try {
-    if (!db || sessionId.startsWith('local_') || sessionId.startsWith('error_')) {
-      console.warn('Firebase not initialized or invalid session, skipping log');
-      return;
-    }
-
-    const sessionRef = doc(db, getWorkspaceCollectionName('continuous_improvement', workspace), sessionId);
-    const sessionDoc = await getDoc(sessionRef);
-
-    if (sessionDoc.exists()) {
-      const sessionData = sessionDoc.data() as ContinuousImprovementSession;
-      const existingLogs = Array.isArray(sessionData.technicalLogs) ? sessionData.technicalLogs : [];
-      const updatedLogs = [
-        ...existingLogs,
-        {
-          ...logEntry,
-          timestamp: new Date()
-        }
-      ];
-
-      await setDoc(sessionRef, {
-        technicalLogs: updatedLogs,
-        lastUpdated: serverTimestamp()
-      }, { merge: true });
-
-      console.log(`[ContinuousImprovement] Added log to session ${sessionId}: ${logEntry.event}`);
-    }
-  } catch (error) {
-    console.error('Error adding technical log:', error);
-  }
 };
 
 // Get chat logs for a user
@@ -471,6 +314,7 @@ export const saveChatSessionLog = async (
       value === undefined ? null : value
     ));
 
+
     // Luo dokumentti chat_logs -kokoelmaan
     const docRef = await addDoc(
       collection(db, getWorkspaceCollectionName('chat_logs', workspace)),
@@ -489,7 +333,8 @@ export const saveChatSessionLog = async (
       sessionId: sessionLog.sessionId,
       rating: sessionLog.userFeedback?.rating,
       messageCount: sessionLog.messages.length,
-      logCount: sessionLog.logs.length
+      logCount: sessionLog.logs.length,
+      contextUsage: sanitizedLog.metadata?.contextUsage
     });
 
     return docRef.id;
@@ -512,16 +357,6 @@ export const setUserFeedback = async (
     hasComment: !!comment
   });
   // This function is deprecated - new feedback is saved via saveChatSessionLog
-};
-
-// Legacy function - use getChatLogs instead
-export const getContinuousImprovementSessions = async (
-  userId: string,
-  promptKey?: string,
-  workspace: WorkspaceType = 'invoicer'
-): Promise<ContinuousImprovementSession[]> => {
-  logger.warn('FirestoreService', 'getContinuousImprovementSessions', 'Legacy function called - use getChatLogs instead');
-  return [];
 };
 
 // Get negative feedback sessions from chat_logs
