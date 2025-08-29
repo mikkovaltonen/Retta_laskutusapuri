@@ -48,7 +48,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [quickActionUsed, setQuickActionUsed] = useState(false);
   const [propertyManagerType, setPropertyManagerType] = useState<'hoas' | 'kontu-onni' | 'retta-management'>('retta-management');
-  const [showPropertyManagerDialog, setShowPropertyManagerDialog] = useState(false);
+  const [showExcelOptions, setShowExcelOptions] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -469,9 +469,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     }
   };
 
-  const handleMyyntiExcelClick = () => {
-    setShowPropertyManagerDialog(true);
-  };
 
   const generateMyyntiExcelFromTarkastustaulukko = async () => {
     console.log('🔍 Scanning chat history for TARKASTUSTAULUKKO...');
@@ -1549,15 +1546,61 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
             <CheckCircle className="w-4 h-4 mr-1" />
             Tarkasta
           </Button>
-          <Button
-            onClick={handleMyyntiExcelClick}
-            disabled={loading}
-            variant="outline"
-            title="Lataa MyyntiExcel TARKASTUSTAULUKOSTA"
+          <div 
+            className="relative"
+            onMouseEnter={() => setShowExcelOptions(true)}
+            onMouseLeave={() => setShowExcelOptions(false)}
           >
-            <Download className="w-4 h-4 mr-1" />
-            MyyntiExcel
-          </Button>
+            {!showExcelOptions ? (
+              <Button
+                disabled={loading}
+                variant="outline"
+                title="Lataa MyyntiExcel TARKASTUSTAULUKOSTA"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                MyyntiExcel
+              </Button>
+            ) : (
+              <div className="flex gap-1">
+                <Button
+                  onClick={() => {
+                    setPropertyManagerType('hoas');
+                    generateMyyntiExcelFromTarkastustaulukko();
+                  }}
+                  disabled={loading}
+                  variant="outline"
+                  size="sm"
+                  title="HOAS MyyntiExcel"
+                >
+                  HOAS
+                </Button>
+                <Button
+                  onClick={() => {
+                    setPropertyManagerType('kontu-onni');
+                    generateMyyntiExcelFromTarkastustaulukko();
+                  }}
+                  disabled={loading}
+                  variant="outline"
+                  size="sm"
+                  title="Kontu & Onni MyyntiExcel"
+                >
+                  Kontu
+                </Button>
+                <Button
+                  onClick={() => {
+                    setPropertyManagerType('retta-management');
+                    generateMyyntiExcelFromTarkastustaulukko();
+                  }}
+                  disabled={loading}
+                  variant="outline"
+                  size="sm"
+                  title="Retta Management MyyntiExcel"
+                >
+                  Retta
+                </Button>
+              </div>
+            )}
+          </div>
           <Button
             onClick={sendMessage}
             disabled={loading || !isInitialized || !inputMessage.trim()}
@@ -1573,73 +1616,6 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         )}
       </div>
       
-      {/* Property Manager Selection Dialog */}
-      <Dialog open={showPropertyManagerDialog} onOpenChange={setShowPropertyManagerDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Valitse isännöitsijärakenne</DialogTitle>
-            <DialogDescription>
-              Valitse käytettävä MyyntiExcel-rakenne isännöitsijän mukaan
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Isännöitsijätyyppi</label>
-              <Select value={propertyManagerType} onValueChange={(value) => setPropertyManagerType(value as 'hoas' | 'kontu-onni' | 'retta-management')}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Valitse isännöitsijä" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="retta-management">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Retta Management</span>
-                      <span className="text-xs text-muted-foreground">17 saraketta, verkkolaskutus</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="hoas">
-                    <div className="flex flex-col">
-                      <span className="font-medium">HOAS</span>
-                      <span className="text-xs text-muted-foreground">15 saraketta, KP 720, reskontra MM</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="kontu-onni">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Kontu & Onni</span>
-                      <span className="text-xs text-muted-foreground">9 saraketta, ALV valmiiksi laskettu</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="bg-blue-50 p-3 rounded-md">
-              <p className="text-sm text-blue-900">
-                <strong>Vihje:</strong> Valitse rakenne isännöitsijän mukaan:
-              </p>
-              <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
-                <li>• <strong>HOAS:</strong> Helsingin seudun opiskelija-asuntosäätiö</li>
-                <li>• <strong>Kontu & Onni:</strong> Tytäryhtiöisännöitsijät</li>
-                <li>• <strong>Retta Management:</strong> Muut isännöitsijät (oletus)</li>
-              </ul>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowPropertyManagerDialog(false)}
-            >
-              Peruuta
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowPropertyManagerDialog(false);
-                generateMyyntiExcelFromTarkastustaulukko();
-              }}
-            >
-              Luo MyyntiExcel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
