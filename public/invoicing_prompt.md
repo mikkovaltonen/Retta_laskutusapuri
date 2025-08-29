@@ -103,14 +103,32 @@ Käytä tätä taulukkoa, kun vaiheet 1-3 eivät tuota tulosta.
 
 ## 📋 TARKASTUSTAULUKKO
 
-Hinnoitelu tulokset esitetään tarkastustaulukossa. Kun käyttäjä pyytää tarkastusta, luo AINA kompakti taulukko:
+Hinnoitelu tulokset esitetään tarkastustaulukossa. Kun käyttäjä pyytää tarkastusta, luo AINA taulukko.
 
-**TÄRKEÄÄ taulukon muotoilussa:**:  Käytä taulokossa pientä fonttikokoa
+
+### KRIITTINEN: Markdown-taulukon muotoilusäännöt
+**SINUN TÄYTYY NOUDATTAA NÄITÄ SÄÄNTÖJÄ TARKASTI:**
+
+1. **AINA sisällytä erotinrivi** viivoilla otsikkorivin jälkeen
+2. **ÄLÄ KOSKAAN käytä `:---` kohdistussyntaksia** - käytä vain tavallisia `---` tai `-----`
+3. **Jokaisella rivillä täytyy olla sama määrä sarakkeita**
+4. **Lisää aina välilyönnit putkien ympärille luettavuuden vuoksi**
+
+**Esimerkki TARKASTUSTAULUKOSTA:**
 
 
 
 ```markdown
-| Tampuuri | RP-numero | Tuote | O.hinta (o) | O.hinta (h) | M.hinta (o) | M.hinta (h) | M.hinta (t) | Tarkastus | A-hinta | Määrä | Yksikkö | ALV-koodi | 
+| Tampuuri | RP-numero | Tuote | O.hinta (o) | O.hinta (h) | M.hinta (o) | M.hinta (h) | M.hinta (t) | Tarkastus | A-hinta | Määrä | Yksikkö | ALV-koodi |
+|----------|-----------|-------|-------------|-------------|-------------|-------------|-------------|-----------|---------|-------|---------|-----------|
+| 10531    |           | Pelastussuunnitelma | 20.00 | - | 47.48 | - | - | Hinta Excelistä | 47.48 | 1 | kpl | 25,5% |
+| 05505    | RP-1803251135027181 | Pelastussuunnitelma | 20.00 | - | 47.48 | - | 82.16 | Hinta tilaukselta | 82.16 | 1 | kpl | 25,5% |
+```
+
+**MUISTA:**
+- EI kaksoispisteitä erotinrivissä (ei `:---`)
+- AINA sisällytä erotinrivi
+- Jos RP-numeroa ei ole, jätä kenttä tyhjäksi (ei viivoja)
 
 Laita taulukon alle tietolähteen selite (o) - ostolasku excel, (h) - hinnasto ja (t) - tilaus  
 Name sisältää "POISTA"  älä sisällytä ostolaskuExcel riviä tarkastustaulukkoon vaan ilmoita siitä kirjallisesti taulukon alla. 
@@ -118,8 +136,8 @@ Jos ostolaskuExcelin RP-numeroa ei löydy tilaustaulusta, älä sisällytä osto
 
 Tarkastustaulukon kenttien lähteet
 - **Asiakasnumero**: Tampuurinumero OstolaskuExcelistä. Kentän nimi voi olla "Kohteen Tampuuri ID"
-- **RP-numero**: RP-numero eli tilausnumero OstolaskuExcelistä. - RP-numero tulee näkyä kokonaan ja jos RP numeroa ei ole se tulee korvata  17:sta viivalla ------------------
-- **Tuote**: Tuote OstolaskuExcelistä. Jos vastaava tuote löytyy tilaukselta tai hinnastolta hieman eri kirjoitusmuodossa käytä ensisijaisesti tilauksen tekstimuotoa, toisijaisesti hinnaston tekstimuotoa. Jos Tuote on yli 80 merkkiä pitkä niin tivistä se älykkääsi alle 80 merkin pituiseksi. Jos kenttä on alle 80 merkkiä pitkä niin lisää loppuu välilyöntejä jotta kenttä tulee teknisesti 80 merkkisesti ja Markup taulukon sarakkeet pysyvät selkeinä. 
+- **RP-numero**: RP-numero eli tilausnumero OstolaskuExcelistä. Jos RP-numeroa ei ole, jätä kenttä tyhjäksi
+- **Tuote**: Tuote OstolaskuExcelistä. Jos vastaava tuote löytyy tilaukselta tai hinnastolta hieman eri kirjoitusmuodossa käytä ensisijaisesti tilauksen tekstimuotoa, toisijaisesti hinnaston tekstimuotoa. Jos Tuote on yli 80 merkkiä pitkä niin tiivistä se älykkäästi alle 80 merkin pituiseksi. 
 - **O.hinta (o)**: Tämä on ostolaskuExcel kappalekohtainen ostohinta. Se voi olla sarakkeessa nimeltä "Laskutus € (alv0%) Rettalle" tai "Laskutus Rettalle/vuosi" 
 - **O.hinta (h)**: Tämä on tuotteen ostohinta hinnastossa joka löytyy searchHinnasto:n "BuyPrice" kentästä.  
 - **M.hinta (o)**: Tämä on ostolaskuExcel kappalekohtainen myyntihinta. Se voi olla kentässä "Retta asiakashinta" tai "Retta asiakashinta vuosittain" 

@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info, CheckCircle, Download } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
@@ -40,11 +41,14 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   const [uploadedWorkbook, setUploadedWorkbook] = useState<any>(null);
   const [showSheetSelector, setShowSheetSelector] = useState(false);
   const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showNegativeFeedbackDialog, setShowNegativeFeedbackDialog] = useState(false);
   const [selectedMessageForFeedback, setSelectedMessageForFeedback] = useState<string>('');
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [quickActionUsed, setQuickActionUsed] = useState(false);
+  const [propertyManagerType, setPropertyManagerType] = useState<'hoas' | 'kontu-onni' | 'retta-management'>('retta-management');
+  const [showPropertyManagerDialog, setShowPropertyManagerDialog] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -255,9 +259,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       timestamp: new Date()
     };
 
-    // Only log if message is very short (potential issue)
+    // Log debug info for very short messages
     if (userMessage.content.trim().length < 5) {
-      logger.warn('ChatAI', 'sendMessage', 'Very short user message', { message: userMessage.content }, sessionId);
+      logger.debug('ChatAI', 'sendMessage', 'Short user message', { message: userMessage.content }, sessionId);
     }
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
@@ -465,8 +469,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     }
   };
 
+  const handleMyyntiExcelClick = () => {
+    setShowPropertyManagerDialog(true);
+  };
+
   const generateMyyntiExcelFromTarkastustaulukko = async () => {
     console.log('🔍 Scanning chat history for TARKASTUSTAULUKKO...');
+    console.log('📊 Using property manager type:', propertyManagerType);
     
     // Find messages containing TARKASTUSTAULUKKO (case insensitive)
     let tarkastustaulukkoData: any[] = [];
@@ -592,36 +601,96 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     // Create Excel workbook
     const wb = XLSX.utils.book_new();
     
-    // Convert data to worksheet format
-    const wsData = [
-      // Header row
-      ['Asiakasnumero', 'Reskontra', 'Tuotekoodi', 'Määrä', 'A-hinta', 'Yhteensä', 'Kuvaus', 'Yksikkö', 'Tuotenimi', 'ALV-koodi', 'Isännöitsijä', 'Kustannuspaikka', 'Tilausnumero'],
-      // Data rows
-      ...tarkastustaulukkoData.map(row => [
-        row.asiakasnumero,
-        row.reskontra,
-        row.tuotekoodi,
-        row.määrä,
-        row.ahinta,
-        row.yhteensä,
-        row.kuvaus,
-        row.yksikkö,
-        row.tuotenimi,
-        row.alvkoodi,
-        row.isännöitsijä,
-        row.kustannuspaikka,
-        row.tilausnumero
-      ])
-    ];
+    // Define column structures based on property manager type
+    let wsData: any[][] = [];
+    
+    if (propertyManagerType === 'hoas') {
+      // HOAS structure - 15 columns
+      wsData = [
+        // Header row
+        ['KP', 'Asiakasnumero /Tampuuri nro', 'Laskutettava yhtiö', 'Kohde', 'Reskontra', 
+         'Tuotekoodi', 'määrä', 'ahinta alv 0%', 'Kuvaus', 'yksikkö, kpl', 'alvkoodi', 
+         'Laskutusaikataulu', 'Verkkolaskuosoite', 'Operaattoritunnus', 'Välittäjä'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          720, // Fixed KP value for HOAS
+          row.asiakasnumero,
+          'Helsingin seudun opiskelija-asuntosäätiö sr', // Fixed for HOAS
+          `HOAS ${row.kuvaus}`, // Kohde
+          'MM', // Fixed reskontra for HOAS
+          1571, // Fixed product code for HOAS
+          row.määrä,
+          row.ahinta,
+          row.kuvaus,
+          row.määrä,
+          '255SN', // Fixed ALV code for HOAS
+          '', // Laskutusaikataulu
+          3701011385, // Fixed for HOAS
+          'TE003701165149HOAS', // Fixed for HOAS
+          'TietoEVRY Oyj' // Fixed for HOAS
+        ])
+      ];
+    } else if (propertyManagerType === 'kontu-onni') {
+      // Kontu & Onni structure - 9 columns
+      wsData = [
+        // Header row
+        ['Yhtiö', 'Tuote', 'Määrä', 'alv 0%', 'alv 25,5%', 'Selite', 
+         'Työnumero (Safetumin käyttöön)', 'Isännöitsijä', 'Huomautukset'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          `Asunto Oy ${row.asiakasnumero}`, // Yhtiö
+          row.kuvaus, // Tuote
+          row.määrä,
+          row.ahinta, // alv 0%
+          row.ahinta * 1.255, // alv 25,5% (calculated)
+          row.kuvaus, // Selite
+          row.tilausnumero || '', // Työnumero
+          'Kontu', // Default to Kontu, user can edit later
+          '' // Huomautukset
+        ])
+      ];
+    } else {
+      // Retta Management structure - 17 columns (default)
+      wsData = [
+        // Header row
+        ['asiakasnumero (kuvaus)', 'reskontra', 'tuotekoodi', 'määrä', 'ahinta', 
+         'kuvaus', 'yksikkö', 'tuotenimi', 'alvkoodi', 'Isännöitsijä', 
+         'Kustannuspaikka', 'Tilausnumero (kuvaus)', 'Yhteensä', 'Kohde (kuvaus)', 
+         'Verkkolaskuosoite', 'Operaatiotunnus', 'Välittäjä'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          row.asiakasnumero,
+          'MK', // Fixed reskontra for Retta Management
+          1578, // Default product code for Retta Management
+          row.määrä,
+          row.ahinta,
+          row.kuvaus,
+          row.yksikkö,
+          '', // tuotenimi
+          '255SN', // Default ALV code
+          '', // Isännöitsijä
+          '', // Kustannuspaikka
+          row.tilausnumero,
+          row.määrä * row.ahinta, // Yhteensä (calculated)
+          row.kuvaus, // Kohde (kuvaus)
+          row.asiakasnumero, // Use customer number as invoice address
+          'E204503', // Default operator code
+          'OpusCapita Solutions Oy' // Default välittäjä
+        ])
+      ];
+    }
     
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'MyyntiExcel');
     
-    // Generate Excel file
+    // Generate Excel file with property manager type in filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const filename = `MyyntiExcel_${timestamp}.xlsx`;
+    const managerTypeLabel = propertyManagerType === 'hoas' ? 'HOAS' : 
+                            propertyManagerType === 'kontu-onni' ? 'KontuOnni' : 
+                            'RettaManagement';
+    const filename = `MyyntiExcel_${managerTypeLabel}_${timestamp}.xlsx`;
     
     // Try to use File System Access API if available (Chrome, Edge)
     if ('showSaveFilePicker' in window) {
@@ -641,7 +710,10 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         await writable.write(buffer);
         await writable.close();
         
-        toast.success(`MyyntiExcel tallennettu: ${tarkastustaulukkoData.length} riviä`);
+        const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                        propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                        'Retta Management';
+        toast.success(`MyyntiExcel (${typeText}) tallennettu: ${tarkastustaulukkoData.length} riviä`);
         console.log(`✅ MyyntiExcel saved to chosen location: ${filename}`);
       } catch (err) {
         // User cancelled or error occurred, fall back to regular download
@@ -650,94 +722,116 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         }
         // Fall back to regular download
         XLSX.writeFile(wb, filename);
-        toast.success(`MyyntiExcel ladattu: ${tarkastustaulukkoData.length} riviä`);
+        const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                        propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                        'Retta Management';
+        toast.success(`MyyntiExcel (${typeText}) ladattu: ${tarkastustaulukkoData.length} riviä`);
       }
     } else {
       // Browser doesn't support File System Access API, use regular download
       XLSX.writeFile(wb, filename);
-      toast.info(`MyyntiExcel ladattu Downloads-kansioon: ${tarkastustaulukkoData.length} riviä`);
+      const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                      propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                      'Retta Management';
+      toast.info(`MyyntiExcel (${typeText}) ladattu Downloads-kansioon: ${tarkastustaulukkoData.length} riviä`);
     }
     
     console.log(`✅ MyyntiExcel processed: ${filename}`);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const isJson = file.name.endsWith('.json');
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
     
-    if (!isJson && !isExcel) {
-      setError('Vain JSON- ja Excel-tiedostot ovat sallittuja');
-      return;
-    }
+    // Support multiple files
+    const allData: any[] = [];
+    const fileNames: string[] = [];
 
     try {
-      let jsonData: any[];
-      
-      if (isJson) {
-        // Handle JSON file
-        const text = await file.text();
-        jsonData = JSON.parse(text);
+      // Process each file
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         
-        // Validate it's an array
-        if (!Array.isArray(jsonData)) {
-          setError('JSON-tiedoston tulee olla taulukko (array)');
-          return;
+        // Validate file type - only Excel allowed
+        const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+        
+        if (!isExcel) {
+          toast.error(`Tiedosto ${file.name} ohitettu - vain Excel-tiedostot sallittuja`);
+          continue;
         }
-      } else {
+        
+        fileNames.push(file.name);
+        let jsonData: any[];
         // Handle Excel file
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
         if (workbook.SheetNames.length === 0) {
-          setError('Excel-tiedostossa ei ole yhtään välilehteä');
-          return;
+          toast.error(`${file.name}: Excel-tiedostossa ei ole yhtään välilehteä`);
+          continue;
         }
         
-        // If multiple sheets, show selector
-        if (workbook.SheetNames.length > 1) {
+        // If multiple sheets, show selector (only for single file mode)
+        if (workbook.SheetNames.length > 1 && files.length === 1) {
           setUploadedWorkbook(workbook);
           setAvailableSheets(workbook.SheetNames);
           setUploadedFileName(file.name);
+          setSelectedSheets([]); // Reset selected sheets
           setShowSheetSelector(true);
           return;
         }
         
-        // Single sheet - process directly
+        // Single sheet or multiple files mode - process first sheet directly
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         jsonData = XLSX.utils.sheet_to_json(worksheet);
         
         if (jsonData.length === 0) {
-          setError('Excel-tiedosto on tyhjä');
-          return;
+          toast.warn(`${file.name}: Tyhjä tiedosto ohitettu`);
+          continue;
         }
         
-        toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
-      }
+        toast.success(`Ladattu ${jsonData.length} riviä: ${file.name} (${sheetName})`);
+      
+      // Add to combined data
+      allData.push(...jsonData);
+    } // End of for loop
 
-      setOstolaskuExcelData(jsonData);
-      setUploadedFileName(file.name);
+      // Check if we got any data
+      if (allData.length === 0) {
+        setError('Ei ladattavia tietoja valituissa tiedostoissa');
+        return;
+      }
+      
+      // Calculate final combined data
+      let finalData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        finalData = [...ostolaskuExcelData, ...allData];
+        toast.info(`Lisätty ${allData.length} riviä (yhteensä ${finalData.length} riviä)`);
+      } else {
+        finalData = allData;
+      }
+      
+      // Update state with combined data
+      setOstolaskuExcelData(finalData);
+      setUploadedFileName(fileNames.join(', '));
       setError(null);
       
       console.log('✅ OstolaskuExcel uploaded:', {
-        fileName: file.name,
-        recordCount: jsonData.length,
-        fileType: isJson ? 'JSON' : 'Excel'
+        fileNames: fileNames,
+        totalRecords: finalData.length,
+        fileCount: fileNames.length
       });
 
       // Add a success message and re-initialize session with OstolaskuExcel data
-      if (user && systemPrompt) {
+      if (user && systemPrompt && finalData.length > 0) {
         console.log('🔄 Re-initializing chat with OstolaskuExcel data...');
         
         // Add a success message about loaded OstolaskuExcel
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${file.name}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedostot: ${fileNames.length} kpl\n📊 Rivejä yhteensä: ${finalData.length}\n📁 Ladatut: ${fileNames.join(', ')}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -750,7 +844,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuExcelData: jsonData
+          ostolaskuExcelData: finalData
         };
 
         try {
@@ -777,6 +871,107 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     fileInputRef.current?.click();
   };
 
+  const handleMultipleSheetsSelection = async () => {
+    if (!uploadedWorkbook || selectedSheets.length === 0) return;
+
+    try {
+      const allData: any[] = [];
+      
+      // Process each selected sheet
+      for (const sheetName of selectedSheets) {
+        const worksheet = uploadedWorkbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        if (jsonData.length > 0) {
+          allData.push(...jsonData);
+          toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+          
+          // Log verification table fields for first row of each sheet
+          const firstRow = jsonData[0];
+          console.log(`📊 Välilehti "${sheetName}" kentät:`, {
+            tampuuri: firstRow['tampuuri'] || firstRow['Tampuurinumero'] || 'EI LÖYDY',
+            rpNumero: firstRow['RP-numero'] || firstRow['OrderNumber'] || 'EI LÖYDY',
+            availableFields: Object.keys(firstRow).slice(0, 10)
+          });
+        } else {
+          toast.warn(`Välilehti "${sheetName}" on tyhjä, ohitettu`);
+        }
+      }
+      
+      if (allData.length === 0) {
+        setError('Valituissa välilehdissä ei ole dataa');
+        return;
+      }
+      
+      // Calculate combined data with existing data
+      let combinedData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        combinedData = [...ostolaskuExcelData, ...allData];
+        toast.info(`Lisätty yhteensä ${allData.length} riviä ${selectedSheets.length} välilehdeltä (kokonaismäärä: ${combinedData.length} riviä)`);
+      } else {
+        combinedData = allData;
+        toast.success(`Ladattu yhteensä ${allData.length} riviä ${selectedSheets.length} välilehdeltä`);
+      }
+      
+      // Update state
+      setOstolaskuExcelData(combinedData);
+      setUploadedFileName(`${uploadedFileName} (${selectedSheets.length} välilehteä)`);
+      
+      // Notify parent component
+      if (onOstolaskuExcelDataChange) {
+        onOstolaskuExcelDataChange(combinedData);
+      }
+      
+      setError(null);
+      setShowSheetSelector(false);
+      setSelectedSheets([]);
+      
+      console.log('✅ Multiple sheets loaded:', {
+        fileName: uploadedFileName,
+        sheetsLoaded: selectedSheets,
+        totalRecords: combinedData.length
+      });
+      
+      // Re-initialize chat session with combined data
+      if (user && systemPrompt && combinedData.length > 0) {
+        console.log('🔄 Re-initializing chat with combined Excel data...');
+        
+        const successMessage: ChatMessage = {
+          id: `OstolaskuExcel-loaded-${Date.now()}`,
+          role: 'assistant',
+          content: `✅ **Excel-välilehdet ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName}"\n📊 Välilehdet: ${selectedSheets.join(', ')}\n📈 Rivejä yhteensä: ${combinedData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+        
+        const newSessionId = `session_${user.uid}_${Date.now()}`;
+        const context: ChatContext = {
+          userId: user.uid,
+          systemPrompt,
+          sessionId: newSessionId,
+          ostolaskuExcelData: combinedData
+        };
+        
+        try {
+          await geminiChatService.initializeSession(context);
+          setSessionId(newSessionId);
+          console.log('✅ Chat re-initialized with multi-sheet data');
+        } catch (err) {
+          console.error('❌ Failed to re-initialize chat:', err);
+        }
+      }
+      
+    } catch (err) {
+      console.error('❌ Multi-sheet processing failed:', err);
+      setError('Välilehtien käsittely epäonnistui');
+    } finally {
+      // Clean up
+      setUploadedWorkbook(null);
+      setAvailableSheets([]);
+    }
+  };
+
   const handleSheetSelection = async (sheetName: string) => {
     if (!uploadedWorkbook) return;
 
@@ -789,17 +984,28 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         return;
       }
 
-      setOstolaskuExcelData(jsonData);
+      // Calculate combined data
+      let combinedData: any[];
+      if (ostolaskuExcelData && ostolaskuExcelData.length > 0) {
+        combinedData = [...ostolaskuExcelData, ...jsonData];
+        toast.info(`Välilehti lisätty: ${jsonData.length} riviä (yhteensä ${combinedData.length} riviä)`);
+      } else {
+        combinedData = jsonData;
+        toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      }
+      
+      // Update state with combined data
+      setOstolaskuExcelData(combinedData);
       
       // Notify parent component about data change
       if (onOstolaskuExcelDataChange) {
-        onOstolaskuExcelDataChange(jsonData);
+        onOstolaskuExcelDataChange(combinedData);
       }
       
       setError(null);
       setShowSheetSelector(false);
       
-      toast.success(`Ladattu ${jsonData.length} riviä välilehdeltä "${sheetName}"`);
+      // Success toast moved to setOstolaskuExcelData callback
       
       console.log('✅ OstolaskuExcel sheet selected:', {
         fileName: uploadedFileName,
@@ -830,7 +1036,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         const successMessage: ChatMessage = {
           id: `OstolaskuExcel-loaded-${Date.now()}`,
           role: 'assistant',
-          content: `✅ **OstolaskuExcel ladattu onnistuneesti!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📊 Rivejä: ${jsonData.length}\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
+          content: `✅ **OstolaskuExcel-välilehti lisätty!**\n\n📄 Tiedosto: "${uploadedFileName || 'OstolaskuExcel.xlsx'}"\n📈 Välilehti: "${sheetName}"\n📊 Lisätty ${jsonData.length} riviä\n\n**Lataus onnistui, voit painaa Tarkasta nappia hintojen ja tilausten tarkastamiseksi**`,
           timestamp: new Date()
         };
         
@@ -839,11 +1045,12 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         // Re-initialize session with OstolaskuExcel data
         const newSessionId = `session_${user.uid}_${Date.now()}`;
         
+        // Use the combined data we just calculated
         const context: ChatContext = {
           userId: user.uid,
           systemPrompt,
           sessionId: newSessionId,
-          ostolaskuExcelData: jsonData
+          ostolaskuExcelData: combinedData && combinedData.length > 0 ? combinedData : undefined
         };
 
         try {
@@ -961,69 +1168,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-900'
                 }`} style={{ maxWidth: message.role === 'assistant' ? 'min(calc(100vw - 8rem), 100%)' : '80%' }}>
-                  <div className="text-sm">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        // Wrap tables in scrollable container with smaller font
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto -mx-3 max-w-full">
-                            <div className="inline-block min-w-full align-middle">
-                              <div className="overflow-hidden">
-                                <table className="min-w-full divide-y divide-gray-200" style={{ fontSize: '0.6rem', lineHeight: '0.85rem' }}>
-                                  {children}
-                                </table>
-                              </div>
-                            </div>
-                          </div>
-                        ),
-                        thead: ({ children }) => (
-                          <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                            {children}
-                          </thead>
-                        ),
-                        th: ({ children }) => (
-                          <th className="border-r border-blue-400 text-left font-semibold uppercase tracking-wide whitespace-nowrap" style={{ fontSize: '0.55rem', padding: '0.15rem 0.25rem' }}>
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children, ...props }) => {
-                          // Check if content looks like a number (for right-alignment)
-                          const content = String(children).trim();
-                          const isNumber = /^\d+([.,]\d+)?$/.test(content);
-                          
-                          return (
-                            <td className={`border-r border-b border-gray-200 whitespace-nowrap ${
-                              isNumber ? 'text-right font-medium' : 'text-left'
-                            }`} style={{ fontSize: '0.6rem', padding: '0.15rem 0.25rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {children}
-                            </td>
-                          );
-                        },
-                        tr: ({ children }) => (
-                          <tr className="hover:bg-blue-50 transition-colors duration-150">
-                            {children}
-                          </tr>
-                        ),
-                        tbody: ({ children }) => (
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {children}
-                          </tbody>
-                        ),
-                        // Preserve paragraph styling
-                        p: ({ children }) => {
-                          const content = String(children);
-                          // Don't wrap tables in p tags
-                          if (content.includes('|') && content.split('|').length > 3) {
-                            return null;
-                          }
-                          return <p className="mb-2">{children}</p>;
-                        },
-                        ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                        li: ({ children }) => <li className="mb-1">{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                      }}
-                    >
+                  <div className="markdown-content">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {message.content}
                     </ReactMarkdown>
                   </div>
@@ -1099,8 +1245,9 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       <input
         ref={fileInputRef}
         type="file"
-        accept=".json,.xlsx,.xls"
+        accept=".xlsx,.xls"
         onChange={handleFileUpload}
+        multiple
         style={{ display: 'none' }}
       />
 
@@ -1162,39 +1309,86 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
       <Dialog open={showSheetSelector} onOpenChange={setShowSheetSelector}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Valitse Excel välilehti</DialogTitle>
+            <DialogTitle>Valitse Excel välilehdet</DialogTitle>
             <DialogDescription>
-              Excel-tiedostossa on useita välilehtiä. Valitse mikä sisältää OstolaskuExcel-datan.
+              Excel-tiedostossa on useita välilehtiä. Valitse yksi tai useampi välilehti ladattavaksi.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-4">
+          <div className="grid gap-3 py-4 max-h-[400px] overflow-y-auto">
             {availableSheets.map((sheetName) => (
-              <Button
+              <div
                 key={sheetName}
-                variant="outline"
-                onClick={() => handleSheetSelection(sheetName)}
-                className="justify-start h-auto p-4"
+                className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50"
               >
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                <div className="text-left">
-                  <div className="font-medium">{sheetName}</div>
-                  <div className="text-xs text-gray-500">Excel välilehti</div>
-                </div>
-              </Button>
+                <input
+                  type="checkbox"
+                  id={`sheet-${sheetName}`}
+                  checked={selectedSheets.includes(sheetName)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedSheets([...selectedSheets, sheetName]);
+                    } else {
+                      setSelectedSheets(selectedSheets.filter(s => s !== sheetName));
+                    }
+                  }}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label
+                  htmlFor={`sheet-${sheetName}`}
+                  className="flex-1 cursor-pointer"
+                >
+                  <div className="flex items-center">
+                    <FileSpreadsheet className="w-4 h-4 mr-2" />
+                    <div>
+                      <div className="font-medium">{sheetName}</div>
+                      <div className="text-xs text-gray-500">Excel välilehti</div>
+                    </div>
+                  </div>
+                </label>
+              </div>
             ))}
           </div>
-          <div className="flex justify-end">
-            <Button 
-              variant="ghost" 
-              onClick={() => {
-                setShowSheetSelector(false);
-                setUploadedWorkbook(null);
-                setAvailableSheets([]);
-                setUploadedFileName('');
-              }}
-            >
-              Peruuta
-            </Button>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (selectedSheets.length === availableSheets.length) {
+                    setSelectedSheets([]);
+                  } else {
+                    setSelectedSheets(availableSheets);
+                  }
+                }}
+              >
+                {selectedSheets.length === availableSheets.length ? 'Poista kaikki valinnat' : 'Valitse kaikki'}
+              </Button>
+            </div>
+            <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-600">
+                {selectedSheets.length} / {availableSheets.length} välilehteä valittu
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    setShowSheetSelector(false);
+                    setUploadedWorkbook(null);
+                    setAvailableSheets([]);
+                    setSelectedSheets([]);
+                    setUploadedFileName('');
+                  }}
+                >
+                  Peruuta
+                </Button>
+                <Button
+                  onClick={handleMultipleSheetsSelection}
+                  disabled={selectedSheets.length === 0}
+                >
+                  Lataa valitut ({selectedSheets.length})
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1356,7 +1550,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
             Tarkasta
           </Button>
           <Button
-            onClick={generateMyyntiExcelFromTarkastustaulukko}
+            onClick={handleMyyntiExcelClick}
             disabled={loading}
             variant="outline"
             title="Lataa MyyntiExcel TARKASTUSTAULUKOSTA"
@@ -1378,6 +1572,74 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
           </p>
         )}
       </div>
+      
+      {/* Property Manager Selection Dialog */}
+      <Dialog open={showPropertyManagerDialog} onOpenChange={setShowPropertyManagerDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Valitse isännöitsijärakenne</DialogTitle>
+            <DialogDescription>
+              Valitse käytettävä MyyntiExcel-rakenne isännöitsijän mukaan
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Isännöitsijätyyppi</label>
+              <Select value={propertyManagerType} onValueChange={(value) => setPropertyManagerType(value as 'hoas' | 'kontu-onni' | 'retta-management')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Valitse isännöitsijä" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="retta-management">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Retta Management</span>
+                      <span className="text-xs text-muted-foreground">17 saraketta, verkkolaskutus</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hoas">
+                    <div className="flex flex-col">
+                      <span className="font-medium">HOAS</span>
+                      <span className="text-xs text-muted-foreground">15 saraketta, KP 720, reskontra MM</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="kontu-onni">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Kontu & Onni</span>
+                      <span className="text-xs text-muted-foreground">9 saraketta, ALV valmiiksi laskettu</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-md">
+              <p className="text-sm text-blue-900">
+                <strong>Vihje:</strong> Valitse rakenne isännöitsijän mukaan:
+              </p>
+              <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
+                <li>• <strong>HOAS:</strong> Helsingin seudun opiskelija-asuntosäätiö</li>
+                <li>• <strong>Kontu & Onni:</strong> Tytäryhtiöisännöitsijät</li>
+                <li>• <strong>Retta Management:</strong> Muut isännöitsijät (oletus)</li>
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPropertyManagerDialog(false)}
+            >
+              Peruuta
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowPropertyManagerDialog(false);
+                generateMyyntiExcelFromTarkastustaulukko();
+              }}
+            >
+              Luo MyyntiExcel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
