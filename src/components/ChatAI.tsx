@@ -1165,8 +1165,44 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-900'
                 }`} style={{ maxWidth: message.role === 'assistant' ? 'min(calc(100vw - 8rem), 100%)' : '80%' }}>
-                  <div className="markdown-content">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-2">
+                            <table className="min-w-full">
+                              {children}
+                            </table>
+                          </div>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-gray-50">
+                            {children}
+                          </thead>
+                        ),
+                        tbody: ({ children }) => (
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {children}
+                          </tbody>
+                        ),
+                        tr: ({ children }) => (
+                          <tr className="hover:bg-gray-50">
+                            {children}
+                          </tr>
+                        ),
+                        th: ({ children }) => (
+                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="px-3 py-2 whitespace-nowrap text-sm">
+                            {children}
+                          </td>
+                        ),
+                      }}
+                    >
                       {message.content}
                     </ReactMarkdown>
                   </div>
