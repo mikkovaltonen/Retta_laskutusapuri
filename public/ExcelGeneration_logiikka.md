@@ -8,7 +8,7 @@ MyyntiExcel-painike on Retta-laskutusapurin keskeinen ominaisuus, joka muuntaa T
 
 ### 2. Taulukon rakenteen tunnistus
 
-#### Odotettu TARKASTUSTAULUKKO-muoto
+#### Odotettu TARKASTUSTAULUKKO-muoto (Yleinen rakenne)
 | Sarake | Kentän nimi | Kuvaus | Kartoitetaan |
 |--------|-------------|--------|--------------|
 | 1 | Tampuuri | Asiakaskiinteistön ID | asiakasnumero |
@@ -71,6 +71,80 @@ MyyntiExcel-painike on Retta-laskutusapurin keskeinen ominaisuus, joka muuntaa T
 | L | Kustannuspaikka | Teksti | Tyhjä |
 | M | Tilausnumero | Teksti | Merkkijono |
 
+## Toteutetut isännöitsijäkohtaiset rakenteet
+
+### HOAS-rakenne
+**Tunnistus**: Asiakasnumero 65763, Laskutettava yhtiö sisältää "HOAS" tai "Helsingin seudun opiskelija-asuntosäätiö"
+
+**MyyntiExcel-sarakkeet**:
+| Sarake | Kentän nimi | Tyyppi | Sisältö | Esimerkki |
+|--------|-------------|--------|---------|-----------|
+| A | KP | Numero | Kustannuspaikka | 720 |
+| B | Asiakasnumero /Tampuuri nro | Numero | Tampuuri/Asiakasnumero | 65763 |
+| C | Laskutettava yhtiö | Teksti | Yhtiön nimi | "Helsingin seudun opiskelija-asuntosäätiö sr" |
+| D | Kohde | Teksti | Kiinteistön kohdetiedot | "166, HOAS kurkisuontie 9" |
+| E | Reskontra | Teksti | Reskontrakoodi | "MM" |
+| F | Tuotekoodi | Numero | Tuotekoodi | 1571 |
+| G | määrä | Numero | Kappalemäärä | 1 |
+| H | ahinta alv 0% | Numero | Hinta ilman ALV | 281.50 |
+| I | Kuvaus | Teksti | Tuotekuvaus | "Leikkihiekan vaihto..." |
+| J | yksikkö, kpl | Numero | Yksikkömäärä | 1.0 |
+| K | alvkoodi | Teksti | ALV-koodi | "255SN" |
+| L | Laskutusaikataulu | Teksti | Aikataulu | - |
+| M | Verkkolaskuosoite | Numero | E-laskuosoite | 3701011385 |
+| N | Operaattoritunnus | Teksti | Operaattori | "TE003701165149HOAS" |
+| O | Välittäjä | Teksti | Välittäjä | "TietoEVRY Oyj" |
+
+### Kontu ja Onni -rakenne (Tytäryhtiörakenne)
+**Tunnistus**: Isännöitsijä-kenttä sisältää "Kontu" tai "Onni"
+
+**MyyntiExcel-sarakkeet**:
+| Sarake | Kentän nimi | Tyyppi | Sisältö | Esimerkki |
+|--------|-------------|--------|---------|-----------|
+| A | Yhtiö | Teksti | Asunto-osakeyhtiön nimi | "Asunto Oy Hesperiankatu 30" |
+| B | Tuote | Teksti | Tuotekuvaus | "Kontu Palovaroittimien asennuspalvelu (paristo)" |
+| C | Määrä | Numero | Kappalemäärä | 50.0 |
+| D | alv 0% | Numero | Hinta ilman ALV | 2212.50 |
+| E | alv 25,5% | Numero | Hinta ALV:n kanssa | 2776.69 |
+| F | Selite | Teksti | Tuoteselite | "Kontu Palovaroittimien asennus (paristo)" |
+| G | Työnumero (Safetumin käyttöön) | Numero | Työtilausnumero | 30995.0 |
+| H | Isännöitsijä | Teksti | Isännöitsijä | "Kontu" tai "Onni" |
+| I | Huomautukset | Teksti | Lisätiedot | "Laskutetaan heinäkuussa" |
+
+**Tytäryhtiökohtainen jako**:
+- **Kontu-kiinteistöt**: Tunnistetaan Isännöitsijä-kentän arvolla "Kontu"
+- **Onni-kiinteistöt**: Tunnistetaan Isännöitsijä-kentän arvolla "Onni" tai "Onni "
+
+### Retta Management -rakenne
+**Tunnistus**: Käytetään kun isännöitsijä ei ole HOAS, Kontu tai Onni. Asiakasnumero voi olla pitkä numerokoodi (esim. 3733264563)
+
+**MyyntiExcel-sarakkeet**:
+| Sarake | Kentän nimi | Tyyppi | Sisältö | Esimerkki |
+|--------|-------------|--------|---------|-----------|
+| A | asiakasnumero (kuvaus) | Numero | Asiakkaan tunniste | 3733264563 |
+| B | reskontra | Teksti | Reskontrakoodi | "MK" |
+| C | tuotekoodi | Numero | Tuotekoodi | 1578 |
+| D | määrä | Numero | Kappalemäärä | 51.0 |
+| E | ahinta | Numero | A-hinta ilman ALV | 48.0 |
+| F | kuvaus | Teksti | Tuotekuvaus | "Palovaroittimien asennus (paristo)" |
+| G | yksikkö | Teksti | Mittayksikkö | - |
+| H | tuotenimi | Teksti | Tuotteen nimi | - |
+| I | alvkoodi | Teksti | ALV-koodi | "255SN" |
+| J | Isännöitsijä | Teksti | Isännöitsijä | - |
+| K | Kustannuspaikka | Teksti | Kustannuspaikka | - |
+| L | Tilausnumero (kuvaus) | Numero | Tilausnumero | 2508008 |
+| M | Yhteensä | Numero | Laskettu summa (määrä × ahinta) | 2448.0 |
+| N | Kohde (kuvaus) | Teksti | Kiinteistön kohdetiedot | "Vivada Helsinki 2B Oy / Espoon Suopurontie 1" |
+| O | Verkkolaskuosoite | Numero | E-laskuosoite | 3733264563 |
+| P | Operaatiotunnus | Teksti | Operaattori | "E204503" |
+| Q | Välittäjä | Teksti | Välittäjä | "OpusCapita Solutions Oy" |
+
+**Erityispiirteet**:
+- Sisältää verkkolaskutustiedot (3 viimeistä saraketta)
+- Kentät päättyvät usein "(kuvaus)" -tekstiin
+- Yhteensä-sarake lasketaan automaattisesti
+- Kohdetieto on yksityiskohtaisempi kuin muissa rakenteissa
+
 ## Tulevat toiminnallisuusvaatimukset
 
 ### 1. TarkastusExcel-välilehden generointi
@@ -99,19 +173,13 @@ MyyntiExcel-painike on Retta-laskutusapurin keskeinen ominaisuus, joka muuntaa T
 | L | Yksikkö | Yksikkö |
 | M | ALV-koodi | ALV-koodi |
 
-### 2. Isännöitsijäkohtaiset rakenteet
-**Vaatimus**: MyyntiExcel-rakenteen tulee vaihdella isännöitsijätyypin mukaan
+### 2. Automaattinen isännöitsijän tunnistus TARKASTUSTAULUKOSTA
+**Vaatimus**: Tunnista isännöitsijätyyppi automaattisesti TARKASTUSTAULUKKO-datasta
 
-**Kolme rakennetyyppiä**:
-1. **Tytäryhtiörakenne**: Kontu ja Onni
-2. **Retta Management -rakenne**: Retta Management -kiinteistöt
-3. **HOAS-rakenne**: HOAS-kiinteistöt
-
-**Puuttuvat syöttötiedot**:
-- Isännöitsijän tunnistuskenttä OstolaskuExcelissä tai erillinen konfiguraatio
-- Yksityiskohtaiset sarakemäärittelyt kullekin rakennetyypille
-- Kenttien kartoitussäännöt kullekin isännöitsijätyypille
-- Liiketoimintasäännöt rakenteen määrittämiseksi
+**Tunnistuslogiikka**:
+- Analysoi Tampuuri-numerot ja muut kentät
+- Kartoita automaattisesti oikeaan isännöitsijärakenteeseen
+- Varoita käyttäjää, jos tunnistus epävarma
 
 ### 3. Tytäryhtiöiden laskujen jakaminen
 **Vaatimus**: Tytäryhtiöisännöitsijöille (Kontu ja Onni) jaetaan yhden kuukauden OstolaskuExcel neljään erilliseen tiedostoon
@@ -131,125 +199,149 @@ MyyntiExcel-painike on Retta-laskutusapurin keskeinen ominaisuus, joka muuntaa T
 ## ASCII-päätöspuu isännöitsijärakenteen valinnalle
 
 ```
-TAMPUURINUMERO
+LÄHDEDATA
 │
-├─ Hae isännöitsijä Tampuurin perusteella
-│
-├─ ONKO TYTÄRYHTIÖ?
-│   │
-│   ├─ KYLLÄ → Tunnista tytäryhtiö
-│   │   │
-│   │   ├─ Tampuuri kuuluu Kontu-listaan?
-│   │   │   └─ KYLLÄ → Käytä Kontu-rakennetta
-│   │   │       └─ Luo 2 tiedostoa:
-│   │   │           ├─ Kontu MyyntiExcel (keskitetty)
-│   │   │           └─ Kontu LaskuerittelyExcel (yksityiskohtainen)
-│   │   │
-│   │   └─ Tampuuri kuuluu Onni-listaan?
-│   │       └─ KYLLÄ → Käytä Onni-rakennetta
-│   │           └─ Luo 2 tiedostoa:
-│   │               ├─ Onni MyyntiExcel (keskitetty)
-│   │               └─ Onni LaskuerittelyExcel (yksityiskohtainen)
-│   │
-│   └─ EI → Jatka muihin isännöitsijöihin
-│
-├─ ONKO RETTA MANAGEMENT?
-│   │
-│   └─ KYLLÄ → Käytä Retta Management -rakennetta
-│       └─ Luo 1 tiedosto: Retta MyyntiExcel
+├─ Analysoi kentät
+│   ├─ Isännöitsijä-kenttä olemassa?
+│   ├─ Asiakasnumero/Tampuuri?
+│   └─ Laskutettava yhtiö?
 │
 ├─ ONKO HOAS?
 │   │
+│   ├─ Asiakasnumero = 65763? TAI
+│   ├─ Laskutettava yhtiö sisältää "HOAS"? TAI
+│   ├─ Laskutettava yhtiö = "Helsingin seudun opiskelija-asuntosäätiö"?
+│   │
 │   └─ KYLLÄ → Käytä HOAS-rakennetta
-│       └─ Luo 1 tiedosto: HOAS MyyntiExcel
+│       └─ Luo HOAS MyyntiExcel (15 saraketta)
 │
-└─ EI TUNNISTETTU
+├─ ONKO TYTÄRYHTIÖ (Kontu/Onni)?
+│   │
+│   ├─ Isännöitsijä-kenttä = "Kontu"?
+│   │   └─ KYLLÄ → Käytä Kontu-rakennetta
+│   │       └─ Luo Kontu MyyntiExcel (9 saraketta)
+│   │
+│   └─ Isännöitsijä-kenttä = "Onni" TAI "Onni "?
+│       └─ KYLLÄ → Käytä Onni-rakennetta
+│           └─ Luo Onni MyyntiExcel (9 saraketta)
+│
+├─ ONKO RETTA MANAGEMENT?
+│   │
+│   └─ Muut tapaukset → Käytä Retta Management -rakennetta
+│       └─ Luo Retta MyyntiExcel (yleinen 13 saraketta)
+│
+└─ VIRHEKÄSITTELY
     │
-    └─ Käytä oletusrakennetta (nykyinen)
-        └─ Varoita käyttäjää: "Isännöitsijää ei tunnistettu"
+    └─ Jos tunnistus epäonnistuu
+        └─ Käytä oletusrakennetta
+            └─ Varoita: "Isännöitsijää ei voitu tunnistaa"
 ```
 
-## Puuttuvien syöttötietojen yhteenveto
+## Implementoitu tunnistuslogiikka todellisten esimerkkien perusteella
 
-### Kriittiset puuttuvat tiedot
-1. **Isännöitsijän tunnistus**
-   - Kentän nimi lähdetiedoissa isännöitsijän tunnistamiseksi
-   - Lista isännöitsijöistä ja niiden tyypeistä
-   - Tampuuri-koodien kartoitus isännöitsijöille
+### Isännöitsijän automaattinen tunnistus
+1. **HOAS-tunnistus**
+   - Asiakasnumero = 65763
+   - Laskutettava yhtiö sisältää "HOAS" tai "Helsingin seudun opiskelija-asuntosäätiö"
+   - Kohde-kenttä alkaa numerolla ja sisältää "HOAS"
 
-2. **Rakennespesifikaatiot**
-   - Yksityiskohtaiset sarakeasetelmat kullekin kolmelle rakenteelle
-   - Pakolliset vs valinnaiset kentät rakennekohtaisesti
-   - Rakennekohtaiset validointisäännöt
+2. **Kontu/Onni-tunnistus**
+   - Isännöitsijä-kenttä eksplisiittisesti määritetty
+   - Tuote-kenttä alkaa tekstillä "Kontu" (historiallinen merkintätapa)
+   - Yhtiö-kenttä sisältää asunto-osakeyhtiön nimen
 
-3. **Tytäryhtiökonfiguraatio**
-   - Täydellinen lista Kontu-kiinteistöistä (Tampuuri-koodit)
-   - Täydellinen lista Onni-kiinteistöistä (Tampuuri-koodit)
-   - Säännöt kumpaankaan kuulumattomien kiinteistöjen käsittelyyn
+3. **Retta Management -oletusrakenne**
+   - Käytetään kun ei tunnisteta HOAS tai Kontu/Onni
 
-4. **LaskuerittelyExcel-muoto**
-   - Yksityiskohtaisten laskujen sarakerakenne
-   - Ero MyyntiExcelin ja LaskuerittelyExcelin välillä
+### Puuttuvat tiedot jatkokehitykseen
+1. **Tampuuri-kiinteistökartoitus**
+   - Täydellinen lista kiinteistöjen Tampuuri-koodeista
+   - Isännöitsijäkohtainen kiinteistöluettelo
+
+2. **LaskuerittelyExcel-muoto**
+   - Yksityiskohtaisten laskujen rakenne tytäryhtiöille
    - Keskitetyn laskutuksen koontisäännöt
 
-5. **Liiketoimintasäännöt**
+3. **Liiketoimintasäännöt**
    - Miten käsitellä sekaisännöitsijälaskuja
-   - Oletusrakenne, kun isännöitsijää ei voida määrittää
    - Virheenkäsittely epäselvissä tapauksissa
 
 ### Ehdotettu ratkaisuarkkitehtuuri
 
 ```javascript
-// Tarvittava konfiguraatio-objekti
+// Tunnistuslogiikka todellisten esimerkkien perusteella
 const isannoitsijaKonfiguraatio = {
-  rakenteet: {
-    tytaryhtiö: {
-      kontu: {
-        kiinteistot: [], // Lista Tampuuri-koodeista
-        myyntiSarakkeet: [], // Sarakemäärittely
-        erittelySarakkeet: [] // Yksityiskohtaisen laskun sarakkeet
-      },
-      onni: {
-        kiinteistot: [], // Lista Tampuuri-koodeista
-        myyntiSarakkeet: [], // Sarakemäärittely
-        erittelySarakkeet: [] // Yksityiskohtaisen laskun sarakkeet
-      }
+  hoas: {
+    tunnistus: {
+      asiakasnumero: [65763],
+      laskutettavaYhtio: ['HOAS', 'Helsingin seudun opiskelija-asuntosäätiö'],
+      kohdePattern: /^\d+,\s*HOAS/
     },
-    rettaManagement: {
-      kiinteistot: [], // Lista Tampuuri-koodeista
-      sarakkeet: [] // Sarakemäärittely
+    sarakkeet: ['KP', 'Asiakasnumero /Tampuuri nro', 'Laskutettava yhtiö', 
+                'Kohde', 'Reskontra', 'Tuotekoodi', 'määrä', 'ahinta alv 0%',
+                'Kuvaus', 'yksikkö, kpl', 'alvkoodi', 'Laskutusaikataulu',
+                'Verkkolaskuosoite', 'Operaattoritunnus', 'Välittäjä']
+  },
+  kontu: {
+    tunnistus: {
+      isannoitsijaKentta: 'Kontu',
+      tuotePrefix: 'Kontu'
     },
-    hoas: {
-      kiinteistot: [], // Lista Tampuuri-koodeista
-      sarakkeet: [] // Sarakemäärittely
-    }
+    sarakkeet: ['Yhtiö', 'Tuote', 'Määrä', 'alv 0%', 'alv 25,5%', 
+                'Selite', 'Työnumero (Safetumin käyttöön)', 'Isännöitsijä', 
+                'Huomautukset']
+  },
+  onni: {
+    tunnistus: {
+      isannoitsijaKentta: ['Onni', 'Onni ']
+    },
+    sarakkeet: ['Yhtiö', 'Tuote', 'Määrä', 'alv 0%', 'alv 25,5%', 
+                'Selite', 'Työnumero (Safetumin käyttöön)', 'Isännöitsijä', 
+                'Huomautukset']
+  },
+  rettaManagement: {
+    tunnistus: {
+      oletus: true // Käytetään kun muut eivät täsmää
+    },
+    sarakkeet: ['asiakasnumero (kuvaus)', 'reskontra', 'tuotekoodi', 'määrä', 
+                'ahinta', 'kuvaus', 'yksikkö', 'tuotenimi', 'alvkoodi',
+                'Isännöitsijä', 'Kustannuspaikka', 'Tilausnumero (kuvaus)',
+                'Yhteensä', 'Kohde (kuvaus)', 'Verkkolaskuosoite', 
+                'Operaatiotunnus', 'Välittäjä']
   }
 };
 
-// Funktio rakenteen määrittämiseksi
-function maaritaRakenne(tampuuri) {
-  // Logiikka käytettävän rakenteen tunnistamiseksi
-  // Palauttaa: 'kontu', 'onni', 'rettaManagement', 'hoas'
-}
-
-// Funktio sopivien tiedostojen luomiseksi
-function luoTiedostot(tarkastusTiedot) {
-  const tiedostotIsannoitsijoittain = ryhmitteleIsannoitsijanMukaan(tarkastusTiedot);
-  const tulosTiedostot = [];
-  
-  for (const [isannoitsija, tiedot] of Object.entries(tiedostotIsannoitsijoittain)) {
-    switch(isannoitsija) {
-      case 'kontu':
-      case 'onni':
-        tulosTiedostot.push(luoMyyntiExcel(tiedot, isannoitsija));
-        tulosTiedostot.push(luoLaskuerittelyExcel(tiedot, isannoitsija));
-        break;
-      default:
-        tulosTiedostot.push(luoMyyntiExcel(tiedot, isannoitsija));
-    }
+// Funktio isännöitsijän tunnistamiseksi
+function tunnistaIsannoitsija(rivi) {
+  // HOAS-tunnistus
+  if (rivi['Asiakasnumero /Tampuuri nro'] === 65763 ||
+      rivi['Laskutettava yhtiö']?.includes('HOAS') ||
+      rivi['Laskutettava yhtiö']?.includes('Helsingin seudun opiskelija-asuntosäätiö')) {
+    return 'hoas';
   }
   
-  return tulosTiedostot;
+  // Kontu/Onni-tunnistus
+  if (rivi['Isännöitsijä'] === 'Kontu' || 
+      rivi['Tuote']?.startsWith('Kontu')) {
+    return 'kontu';
+  }
+  
+  if (rivi['Isännöitsijä'] === 'Onni' || 
+      rivi['Isännöitsijä'] === 'Onni ') {
+    return 'onni';
+  }
+  
+  // Oletusrakenne
+  return 'rettaManagement';
+}
+
+// Funktio MyyntiExcelin luomiseksi
+function luoMyyntiExcel(data, isannoitsija) {
+  const config = isannoitsijaKonfiguraatio[isannoitsija];
+  const sarakkeet = config.sarakkeet;
+  
+  // Luo Excel-tiedosto oikealla sarakerakenteella
+  return generoiExcel(data, sarakkeet);
 }
 ```
 
@@ -289,6 +381,28 @@ function luoTiedostot(tarkastusTiedot) {
    - Tytäryhtiölaskut jaetaan oikein
    - TarkastusExcel vastaa alkuperäistä taulukkoa
 
-*Päivitetty: 28.8.2025*
-*Versio: 1.1*
+## Yhteenveto todellisista MyyntiExcel-rakenteista
+
+### Rakenteiden vertailu
+| Ominaisuus | HOAS | Kontu/Onni | Retta Management |
+|------------|------|------------|------------------|
+| Sarakkeiden määrä | 15 | 9 | 17 |
+| Tunnistusperuste | Asiakasnumero 65763, HOAS-teksti | Isännöitsijä-kenttä | Oletusrakenne |
+| Reskontra | MM | - | MK |
+| ALV-käsittely | alvkoodi (255SN) | alv 0% ja alv 25,5% erillisinä | alvkoodi (255SN) |
+| Verkkolaskutus | Kyllä (3 saraketta) | Ei | Kyllä (3 saraketta) |
+| Työnumero | Ei | Kyllä | Tilausnumero |
+| Kustannuspaikka | KP (720) | - | Tyhjä |
+| Yhtiötieto | Laskutettava yhtiö + Kohde | Yhtiö | Kohde (kuvaus) |
+| Yhteensä-sarake | Ei | Ei | Kyllä (laskettu) |
+| Kenttien nimeäminen | Normaali | Normaali | "(kuvaus)" -liitteet |
+
+### Keskeisimmät erot
+1. **HOAS**: 15 saraketta, verkkolaskutustiedot, kiinteä kustannuspaikka (720), reskontra MM
+2. **Kontu/Onni**: 9 saraketta, ALV laskettu valmiiksi kahdessa sarakkeessa, työnumerot mukana
+3. **Retta Management**: 17 saraketta (laajin), verkkolaskutustiedot, yhteensä-sarake, kentät päättyvät "(kuvaus)"-tekstiin
+
+*Päivitetty: 29.8.2025*
+*Versio: 2.0*
 *Tekijä: Retta-kehitystiimi*
+*Muutos: Lisätty todelliset MyyntiExcel-rakenteet esimerkkien perusteella*

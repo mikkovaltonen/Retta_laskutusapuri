@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Send, Bot, User, Settings, RefreshCw, ThumbsUp, ThumbsDown, Upload, RotateCcw, FileSpreadsheet, Info, CheckCircle, Download } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ScrollArea } from './ui/scroll-area';
@@ -46,6 +47,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
   const [selectedMessageForFeedback, setSelectedMessageForFeedback] = useState<string>('');
   const [feedbackComment, setFeedbackComment] = useState<string>('');
   const [quickActionUsed, setQuickActionUsed] = useState(false);
+  const [propertyManagerType, setPropertyManagerType] = useState<'hoas' | 'kontu-onni' | 'retta-management'>('retta-management');
+  const [showPropertyManagerDialog, setShowPropertyManagerDialog] = useState(false);
   const { user } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -466,8 +469,13 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     }
   };
 
+  const handleMyyntiExcelClick = () => {
+    setShowPropertyManagerDialog(true);
+  };
+
   const generateMyyntiExcelFromTarkastustaulukko = async () => {
     console.log('🔍 Scanning chat history for TARKASTUSTAULUKKO...');
+    console.log('📊 Using property manager type:', propertyManagerType);
     
     // Find messages containing TARKASTUSTAULUKKO (case insensitive)
     let tarkastustaulukkoData: any[] = [];
@@ -593,36 +601,96 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
     // Create Excel workbook
     const wb = XLSX.utils.book_new();
     
-    // Convert data to worksheet format
-    const wsData = [
-      // Header row
-      ['Asiakasnumero', 'Reskontra', 'Tuotekoodi', 'Määrä', 'A-hinta', 'Yhteensä', 'Kuvaus', 'Yksikkö', 'Tuotenimi', 'ALV-koodi', 'Isännöitsijä', 'Kustannuspaikka', 'Tilausnumero'],
-      // Data rows
-      ...tarkastustaulukkoData.map(row => [
-        row.asiakasnumero,
-        row.reskontra,
-        row.tuotekoodi,
-        row.määrä,
-        row.ahinta,
-        row.yhteensä,
-        row.kuvaus,
-        row.yksikkö,
-        row.tuotenimi,
-        row.alvkoodi,
-        row.isännöitsijä,
-        row.kustannuspaikka,
-        row.tilausnumero
-      ])
-    ];
+    // Define column structures based on property manager type
+    let wsData: any[][] = [];
+    
+    if (propertyManagerType === 'hoas') {
+      // HOAS structure - 15 columns
+      wsData = [
+        // Header row
+        ['KP', 'Asiakasnumero /Tampuuri nro', 'Laskutettava yhtiö', 'Kohde', 'Reskontra', 
+         'Tuotekoodi', 'määrä', 'ahinta alv 0%', 'Kuvaus', 'yksikkö, kpl', 'alvkoodi', 
+         'Laskutusaikataulu', 'Verkkolaskuosoite', 'Operaattoritunnus', 'Välittäjä'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          720, // Fixed KP value for HOAS
+          row.asiakasnumero,
+          'Helsingin seudun opiskelija-asuntosäätiö sr', // Fixed for HOAS
+          `HOAS ${row.kuvaus}`, // Kohde
+          'MM', // Fixed reskontra for HOAS
+          1571, // Fixed product code for HOAS
+          row.määrä,
+          row.ahinta,
+          row.kuvaus,
+          row.määrä,
+          '255SN', // Fixed ALV code for HOAS
+          '', // Laskutusaikataulu
+          3701011385, // Fixed for HOAS
+          'TE003701165149HOAS', // Fixed for HOAS
+          'TietoEVRY Oyj' // Fixed for HOAS
+        ])
+      ];
+    } else if (propertyManagerType === 'kontu-onni') {
+      // Kontu & Onni structure - 9 columns
+      wsData = [
+        // Header row
+        ['Yhtiö', 'Tuote', 'Määrä', 'alv 0%', 'alv 25,5%', 'Selite', 
+         'Työnumero (Safetumin käyttöön)', 'Isännöitsijä', 'Huomautukset'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          `Asunto Oy ${row.asiakasnumero}`, // Yhtiö
+          row.kuvaus, // Tuote
+          row.määrä,
+          row.ahinta, // alv 0%
+          row.ahinta * 1.255, // alv 25,5% (calculated)
+          row.kuvaus, // Selite
+          row.tilausnumero || '', // Työnumero
+          'Kontu', // Default to Kontu, user can edit later
+          '' // Huomautukset
+        ])
+      ];
+    } else {
+      // Retta Management structure - 17 columns (default)
+      wsData = [
+        // Header row
+        ['asiakasnumero (kuvaus)', 'reskontra', 'tuotekoodi', 'määrä', 'ahinta', 
+         'kuvaus', 'yksikkö', 'tuotenimi', 'alvkoodi', 'Isännöitsijä', 
+         'Kustannuspaikka', 'Tilausnumero (kuvaus)', 'Yhteensä', 'Kohde (kuvaus)', 
+         'Verkkolaskuosoite', 'Operaatiotunnus', 'Välittäjä'],
+        // Data rows
+        ...tarkastustaulukkoData.map(row => [
+          row.asiakasnumero,
+          'MK', // Fixed reskontra for Retta Management
+          1578, // Default product code for Retta Management
+          row.määrä,
+          row.ahinta,
+          row.kuvaus,
+          row.yksikkö,
+          '', // tuotenimi
+          '255SN', // Default ALV code
+          '', // Isännöitsijä
+          '', // Kustannuspaikka
+          row.tilausnumero,
+          row.määrä * row.ahinta, // Yhteensä (calculated)
+          row.kuvaus, // Kohde (kuvaus)
+          row.asiakasnumero, // Use customer number as invoice address
+          'E204503', // Default operator code
+          'OpusCapita Solutions Oy' // Default välittäjä
+        ])
+      ];
+    }
     
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'MyyntiExcel');
     
-    // Generate Excel file
+    // Generate Excel file with property manager type in filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-    const filename = `MyyntiExcel_${timestamp}.xlsx`;
+    const managerTypeLabel = propertyManagerType === 'hoas' ? 'HOAS' : 
+                            propertyManagerType === 'kontu-onni' ? 'KontuOnni' : 
+                            'RettaManagement';
+    const filename = `MyyntiExcel_${managerTypeLabel}_${timestamp}.xlsx`;
     
     // Try to use File System Access API if available (Chrome, Edge)
     if ('showSaveFilePicker' in window) {
@@ -642,7 +710,10 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         await writable.write(buffer);
         await writable.close();
         
-        toast.success(`MyyntiExcel tallennettu: ${tarkastustaulukkoData.length} riviä`);
+        const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                        propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                        'Retta Management';
+        toast.success(`MyyntiExcel (${typeText}) tallennettu: ${tarkastustaulukkoData.length} riviä`);
         console.log(`✅ MyyntiExcel saved to chosen location: ${filename}`);
       } catch (err) {
         // User cancelled or error occurred, fall back to regular download
@@ -651,12 +722,18 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
         }
         // Fall back to regular download
         XLSX.writeFile(wb, filename);
-        toast.success(`MyyntiExcel ladattu: ${tarkastustaulukkoData.length} riviä`);
+        const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                        propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                        'Retta Management';
+        toast.success(`MyyntiExcel (${typeText}) ladattu: ${tarkastustaulukkoData.length} riviä`);
       }
     } else {
       // Browser doesn't support File System Access API, use regular download
       XLSX.writeFile(wb, filename);
-      toast.info(`MyyntiExcel ladattu Downloads-kansioon: ${tarkastustaulukkoData.length} riviä`);
+      const typeText = propertyManagerType === 'hoas' ? 'HOAS' : 
+                      propertyManagerType === 'kontu-onni' ? 'Kontu & Onni' : 
+                      'Retta Management';
+      toast.info(`MyyntiExcel (${typeText}) ladattu Downloads-kansioon: ${tarkastustaulukkoData.length} riviä`);
     }
     
     console.log(`✅ MyyntiExcel processed: ${filename}`);
@@ -1091,69 +1168,8 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-900'
                 }`} style={{ maxWidth: message.role === 'assistant' ? 'min(calc(100vw - 8rem), 100%)' : '80%' }}>
-                  <div className="text-sm">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        // Wrap tables in scrollable container with smaller font
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto -mx-3 max-w-full">
-                            <div className="inline-block min-w-full align-middle">
-                              <div className="overflow-hidden">
-                                <table className="min-w-full divide-y divide-gray-200" style={{ fontSize: '0.6rem', lineHeight: '0.85rem' }}>
-                                  {children}
-                                </table>
-                              </div>
-                            </div>
-                          </div>
-                        ),
-                        thead: ({ children }) => (
-                          <thead className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                            {children}
-                          </thead>
-                        ),
-                        th: ({ children }) => (
-                          <th className="border-r border-blue-400 text-left font-semibold uppercase tracking-wide whitespace-nowrap" style={{ fontSize: '0.55rem', padding: '0.15rem 0.25rem' }}>
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children, ...props }) => {
-                          // Check if content looks like a number (for right-alignment)
-                          const content = String(children).trim();
-                          const isNumber = /^\d+([.,]\d+)?$/.test(content);
-                          
-                          return (
-                            <td className={`border-r border-b border-gray-200 whitespace-nowrap ${
-                              isNumber ? 'text-right font-medium' : 'text-left'
-                            }`} style={{ fontSize: '0.6rem', padding: '0.15rem 0.25rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {children}
-                            </td>
-                          );
-                        },
-                        tr: ({ children }) => (
-                          <tr className="hover:bg-blue-50 transition-colors duration-150">
-                            {children}
-                          </tr>
-                        ),
-                        tbody: ({ children }) => (
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {children}
-                          </tbody>
-                        ),
-                        // Preserve paragraph styling
-                        p: ({ children }) => {
-                          const content = String(children);
-                          // Don't wrap tables in p tags
-                          if (content.includes('|') && content.split('|').length > 3) {
-                            return null;
-                          }
-                          return <p className="mb-2">{children}</p>;
-                        },
-                        ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                        li: ({ children }) => <li className="mb-1">{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                      }}
-                    >
+                  <div className="markdown-content">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {message.content}
                     </ReactMarkdown>
                   </div>
@@ -1534,7 +1550,7 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
             Tarkasta
           </Button>
           <Button
-            onClick={generateMyyntiExcelFromTarkastustaulukko}
+            onClick={handleMyyntiExcelClick}
             disabled={loading}
             variant="outline"
             title="Lataa MyyntiExcel TARKASTUSTAULUKOSTA"
@@ -1556,6 +1572,74 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
           </p>
         )}
       </div>
+      
+      {/* Property Manager Selection Dialog */}
+      <Dialog open={showPropertyManagerDialog} onOpenChange={setShowPropertyManagerDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Valitse isännöitsijärakenne</DialogTitle>
+            <DialogDescription>
+              Valitse käytettävä MyyntiExcel-rakenne isännöitsijän mukaan
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Isännöitsijätyyppi</label>
+              <Select value={propertyManagerType} onValueChange={(value) => setPropertyManagerType(value as 'hoas' | 'kontu-onni' | 'retta-management')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Valitse isännöitsijä" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="retta-management">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Retta Management</span>
+                      <span className="text-xs text-muted-foreground">17 saraketta, verkkolaskutus</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hoas">
+                    <div className="flex flex-col">
+                      <span className="font-medium">HOAS</span>
+                      <span className="text-xs text-muted-foreground">15 saraketta, KP 720, reskontra MM</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="kontu-onni">
+                    <div className="flex flex-col">
+                      <span className="font-medium">Kontu & Onni</span>
+                      <span className="text-xs text-muted-foreground">9 saraketta, ALV valmiiksi laskettu</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-md">
+              <p className="text-sm text-blue-900">
+                <strong>Vihje:</strong> Valitse rakenne isännöitsijän mukaan:
+              </p>
+              <ul className="text-xs text-blue-800 mt-2 space-y-1 ml-4">
+                <li>• <strong>HOAS:</strong> Helsingin seudun opiskelija-asuntosäätiö</li>
+                <li>• <strong>Kontu & Onni:</strong> Tytäryhtiöisännöitsijät</li>
+                <li>• <strong>Retta Management:</strong> Muut isännöitsijät (oletus)</li>
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPropertyManagerDialog(false)}
+            >
+              Peruuta
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowPropertyManagerDialog(false);
+                generateMyyntiExcelFromTarkastustaulukko();
+              }}
+            >
+              Luo MyyntiExcel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
