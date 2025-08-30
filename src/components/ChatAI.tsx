@@ -1177,17 +1177,17 @@ export const ChatAI: React.FC<ChatAIProps> = ({ className, onOstolaskuExcelDataC
                           </div>
                         ),
                         thead: ({ children }) => (
-                          <thead className="bg-gray-50">
+                          <thead className="bg-gray-50" style={{ backgroundColor: '#f9fafb' }}>
                             {children}
                           </thead>
                         ),
                         tbody: ({ children }) => (
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-white divide-y divide-gray-200" style={{ backgroundColor: '#ffffff' }}>
                             {children}
                           </tbody>
                         ),
                         tr: ({ children }) => (
-                          <tr className="hover:bg-gray-50">
+                          <tr className="hover:bg-gray-50" style={{ backgroundColor: 'transparent' }}>
                             {children}
                           </tr>
                         ),
